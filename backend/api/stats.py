@@ -1,6 +1,6 @@
 """Personal reading statistics endpoint. TomeSync data only."""
 from collections import defaultdict
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, HTTPException
@@ -15,6 +15,7 @@ from backend.models.tome_sync import ReadingSession, TomeSyncPosition
 from backend.models.book import Book, BookFile
 from backend.models.user_book_status import UserBookStatus
 from backend.models.library import BookType
+from backend.services.streaks import compute_user_streaks
 
 router = APIRouter(tags=["stats"])
 
@@ -23,37 +24,6 @@ def _date_range(days: int) -> Optional[datetime]:
     if days <= 0:
         return None
     return datetime.utcnow() - timedelta(days=days)
-
-
-def _calc_streaks(dates: list[date]) -> tuple[int, int]:
-    """Return (current_streak, longest_streak) from a list of dates with activity."""
-    if not dates:
-        return 0, 0
-    day_set = set(dates)
-    today = date.today()
-    # Current streak: walk backwards from today
-    current = 0
-    d = today
-    while d in day_set:
-        current += 1
-        d -= timedelta(days=1)
-    # If today has no activity, check if yesterday starts the streak
-    if current == 0:
-        d = today - timedelta(days=1)
-        while d in day_set:
-            current += 1
-            d -= timedelta(days=1)
-    # Longest streak: walk the sorted set
-    sorted_days = sorted(day_set)
-    longest = 1
-    run = 1
-    for i in range(1, len(sorted_days)):
-        if (sorted_days[i] - sorted_days[i - 1]).days == 1:
-            run += 1
-            longest = max(longest, run)
-        else:
-            run = 1
-    return current, longest
 
 
 def _fill_daily(rows: list, cutoff: datetime, now: datetime) -> list[dict]:
@@ -111,15 +81,8 @@ def get_stats(
         finished_query = finished_query.filter(UserBookStatus.updated_at >= cutoff)
     books_finished_count = finished_query.count()
 
-    # Streaks (all time)
-    all_dates_rows = (
-        db.query(func.date(ReadingSession.started_at, tz_modifier).label("d"))
-        .filter(ReadingSession.user_id == current_user.id)
-        .distinct()
-        .all()
-    )
-    all_dates = [date.fromisoformat(r.d) for r in all_dates_rows if r.d]
-    current_streak, longest_streak = _calc_streaks(all_dates)
+    # Streaks (all time, local-day with 4h rollover so late-night reading still counts)
+    current_streak, longest_streak = compute_user_streaks(db, current_user.id, tz_offset)
 
     # Daily aggregation (for selected range)
     daily_rows = (

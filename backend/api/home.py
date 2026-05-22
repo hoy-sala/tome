@@ -1,7 +1,7 @@
 """Home tab summary endpoints."""
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -11,31 +11,14 @@ from backend.models.user import User
 from backend.models.tome_sync import ReadingSession
 from backend.models.book import Book
 from backend.models.user_book_status import UserBookStatus
+from backend.services.streaks import compute_user_streaks
 
 router = APIRouter(prefix="/home", tags=["home"])
 
 
-def _calc_current_streak(dates: list[date]) -> int:
-    """Return current streak in days from a list of dates with activity."""
-    if not dates:
-        return 0
-    day_set = set(dates)
-    today = date.today()
-    current = 0
-    d = today
-    while d in day_set:
-        current += 1
-        d -= timedelta(days=1)
-    if current == 0:
-        d = today - timedelta(days=1)
-        while d in day_set:
-            current += 1
-            d -= timedelta(days=1)
-    return current
-
-
 @router.get("/stats")
 def get_home_stats(
+    tz_offset: int = Query(0, description="Client timezone offset in minutes (JS getTimezoneOffset)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
@@ -68,15 +51,7 @@ def get_home_stats(
         .count()
     )
 
-    # Current streak (all-time reading dates)
-    all_dates_rows = (
-        db.query(func.date(ReadingSession.started_at).label("d"))
-        .filter(ReadingSession.user_id == current_user.id)
-        .distinct()
-        .all()
-    )
-    all_dates = [date.fromisoformat(r.d) for r in all_dates_rows if r.d]
-    current_streak_days = _calc_current_streak(all_dates)
+    current_streak_days, _ = compute_user_streaks(db, current_user.id, tz_offset)
 
     return {
         "current_streak_days": current_streak_days,

@@ -814,7 +814,8 @@ export function DashboardPage() {
   }, [])
 
   useEffect(() => {
-    api.get<HomeStats>('/home/stats').then(setHomeStats).catch(() => {})
+    const tzOffset = new Date().getTimezoneOffset()
+    api.get<HomeStats>(`/home/stats?tz_offset=${tzOffset}`).then(setHomeStats).catch(() => {})
     api.get<Book[]>('/books?reading_status=read&sort=status_updated&order=desc&limit=6').then(setRecentlyFinished).catch(() => {})
     api.get<Book[]>('/books?sort=added_at&order=desc&limit=6').then(setRecentlyAdded).catch(() => {})
     api.get<ActivityEntry[]>('/home/activity').then(setActivityLog).catch(() => {})
