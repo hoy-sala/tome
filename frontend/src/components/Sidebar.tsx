@@ -11,6 +11,7 @@ import { api } from '@/lib/api'
 import type { Library, SavedFilter } from '@/lib/books'
 import { cn } from '@/lib/utils'
 import { EntityModal } from '@/components/EntityModal'
+import { TomeMark } from '@/components/TomeMark'
 import { useAuth, isAdmin } from '@/contexts/AuthContext'
 import { applyTheme, getStoredTheme, THEMES } from '@/lib/theme'
 import { DOCS, docsLink } from '@/lib/docs'
@@ -550,7 +551,7 @@ export function Sidebar({ libraries, savedFilters, activeTab, onLibrariesChange,
             {/* Header with close button */}
             <div className="flex items-center justify-between px-3 h-14 border-b border-border shrink-0">
               <div className="flex items-center gap-2 group cursor-default">
-                <BookOpen className="w-5 h-5 text-primary transition-transform duration-300 group-hover:rotate-[-12deg] group-hover:scale-110" />
+                <TomeMark className="w-5 h-5 text-primary transition-transform duration-300 group-hover:rotate-[-12deg] group-hover:scale-110" strokeWidth={7} />
                 <span className="font-semibold text-sm">Tome</span>
               </div>
               <button

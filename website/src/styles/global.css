@@ -20,8 +20,6 @@
   --accent: #863bff;
   --accent-soft: #863bff33;
   --accent-fg: oklch(0.99 0 0);
-  --logo-bg: var(--accent);      /* matches the active toggle button */
-  --logo-fg: oklch(0.99 0 0);    /* white book icon */
   --diagram-accent: var(--accent);
   --diagram-accent-fill: var(--accent-soft);
 }
@@ -35,8 +33,6 @@ html.theme-dark {
   --accent: #a166ff;
   --accent-soft: #a166ff33;
   --accent-fg: oklch(0.1 0 0);
-  --logo-bg: var(--accent);      /* purple accent square */
-  --logo-fg: oklch(0.99 0 0);    /* white book icon */
   --diagram-accent: var(--accent);
   --diagram-accent-fill: var(--accent-soft);
 }
@@ -50,8 +46,6 @@ html.theme-amber {
   --accent: oklch(0.62 0.18 50);
   --accent-soft: oklch(0.62 0.18 50 / 0.2);
   --accent-fg: oklch(0.99 0 0);
-  --logo-bg: var(--accent);       /* matches the active toggle button */
-  --logo-fg: oklch(0.99 0 0);     /* white book icon */
   --diagram-accent: var(--accent);
   --diagram-accent-fill: var(--accent-soft);
 }
@@ -60,6 +54,17 @@ html, body {
   background-color: var(--bg);
   color: var(--fg);
   transition: background-color 0.3s ease, color 0.3s ease;
+  /* Body + display — Onest. Humanist sans; warmer than Inter, less cliquey
+     than Geist. Used everywhere; H1/H2 just bump weight + size. */
+  font-family: 'Onest', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+/* H1/H2 tighten letter-spacing slightly at large display sizes. */
+h1, h2, .font-display {
+  letter-spacing: -0.015em;
+}
+/* Mono: JetBrains Mono for code blocks, version strings, kbd. */
+code, kbd, pre, .font-mono, samp {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 html { scroll-behavior: smooth; }
 * { border-color: var(--border); }
@@ -595,14 +600,12 @@ html.theme-dark .docs-article .astro-code span {
   background-color: var(--shiki-dark-bg, var(--card)) !important;
 }
 
-/* Site logo (theme-aware) */
+/* Site logo — bare brand mark; colour inherits from the header text via
+   currentColor, so it tracks the active theme without any extra CSS. */
 .site-logo {
   display: block;
-  border-radius: 7px;
-  transition: background 0.25s ease;
+  color: var(--fg);
 }
-.site-logo .site-logo-bg { fill: var(--logo-bg); transition: fill 0.25s ease; }
-.site-logo .site-logo-icon { stroke: var(--logo-fg); transition: stroke 0.25s ease; }
 
 /* Theme toggle — pure server-rendered HTML+CSS. Active button is highlighted
    via the html.theme-X class (set by the inline init script before paint), so

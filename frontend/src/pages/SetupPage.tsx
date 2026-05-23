@@ -3,6 +3,7 @@ import { useNavigate, Navigate } from 'react-router-dom'
 import { BookOpen, UserPlus, Eye, EyeOff, AlertCircle, CheckCircle2, Smartphone, BarChart3 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { TomeMark } from '@/components/TomeMark'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -70,7 +71,7 @@ export function SetupPage() {
         {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-6 cursor-default logo-jiggle">
           <div className="p-2.5 rounded-xl bg-primary/10 ring-1 ring-primary/20 logo-icon">
-            <BookOpen className="w-6 h-6 text-primary" />
+            <TomeMark className="w-6 h-6 text-primary" strokeWidth={6} />
           </div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Tome</h1>
         </div>
