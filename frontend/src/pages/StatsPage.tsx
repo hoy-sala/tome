@@ -524,7 +524,7 @@ export function StatsPage() {
             <ArrowLeft className="w-4 h-4" />
           </Link>
           <BarChart3 className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm font-semibold hidden sm:inline">Reading Stats</span>
+          <span className="text-base font-bold hidden sm:inline">Reading Stats</span>
           <a
             href={docsLink(DOCS.stats)}
             target="_blank"

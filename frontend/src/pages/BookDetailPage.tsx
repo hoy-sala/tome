@@ -392,7 +392,7 @@ export function BookDetailPage() {
                       )}
                     </button>
                     {libMenuOpen && (
-                      <div className="absolute right-0 top-full mt-1 z-40 bg-card border border-border rounded-xl shadow-xl py-1 min-w-48 max-w-[calc(100vw-2rem)]">
+                      <div className="absolute right-0 top-full mt-1 z-40 bg-card border border-border rounded-xl shadow-xl shadow-accent-soft py-1 min-w-48 max-w-[calc(100vw-2rem)]">
                         <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-border mb-1">
                           Add to library
                         </p>
@@ -565,7 +565,7 @@ export function BookDetailPage() {
             ) : (
               <>
                 <div className="flex items-center gap-2">
-                  <h1 className="text-xl sm:text-2xl font-bold text-foreground">{book.title}</h1>
+                  <h1 className="text-2xl sm:text-3xl font-bold text-foreground">{book.title}</h1>
                   {book.content_type === 'chapter' && (
                     <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded bg-muted text-muted-foreground border border-border">
                       Chapter

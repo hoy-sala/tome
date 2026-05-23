@@ -1,13 +1,12 @@
-import { Moon, Sun } from 'lucide-react'
+import { Sun, Moon, Flame } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
-import { applyTheme, getStoredTheme, THEMES, loadCustomThemes } from '@/lib/theme'
+import { applyTheme, getStoredTheme, THEMES, loadCustomThemes, type ThemeId } from '@/lib/theme'
 
 export function ThemeToggle({ className }: { className?: string }) {
   const [themeId, setThemeId] = useState(getStoredTheme)
 
   function toggle() {
-    // Determine whether the current theme is "dark"
     const builtIn = THEMES.find(t => t.id === themeId)
     let isDark = builtIn?.dark ?? false
     if (!builtIn && themeId.startsWith('custom-')) {
@@ -38,5 +37,40 @@ export function ThemeToggle({ className }: { className?: string }) {
     >
       {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
     </button>
+  )
+}
+
+const BUILT_IN: { id: ThemeId; icon: typeof Sun; label: string }[] = [
+  { id: 'light', icon: Sun, label: 'Light' },
+  { id: 'dark', icon: Moon, label: 'Dark' },
+  { id: 'amber', icon: Flame, label: 'Amber' },
+]
+
+export function ThemePill({ className }: { className?: string }) {
+  const [themeId, setThemeId] = useState(getStoredTheme)
+
+  function pick(id: ThemeId) {
+    applyTheme(id)
+    setThemeId(id)
+  }
+
+  return (
+    <div className={cn('inline-flex gap-0.5 p-0.5 rounded-full bg-muted/60 border border-border', className)} role="group" aria-label="Theme">
+      {BUILT_IN.map(({ id, icon: Icon, label }) => (
+        <button
+          key={id}
+          onClick={() => pick(id)}
+          aria-label={`${label} theme`}
+          className={cn(
+            'w-6 h-6 rounded-full grid place-items-center transition-all duration-200',
+            themeId === id
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:text-foreground hover:bg-background'
+          )}
+        >
+          <Icon className="w-3 h-3" />
+        </button>
+      ))}
+    </div>
   )
 }

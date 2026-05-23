@@ -135,7 +135,7 @@ export function UploadModal({ isOpen, onClose, onDone, onUploaded }: Props) {
       className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
       onMouseDown={e => { if (e.target === e.currentTarget) handleClose() }}
     >
-      <div className="bg-card text-foreground rounded-xl shadow-xl w-full max-w-lg flex flex-col max-h-[90vh]">
+      <div className="bg-card text-foreground rounded-2xl shadow-xl shadow-accent-soft w-full max-w-lg flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
           <h2 className="text-base font-semibold flex items-center gap-2">

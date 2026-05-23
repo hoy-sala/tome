@@ -4,7 +4,8 @@ import * as LucideIcons from 'lucide-react'
 import {
   BookOpen, Plus, Pencil, Trash2,
   ChevronLeft, ChevronRight, Bookmark, Library as LibraryIcon, Layers, Home, BarChart3,
-  Settings, Shield, LogOut, ChevronsUpDown, Sun, Moon, Lock, X, BookPlus, ExternalLink,
+  Settings, Shield, LogOut, ChevronsUpDown, Lock, X, BookPlus, ExternalLink,
+  Sun, Moon, Flame, Check,
   type LucideIcon,
 } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -13,7 +14,7 @@ import { cn } from '@/lib/utils'
 import { EntityModal } from '@/components/EntityModal'
 import { TomeMark } from '@/components/TomeMark'
 import { useAuth, isAdmin } from '@/contexts/AuthContext'
-import { applyTheme, getStoredTheme, THEMES } from '@/lib/theme'
+import { applyTheme, getStoredTheme, type ThemeId } from '@/lib/theme'
 import { DOCS, docsLink } from '@/lib/docs'
 
 const SIDEBAR_KEY = 'tome_sidebar'
@@ -72,7 +73,7 @@ export function IconPicker({ value, onChange }: { value: string; onChange: (v: s
         <Curr className="w-3.5 h-3.5" />
       </button>
       {open && (
-        <div className="absolute left-0 top-full mt-1 z-50 bg-card border border-border rounded-lg shadow-xl p-2 w-72">
+        <div className="absolute left-0 top-full mt-1 z-50 bg-card border border-border rounded-xl shadow-xl shadow-accent-soft p-2 w-72">
           <input
             ref={searchRef}
             value={search}
@@ -676,7 +677,7 @@ export function Sidebar({ libraries, savedFilters, activeTab, onLibrariesChange,
               </div>
               {/* Actions */}
               <div className="px-2 pb-3 space-y-0.5">
-                <MobileThemeToggle />
+                <MobileThemeToggle itemClass="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" />
                 <Link
                   to="/settings"
                   onClick={onMobileClose}
@@ -722,27 +723,33 @@ export function Sidebar({ libraries, savedFilters, activeTab, onLibrariesChange,
 }
 
 
-function MobileThemeToggle() {
-  const [isDark, setIsDark] = useState(() => {
-    const t = THEMES.find(t => t.id === getStoredTheme())
-    return t?.dark ?? false
-  })
+const THEME_OPTIONS: { id: ThemeId; icon: typeof Sun; label: string }[] = [
+  { id: 'light', icon: Sun, label: 'Light' },
+  { id: 'dark', icon: Moon, label: 'Dark' },
+  { id: 'amber', icon: Flame, label: 'Amber' },
+]
 
-  function toggle() {
-    const next = isDark ? 'light' : 'dark'
-    applyTheme(next)
-    setIsDark(!isDark)
-  }
-
+function ThemeMenuItems({ itemClass }: { itemClass: string }) {
+  const [current, setCurrent] = useState(getStoredTheme)
   return (
-    <button
-      onClick={toggle}
-      className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-    >
-      {isDark ? <Sun className="w-5 h-5 shrink-0" /> : <Moon className="w-5 h-5 shrink-0" />}
-      {isDark ? 'Light mode' : 'Dark mode'}
-    </button>
+    <>
+      {THEME_OPTIONS.map(({ id, icon: Icon, label }) => (
+        <button
+          key={id}
+          onClick={() => { applyTheme(id); setCurrent(id) }}
+          className={itemClass}
+        >
+          <Icon className="w-4 h-4 shrink-0" />
+          {label}
+          {current === id && <Check className="w-3.5 h-3.5 shrink-0 text-primary ml-auto" />}
+        </button>
+      ))}
+    </>
   )
+}
+
+function MobileThemeToggle({ itemClass }: { itemClass: string }) {
+  return <ThemeMenuItems itemClass={itemClass} />
 }
 
 function CollapsedUserMenu({ user, logout }: { user: { username: string; is_admin?: boolean; role?: string } | null; logout: () => void }) {
@@ -773,7 +780,7 @@ function CollapsedUserMenu({ user, logout }: { user: { username: string; is_admi
         </div>
       </button>
       {open && (
-        <div className="absolute bottom-full left-1 right-1 mb-1 bg-card border border-border rounded-lg shadow-lg py-1.5 z-50 w-40">
+        <div className="absolute bottom-full left-1 right-1 mb-1 bg-card border border-border rounded-xl shadow-lg shadow-accent-soft py-1.5 z-50 w-40">
           <Link to="/settings" onClick={() => setOpen(false)} className={menuItem}>
             <Settings className="w-4 h-4 shrink-0" />
             Settings
@@ -790,6 +797,8 @@ function CollapsedUserMenu({ user, logout }: { user: { username: string; is_admi
             <ExternalLink className="w-3 h-3 shrink-0 opacity-60" />
           </a>
           <div className="my-1 h-px bg-border mx-2" />
+          <ThemeMenuItems itemClass={menuItem} />
+          <div className="my-1 h-px bg-border mx-2" />
           <button onClick={logout} className={destructive}>
             <LogOut className="w-4 h-4 shrink-0" />
             Log out
@@ -803,10 +812,6 @@ function CollapsedUserMenu({ user, logout }: { user: { username: string; is_admi
 function UserMenu({ user, logout }: { user: { username: string; is_admin?: boolean; role?: string } | null; logout: () => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-  const [isDark, setIsDark] = useState(() => {
-    const t = THEMES.find(t => t.id === getStoredTheme())
-    return t?.dark ?? false
-  })
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -816,43 +821,24 @@ function UserMenu({ user, logout }: { user: { username: string; is_admin?: boole
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  function toggleTheme() {
-    const next = isDark ? 'light' : 'dark'
-    applyTheme(next)
-    setIsDark(!isDark)
-  }
-
   const menuItem = 'flex items-center gap-2.5 w-full px-3 py-1.5 text-[13px] rounded-md transition-colors hover:bg-accent text-foreground/80 hover:text-foreground'
   const destructive = menuItem + ' text-destructive/80 hover:text-destructive hover:bg-destructive/10'
 
   return (
     <div ref={ref} className="relative shrink-0 border-t border-border px-2 py-2.5">
-      <div className="flex items-center gap-1">
-        {/* Always-visible theme toggle */}
-        <button
-          onClick={toggleTheme}
-          title={isDark ? 'Switch to light' : 'Switch to dark'}
-          aria-label={isDark ? 'Switch to light' : 'Switch to dark'}
-          className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-accent/60 transition-colors text-muted-foreground hover:text-foreground shrink-0"
-        >
-          {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-        </button>
-
-        {/* Trigger button */}
-        <button
-          onClick={() => setOpen(o => !o)}
-          className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-lg text-[13px] hover:bg-accent/60 transition-colors min-w-0"
-        >
-          <div className="flex w-6 h-6 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary shrink-0 ring-2 ring-primary/20">
-            {(user?.username ?? '?').slice(0, 2).toUpperCase()}
-          </div>
-          <span className="truncate font-medium text-foreground/80 flex-1 text-left">{user?.username}</span>
-          <ChevronsUpDown className="w-3 h-3 text-muted-foreground/50 shrink-0" />
-        </button>
-      </div>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-[13px] hover:bg-accent/60 transition-colors min-w-0"
+      >
+        <div className="flex w-6 h-6 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary shrink-0 ring-2 ring-primary/20">
+          {(user?.username ?? '?').slice(0, 2).toUpperCase()}
+        </div>
+        <span className="truncate font-medium text-foreground/80 flex-1 text-left">{user?.username}</span>
+        <ChevronsUpDown className="w-3 h-3 text-muted-foreground/50 shrink-0" />
+      </button>
 
       {open && (
-        <div className="absolute bottom-full left-2 right-2 mb-1 bg-card border border-border rounded-lg shadow-lg py-1.5 z-50">
+        <div className="absolute bottom-full left-2 right-2 mb-1 bg-card border border-border rounded-xl shadow-lg shadow-accent-soft py-1.5 z-50">
           <Link to="/settings" onClick={() => setOpen(false)} className={menuItem}>
             <Settings className="w-4 h-4 shrink-0" />
             Settings
@@ -868,6 +854,8 @@ function UserMenu({ user, logout }: { user: { username: string; is_admin?: boole
             <span className="flex-1">Docs</span>
             <ExternalLink className="w-3 h-3 shrink-0 opacity-60" />
           </a>
+          <div className="my-1 h-px bg-border mx-2" />
+          <ThemeMenuItems itemClass={menuItem} />
           <div className="my-1 h-px bg-border mx-2" />
           <button onClick={logout} className={destructive}>
             <LogOut className="w-4 h-4 shrink-0" />
@@ -1011,7 +999,7 @@ function LibraryModal({ title, initialName, initialIcon, initialIsPublic, onSave
       className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"
       onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-card text-foreground rounded-xl shadow-xl max-w-sm w-full mx-4 p-6 space-y-4">
+      <div className="bg-card text-foreground rounded-2xl shadow-xl shadow-accent-soft max-w-sm w-full mx-4 p-6 space-y-4">
         <h2 className="text-base font-semibold">{title}</h2>
         <input
           ref={inputRef}

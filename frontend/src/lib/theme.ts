@@ -20,8 +20,8 @@ export interface CustomTheme {
 }
 
 export const THEMES: ThemeDefinition[] = [
-  { id: 'light', label: 'Light', dark: false, preview: { bg: '#ffffff',  card: '#f1f5f9', primary: '#1a1a1a',  text: '#1a1a1a' } },
-  { id: 'dark',  label: 'Dark',  dark: true,  preview: { bg: '#09090b',  card: '#18181b', primary: '#fafafa',   text: '#fafafa' } },
+  { id: 'light', label: 'Light', dark: false, preview: { bg: '#ffffff',  card: '#f1f5f9', primary: '#863bff',  text: '#1a1a1a' } },
+  { id: 'dark',  label: 'Dark',  dark: true,  preview: { bg: '#09090b',  card: '#18181b', primary: '#a166ff',   text: '#fafafa' } },
   { id: 'amber', label: 'Amber', dark: false, preview: { bg: '#f9f4ec',  card: '#fffef9', primary: '#8c5c2a',   text: '#2e1f10' } },
 ]
 

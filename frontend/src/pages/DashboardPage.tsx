@@ -126,7 +126,7 @@ function BulkDeleteModal({ open, books, selectedIds, onCancel, onConfirm }: Bulk
         onClick={() => { if (!deleting) onCancel() }}
       />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="pointer-events-auto w-full max-w-md bg-card border border-border rounded-2xl shadow-2xl flex flex-col max-h-[80vh]">
+        <div className="pointer-events-auto w-full max-w-md bg-card border border-border rounded-2xl shadow-2xl shadow-accent-soft flex flex-col max-h-[80vh]">
           {/* Header */}
           <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
             <div className="flex items-center gap-2">
@@ -234,8 +234,8 @@ function relativeTime(isoString: string): string {
 
 function StatPill({ icon, value, label }: { icon: ReactNode; value: string; label: string }) {
   return (
-    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-muted/60 border border-border">
-      <span className="text-muted-foreground">{icon}</span>
+    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-primary/5 border border-primary/10">
+      <span className="text-primary/60">{icon}</span>
       <span className="text-sm font-semibold text-foreground">{value}</span>
       <span className="text-xs text-muted-foreground">{label}</span>
     </div>
@@ -987,7 +987,7 @@ export function DashboardPage() {
               {!forgottenDismissed && forgottenBooks.length > 0 && (
                 <section className="rounded-lg border border-border bg-muted/30 p-4">
                   <header className="flex items-center justify-between mb-3">
-                    <h2 className="text-sm font-medium">Pick up where you left off</h2>
+                    <h2 className="text-base font-semibold">Pick up where you left off</h2>
                     <button
                       onClick={() => setForgottenDismissed(true)}
                       className="text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -1023,13 +1023,18 @@ export function DashboardPage() {
 
               {/* ── Continue Reading ──────────────────────────────────────── */}
               <div className="flex flex-col gap-3">
-                <h2 className="text-sm font-semibold text-foreground">Continue Reading</h2>
+                <h2 className="text-base font-semibold text-foreground">Continue Reading</h2>
                 {continueReading.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-24 gap-3 text-muted-foreground">
-                    <BookOpen className="w-12 h-12 opacity-20" />
-                    <p className="text-sm">No books in progress. Start reading something!</p>
-                    <button onClick={() => setTab('books')} className="text-xs text-primary hover:underline">
-                      Browse All Books
+                  <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+                      <BookOpen className="w-8 h-8 text-primary/40" />
+                    </div>
+                    <div>
+                      <p className="text-base font-medium text-foreground">Nothing in progress</p>
+                      <p className="text-sm text-muted-foreground mt-1">Start reading and your progress will show up here</p>
+                    </div>
+                    <button onClick={() => setTab('books')} className="text-sm text-primary hover:underline">
+                      Browse your library
                     </button>
                   </div>
                 ) : (
@@ -1061,7 +1066,7 @@ export function DashboardPage() {
                 if (seriesBooks.length === 0) return null
                 return (
                   <div className="flex flex-col gap-3">
-                    <h2 className="text-sm font-semibold text-foreground">Series Progress</h2>
+                    <h2 className="text-base font-semibold text-foreground">Series Progress</h2>
                     <div className="flex flex-col gap-2">
                       {seriesBooks.map(book => {
                         const seriesData = seriesList.find(s => s.name === book.series)
@@ -1097,7 +1102,7 @@ export function DashboardPage() {
               {/* ── Recently Finished ─────────────────────────────────────── */}
               {recentlyFinished.length > 0 && (
                 <div className="flex flex-col gap-3">
-                  <h2 className="text-sm font-semibold text-foreground">Recently Finished</h2>
+                  <h2 className="text-base font-semibold text-foreground">Recently Finished</h2>
                   <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
                     {recentlyFinished.map(book => (
                       <div key={book.id} className="shrink-0 w-24">
@@ -1117,7 +1122,7 @@ export function DashboardPage() {
               {/* ── Recently Added ────────────────────────────────────────── */}
               {recentlyAdded.length > 0 && (
                 <div className="flex flex-col gap-3">
-                  <h2 className="text-sm font-semibold text-foreground">Recently Added</h2>
+                  <h2 className="text-base font-semibold text-foreground">Recently Added</h2>
                   <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
                     {recentlyAdded.map(book => (
                       <div key={book.id} className="shrink-0 w-24">
@@ -1138,7 +1143,7 @@ export function DashboardPage() {
               {/* ── Reading Log ───────────────────────────────────────────── */}
               {activityLog.length > 0 && (
                 <div className="flex flex-col gap-3">
-                  <h2 className="text-sm font-semibold text-foreground">Reading Log</h2>
+                  <h2 className="text-base font-semibold text-foreground">Reading Log</h2>
                   <div className="flex flex-col gap-1">
                     {activityLog.map((entry, i) => (
                       <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted/50 transition-colors">
@@ -1212,7 +1217,7 @@ export function DashboardPage() {
                         <div className="flex flex-col sm:flex-row sm:items-start gap-4">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <h2 className="text-lg font-bold text-foreground leading-tight">{seriesDetail.name}</h2>
+                              <h2 className="text-xl sm:text-2xl font-bold text-foreground leading-tight">{seriesDetail.name}</h2>
                               <SeriesStatusBadge status={seriesMetaMap[seriesDetail.name]} />
                             </div>
                             {seriesDetail.author && (
@@ -1449,7 +1454,7 @@ export function DashboardPage() {
                 <button key={f} onClick={() => toggleSort(f)}
                   className={cn(
                     'flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all',
-                    sort === f ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    sort === f ? 'bg-primary/10 text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   )}>
                   {SORT_LABELS[f]}
                   {sort === f && (order === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
@@ -1550,7 +1555,7 @@ export function DashboardPage() {
               ]).map(({ mode, Icon, title }) => (
                 <button key={mode} onClick={() => persistView(mode)} title={title} aria-label={title}
                   className={cn('p-1.5 rounded-md transition-all',
-                    view === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
+                    view === mode ? 'bg-primary/10 text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
                   <Icon className="w-3.5 h-3.5" />
                 </button>
               ))}
@@ -1750,25 +1755,36 @@ export function DashboardPage() {
               <Loader2 className="w-6 h-6 animate-spin text-primary" />
             </div>
           ) : books.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 gap-3 text-muted-foreground">
-              <BookOpen className="w-12 h-12 opacity-20" />
+            <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+                <BookOpen className="w-8 h-8 text-primary/40" />
+              </div>
               {search ? (
                 <>
-                  <p className="text-sm">No results for &ldquo;{search}&rdquo;</p>
+                  <div>
+                    <p className="text-base font-medium text-foreground">No results found</p>
+                    <p className="text-sm text-muted-foreground mt-1">Nothing matched &ldquo;{search}&rdquo;</p>
+                  </div>
                   <button
                     onClick={() => { setSearchInput(''); setFilter('q', '') }}
-                    className="text-xs text-primary hover:underline"
+                    className="text-sm text-primary hover:underline"
                   >
                     Clear search
                   </button>
                 </>
               ) : (hasFilters || filterLibrary) ? (
                 <>
-                  <p className="text-sm">No books match your filters.</p>
-                  <button onClick={clearFilters} className="text-xs text-primary hover:underline">Clear filters</button>
+                  <div>
+                    <p className="text-base font-medium text-foreground">No matches</p>
+                    <p className="text-sm text-muted-foreground mt-1">Try adjusting your filters</p>
+                  </div>
+                  <button onClick={clearFilters} className="text-sm text-primary hover:underline">Clear all filters</button>
                 </>
               ) : (
-                <p className="text-sm">No books yet — upload or import some!</p>
+                <div>
+                  <p className="text-base font-medium text-foreground">Your library is empty</p>
+                  <p className="text-sm text-muted-foreground mt-1">Upload or scan a folder to get started</p>
+                </div>
               )}
             </div>
           ) : (

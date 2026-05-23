@@ -156,7 +156,7 @@ export function LoginPage() {
         </div>
 
         {/* Card — fade in on mount */}
-        <div className="bg-card border border-border rounded-2xl p-6 shadow-lg shadow-black/5 animate-fade-in-up">
+        <div className="bg-card border border-border rounded-2xl p-6 shadow-lg shadow-accent-soft animate-fade-in-up">
 
           {qcMode ? (
             /* Quick Connect view */

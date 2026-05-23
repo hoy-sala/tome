@@ -167,7 +167,7 @@ export function MetadataFetchModal({ book, open, onClose, onApplied }: Props) {
       <div className="absolute inset-0 bg-black/50" onClick={handleClose} />
 
       {/* Panel */}
-      <div className="relative z-10 bg-background border border-border rounded-xl shadow-xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="relative z-10 bg-background border border-border rounded-2xl shadow-xl shadow-accent-soft w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-background z-10">
           <div className="flex items-center gap-2 font-semibold text-sm">

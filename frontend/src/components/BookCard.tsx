@@ -207,7 +207,7 @@ export function BookCard({
       <div
         ref={coverDivRef}
         className={cn(
-          'aspect-[2/3] bg-muted relative overflow-hidden rounded-lg shadow-sm group-hover:shadow-lg',
+          'aspect-[2/3] bg-muted relative overflow-hidden rounded-xl shadow-sm group-hover:shadow-lg group-hover:shadow-accent-soft',
           selected && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
           focused && 'ring-2 ring-blue-500 ring-offset-2 ring-offset-background',
         )}

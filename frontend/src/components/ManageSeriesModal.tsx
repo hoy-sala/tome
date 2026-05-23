@@ -161,7 +161,7 @@ export function ManageSeriesModal({ seriesName, volumes, onClose, onSaved }: Pro
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="w-full max-w-3xl bg-card rounded-xl border border-border shadow-xl flex flex-col max-h-[90vh] min-h-[420px]">
+      <div className="w-full max-w-3xl bg-card rounded-2xl border border-border shadow-xl shadow-accent-soft flex flex-col max-h-[90vh] min-h-[420px]">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
           <div>
