@@ -12,7 +12,8 @@ build/
 data/
 books/
 bindery/
-/library/                       # ignore top-level ebook library only — docs/seed/library/ is the showcase seed and IS committed
+# Top-level ebook library only — docs/seed/library/ is the showcase seed and IS committed.
+/library/
 incoming/
 *.db
 *.db-wal
