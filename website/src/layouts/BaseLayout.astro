@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css'
+import { withBase } from '../lib/path'
 
 interface Props {
   title: string
@@ -13,6 +14,7 @@ const { title, description = 'A self-hosted ebook library that knows how you rea
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href={withBase('/favicon.svg')} />
     <title>{title}</title>
     <meta name="description" content={description} />
     <!-- No-flash theme init: runs before paint, sets the class from storage or system pref -->
