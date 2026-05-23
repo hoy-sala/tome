@@ -1,5 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <rect width="1024" height="1024" rx="224" fill="#1a1714"/>
+  <defs>
+    <!-- Subtle vertical gradient: warmer ink at top, deeper at bottom — gives the
+         "domed" plasticity feel without going full skeumorphic. -->
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#2d2724"/>
+      <stop offset="100%" stop-color="#0d0a08"/>
+    </linearGradient>
+    <!-- Glassy top-edge highlight, clipped to the tile shape. -->
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#ffffff" stop-opacity="0.10"/>
+      <stop offset="60%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <!-- Soft inner rim — barely-there light edge along the top arc, just enough
+         to read as a curved surface. -->
+    <radialGradient id="rim" cx="0.5" cy="-0.15" r="0.85">
+      <stop offset="0%"  stop-color="#ffffff" stop-opacity="0.14"/>
+      <stop offset="55%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="tileShape">
+      <rect width="1024" height="1024" rx="224"/>
+    </clipPath>
+  </defs>
+  <rect width="1024" height="1024" rx="224" fill="url(#tile)"/>
+  <g clip-path="url(#tileShape)">
+    <rect width="1024" height="1024" fill="url(#rim)"/>
+    <rect width="1024" height="1024" fill="url(#gloss)"/>
+  </g>
   <g transform="translate(150 150) scale(11.5)">
     <path d="M4 18 Q 4 14 8 14 L 28 18 Q 32 19 32 22 Q 32 19 36 18 L 56 14 Q 60 14 60 18 L 60 46 Q 60 49 56 49 L 36 49 Q 32 50 32 52 Q 32 50 28 49 L 8 49 Q 4 49 4 46 Z" stroke="#f5f1ea" stroke-width="5" stroke-linejoin="round" fill="none"/>
     <line x1="32" y1="22" x2="32" y2="52" stroke="#f5f1ea" stroke-width="5" stroke-linecap="round"/>
