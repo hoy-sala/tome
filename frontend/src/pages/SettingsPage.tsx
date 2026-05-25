@@ -38,6 +38,12 @@ interface OpdsPin {
 export function SettingsPage() {
   const { user, refreshUser } = useAuth()
 
+  // ── Version ──────────────────────────────────────────────────────────────
+  const [tomeVersion, setTomeVersion] = useState('…')
+  useEffect(() => {
+    api.get<{ version: string }>('/health').then(r => setTomeVersion(r.version)).catch(() => {})
+  }, [])
+
   // ── Profile ───────────────────────────────────────────────────────────────
   const [profileUsername, setProfileUsername] = useState(user?.username ?? '')
   const [profileEmail, setProfileEmail] = useState(user?.email ?? '')
@@ -1227,7 +1233,7 @@ export function SettingsPage() {
         <section>
           <div className="flex items-center gap-2 text-xs text-muted-foreground/60">
             <Info className="w-3.5 h-3.5 shrink-0" />
-            <span>Tome v0.1.0</span>
+            <span>Tome v{tomeVersion}</span>
             <span>&middot;</span>
             <a
               href="https://github.com/bndct-devops/tome"
