@@ -629,6 +629,19 @@ html { scroll-behavior: smooth; }
    suppress it here since the rotating chevron on the right is our indicator. */
 .docs-article details.callout-collapsible summary::before { content: none; }
 
+/* Header logo — gentle lift-and-settle on hover (no rotation, stays clear of the wordmark). */
+.site-logo { transform-box: view-box; transform-origin: 32px 32px; }
+header a:hover .site-logo { animation: logo-bob 0.5s ease-in-out; }
+@keyframes logo-bob {
+  0%   { transform: translateY(0); }
+  45%  { transform: translateY(-5px); }
+  70%  { transform: translateY(1px); }
+  100% { transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  header a:hover .site-logo { animation: none; }
+}
+
 .callout-info    { --callout-accent: oklch(0.60 0.16 240); --callout-bg: oklch(0.60 0.16 240 / 0.10); }
 .callout-tip     { --callout-accent: oklch(0.62 0.18 160); --callout-bg: oklch(0.62 0.18 160 / 0.10); }
 .callout-warning { --callout-accent: oklch(0.70 0.18 75);  --callout-bg: oklch(0.70 0.18 75 / 0.10); }
