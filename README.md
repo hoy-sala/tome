@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/screenshots/home.png" alt="Tome dashboard — continue reading, series progress, recently finished" />
+  <img src="docs/screenshots/hero.gif" alt="Tome — browsing the library, reading stats, and KOReader sync in action" />
 </p>
 
 # Tome
