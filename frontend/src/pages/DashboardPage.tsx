@@ -18,6 +18,7 @@ import { AutocompleteInput } from '@/components/AutocompleteInput'
 import { UploadModal } from '@/components/UploadModal'
 import { ManageSeriesModal } from '@/components/ManageSeriesModal'
 import { SendToDeviceModal } from '@/components/SendToDeviceModal'
+import { BookAnimation } from '@/components/BookAnimation'
 import { SyncStatusBadge } from '@/components/SyncStatusBadge'
 import { api } from '@/lib/api'
 import type { Book, Library, SavedFilter, ReadingStatus, Arc, SeriesMeta, SeriesStatus } from '@/lib/books'
@@ -871,7 +872,7 @@ export function DashboardPage() {
             <Menu className="w-5 h-5" />
           </button>
           <div className="flex items-center gap-2 mr-2 shrink-0 group cursor-default">
-            <TomeMark className="w-5 h-5 text-primary transition-transform duration-300 group-hover:rotate-[-12deg] group-hover:scale-110" strokeWidth={7} />
+            <TomeMark className="w-5 h-5 text-primary logo-bob" strokeWidth={7} />
             <span className="font-semibold text-sm">Tome</span>
           </div>
           <div className="relative flex-1 sm:max-w-md">
@@ -1197,7 +1198,7 @@ export function DashboardPage() {
             </div>
             {seriesLoading ? (
               <div className="flex justify-center py-24">
-                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                <BookAnimation variant="refresh" className="block w-10 h-10 text-primary" />
               </div>
             ) : seriesList.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-24 gap-3 text-muted-foreground">
@@ -1764,7 +1765,7 @@ export function DashboardPage() {
           {/* ── Grid / list ───────────────────────────────────────────────── */}
           {loading ? (
             <div className="flex justify-center py-24">
-              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              <BookAnimation variant="refresh" className="block w-12 h-12 text-primary" />
             </div>
           ) : books.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">

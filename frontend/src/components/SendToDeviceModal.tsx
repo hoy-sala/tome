@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Send, X, Loader2, AlertTriangle } from 'lucide-react'
+import { BookAnimation } from '@/components/BookAnimation'
 import { api } from '@/lib/api'
 import { useToast } from '@/contexts/ToastContext'
 import type { BookFile } from '@/lib/books'
@@ -97,7 +98,7 @@ export function SendToDeviceModal({ open, onClose, books }: SendToDeviceModalPro
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 z-50" onClick={sending ? undefined : onClose} />
+      <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} />
       <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
         <div className="bg-card border border-border rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
           {/* Header */}
@@ -108,8 +109,7 @@ export function SendToDeviceModal({ open, onClose, books }: SendToDeviceModalPro
             </div>
             <button
               onClick={onClose}
-              disabled={sending}
-              className="p-1 rounded-lg hover:bg-muted transition-colors text-muted-foreground disabled:opacity-50"
+              className="p-1 rounded-lg hover:bg-muted transition-colors text-muted-foreground"
             >
               <X className="w-4 h-4" />
             </button>
@@ -120,6 +120,13 @@ export function SendToDeviceModal({ open, onClose, books }: SendToDeviceModalPro
             {loading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : sending ? (
+              <div className="flex flex-col items-center justify-center py-6 gap-3">
+                <BookAnimation variant="send" className="block w-16 h-16 text-primary" />
+                <p className="text-sm font-medium text-foreground">
+                  Sending<span className="dots-anim"><span>.</span><span>.</span><span>.</span></span>
+                </p>
               </div>
             ) : smtpConfigured === false ? (
               <div className="text-center py-4 space-y-2">

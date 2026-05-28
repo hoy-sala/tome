@@ -7,6 +7,7 @@ import {
 import { api } from '@/lib/api'
 import type { BookDetail, BookType, Library, MetadataCandidate } from '@/lib/books'
 import { cn } from '@/lib/utils'
+import { BookAnimation } from '@/components/BookAnimation'
 import { BulkMetadataReviewModal } from './BulkMetadataReviewModal'
 import { UploadModal } from './UploadModal'
 import { useShiftSelect } from '@/lib/useShiftSelect'
@@ -368,7 +369,7 @@ function ReviewFlow({ queue, onBack, onBookUpdated }: ReviewFlowProps) {
 
       {loadingBook && (
         <div className="flex items-center justify-center py-24">
-          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          <BookAnimation variant="refresh" className="block w-10 h-10 text-primary" />
         </div>
       )}
 
@@ -1399,7 +1400,7 @@ export function MetadataManager() {
       {error && <p className="text-sm text-destructive">{error}</p>}
       {loading && (
         <div className="flex items-center justify-center py-16">
-          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          <BookAnimation variant="refresh" className="block w-10 h-10 text-primary" />
         </div>
       )}
 

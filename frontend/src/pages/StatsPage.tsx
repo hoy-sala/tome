@@ -7,6 +7,7 @@ import {
   ArrowUpDown, HelpCircle,
 } from 'lucide-react'
 import { DOCS, docsLink } from '@/lib/docs'
+import { BookAnimation } from '@/components/BookAnimation'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -575,7 +576,7 @@ export function StatsPage() {
       <main className="max-w-5xl mx-auto px-4 py-6">
         {loading ? (
           <div className="flex justify-center py-32">
-            <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            <BookAnimation variant="refresh" className="block w-10 h-10 text-primary" />
           </div>
         ) : isEmpty ? (
           <div className="flex flex-col items-center justify-center py-32 gap-4 text-muted-foreground">

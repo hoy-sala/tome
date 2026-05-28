@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { BookAnimation } from '@/components/BookAnimation'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -249,7 +250,7 @@ export function UsersPage() {
       <main className="max-w-5xl mx-auto px-4 py-6">
         {loading ? (
           <div className="flex justify-center py-24">
-            <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            <BookAnimation variant="refresh" className="block w-10 h-10 text-primary" />
           </div>
         ) : (
           <div className="flex flex-col gap-2">

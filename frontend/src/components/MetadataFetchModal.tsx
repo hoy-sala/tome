@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { Loader2, Sparkles, BookOpen, ExternalLink, Check, X } from 'lucide-react'
+import { BookAnimation } from '@/components/BookAnimation'
 import type { BookDetail, MetadataCandidate } from '@/lib/books'
 
 const API = import.meta.env.VITE_API_URL ?? ''
@@ -210,8 +211,9 @@ export function MetadataFetchModal({ book, open, onClose, onApplied }: Props) {
               {error && <p className="text-sm text-destructive">{error}</p>}
 
               {loading && (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <div className="flex flex-col items-center justify-center py-8 gap-3">
+                  <BookAnimation variant="refresh" className="block w-12 h-12 text-primary" />
+                  <p className="text-sm text-muted-foreground">Searching…</p>
                 </div>
               )}
 

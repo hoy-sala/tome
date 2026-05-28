@@ -129,6 +129,94 @@
   100% { background-position: 200% 0; }
 }
 
+/* ── Book animations (BookAnimation component) ───────────────────────────
+   One SVG book (left-page / right-page / spine), stroke = currentColor so it
+   inherits the theme via text-* utilities. transform-box: view-box keeps the
+   px transform-origins mapped to the 64-unit viewBox, so motion is correct at
+   any render size. */
+.book-anim svg { width: 100%; height: 100%; overflow: visible; }
+.book-anim path,
+.book-anim line { stroke: currentColor; fill: none; }
+.book-anim g.book,
+.book-anim .left-page,
+.book-anim .right-page,
+.book-anim .spine,
+.book-anim .pg { transform-box: view-box; }
+.book-anim .left-page,
+.book-anim .right-page { transform-origin: 32px 35px; }
+.book-anim .spine { transform-origin: 32px 37px; }
+.book-anim g.book { transform-origin: 32px 32px; }
+.book-anim .ba-shadow { fill: currentColor; stroke: none; opacity: 0.3; }
+
+/* Levitate — vertical bob with a breathing shadow (hero / login) */
+.book-anim--levitate.is-playing g.book { animation: ba-floaty 3.2s ease-in-out infinite; }
+.book-anim--levitate.is-playing .ba-shadow { animation: ba-shadowpulse 3.2s ease-in-out infinite; transform-origin: center; }
+@keyframes ba-floaty { 0%,100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-7px) rotate(2deg); } }
+@keyframes ba-shadowpulse { 0%,100% { transform: scaleX(1); opacity: .3; } 50% { transform: scaleX(.78); opacity: .15; } }
+
+/* Refresh — full Y spin with anticipation + settle (rescan / wait states) */
+.book-anim--refresh.is-playing g.book { animation: ba-flip360 1.5s ease-in-out infinite; }
+@keyframes ba-flip360 {
+  0%,12% { transform: perspective(400px) rotateY(0); }
+  20%    { transform: perspective(400px) rotateY(-24deg); }
+  72%    { transform: perspective(400px) rotateY(360deg); }
+  84%    { transform: perspective(400px) rotateY(350deg); }
+  92%    { transform: perspective(400px) rotateY(363deg); }
+  100%   { transform: perspective(400px) rotateY(360deg); }
+}
+
+/* Send — closes then whooshes off (send-to-device success) */
+.book-anim--send.is-playing g.book { animation: ba-whoosh 2.6s linear infinite; }
+.book-anim--send.is-playing .left-page { animation: ba-closeL 2.6s ease-in infinite; }
+.book-anim--send.is-playing .right-page { animation: ba-closeR 2.6s ease-in infinite; }
+@keyframes ba-closeL { 0%,8% { transform: rotateY(0); } 25%,100% { transform: perspective(300px) rotateY(34deg); } }
+@keyframes ba-closeR { 0%,8% { transform: rotateY(0); } 25%,100% { transform: perspective(300px) rotateY(-34deg); } }
+@keyframes ba-whoosh {
+  0%,24% { transform: translate(0,0) scale(1) rotate(0); opacity: 1; }
+  34%    { transform: translate(-5px,6px) scale(.90) rotate(-9deg); opacity: 1; }
+  44%    { transform: translate(-1px,1px) scale(1.05) rotate(-3deg); opacity: 1; }
+  60%    { transform: translate(12px,-10px) scale(.62) rotate(10deg); opacity: .95; }
+  100%   { transform: translate(56px,-48px) scale(.04) rotate(34deg); opacity: 0; }
+}
+
+/* Riffle — continuous page sweep (loader) */
+.book-anim--riffle.is-playing .pg { animation: ba-riffle 1.3s linear infinite; transform-origin: 32px 35px; opacity: 0; }
+.book-anim--riffle.is-playing .pg:nth-child(2) { animation-delay: 0s; }
+.book-anim--riffle.is-playing .pg:nth-child(3) { animation-delay: .12s; }
+.book-anim--riffle.is-playing .pg:nth-child(4) { animation-delay: .24s; }
+.book-anim--riffle.is-playing .pg:nth-child(5) { animation-delay: .36s; }
+@keyframes ba-riffle {
+  0%   { transform: perspective(300px) rotateY(0); opacity: 0; }
+  20%  { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { transform: perspective(300px) rotateY(-120deg); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .book-anim.is-playing g.book,
+  .book-anim.is-playing .left-page,
+  .book-anim.is-playing .right-page,
+  .book-anim.is-playing .pg,
+  .book-anim.is-playing .ba-shadow { animation: none !important; }
+}
+
+/* Header logo — gentle lift-and-settle on hover (matches the website). */
+@keyframes logo-bob {
+  0%   { transform: translateY(0); }
+  45%  { transform: translateY(-5px); }
+  70%  { transform: translateY(1px); }
+  100% { transform: translateY(0); }
+}
+.group:hover .logo-bob { animation: logo-bob 0.5s ease-in-out; }
+@media (prefers-reduced-motion: reduce) { .group:hover .logo-bob { animation: none; } }
+
+/* Animated loading ellipsis — three dots pulsing in sequence */
+@keyframes dot-pulse { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+.dots-anim > span { animation: dot-pulse 1.2s infinite; }
+.dots-anim > span:nth-child(2) { animation-delay: 0.15s; }
+.dots-anim > span:nth-child(3) { animation-delay: 0.3s; }
+@media (prefers-reduced-motion: reduce) { .dots-anim > span { animation: none; } }
+
 /* iOS safe area utilities */
 .safe-top {
   padding-top: env(safe-area-inset-top);

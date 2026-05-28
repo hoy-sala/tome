@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, Navigate } from 'react-router-dom'
 import { LogIn, Eye, EyeOff, AlertCircle, Smartphone, X, Clock } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import { ThemeToggle } from '@/components/ThemeToggle'
-import { TomeMark } from '@/components/TomeMark'
+import { ThemePill } from '@/components/ThemeToggle'
+import { BookAnimation } from '@/components/BookAnimation'
 import { cn } from '@/lib/utils'
 
 const API_BASE = '/api'
@@ -133,25 +133,15 @@ export function LoginPage() {
           from { opacity: 0; transform: translateY(12px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        @keyframes jiggle {
-          0%, 100% { transform: rotate(0deg); }
-          20% { transform: rotate(-12deg); }
-          40% { transform: rotate(10deg); }
-          60% { transform: rotate(-6deg); }
-          80% { transform: rotate(4deg); }
-        }
         .animate-fade-in-up { animation: fade-in-up 0.4s ease-out both; }
-        .logo-jiggle:hover .logo-icon { animation: jiggle 0.5s ease-in-out; }
       `}</style>
 
-      <ThemeToggle className="fixed top-4 right-4" />
+      <ThemePill className="fixed top-4 right-4" />
 
       <div className="w-full max-w-sm">
         {/* Logo */}
-        <div className="flex items-center justify-center gap-3 mb-8 cursor-default logo-jiggle">
-          <div className="p-2.5 rounded-xl bg-primary/10 ring-1 ring-primary/20 logo-icon">
-            <TomeMark className="w-6 h-6 text-primary" strokeWidth={6} />
-          </div>
+        <div className="flex flex-col items-center gap-3 mb-8 cursor-default">
+          <BookAnimation variant="levitate" className="block w-24 h-24 text-primary" strokeWidth={4} />
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Tome</h1>
         </div>
 

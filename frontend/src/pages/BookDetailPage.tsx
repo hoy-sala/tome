@@ -12,6 +12,7 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { MetadataFetchModal } from '@/components/MetadataFetchModal'
 import { CoverPickerModal } from '@/components/CoverPickerModal'
 import { SendToDeviceModal } from '@/components/SendToDeviceModal'
+import { BookAnimation } from '@/components/BookAnimation'
 import { CoverImage } from '@/components/CoverImage'
 import { AutocompleteInput } from '@/components/AutocompleteInput'
 import { api } from '@/lib/api'
@@ -273,7 +274,7 @@ export function BookDetailPage() {
 
   if (loading) return (
     <div className="min-h-screen bg-background flex items-center justify-center">
-      <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      <BookAnimation variant="refresh" className="block w-10 h-10 text-primary" />
     </div>
   )
 

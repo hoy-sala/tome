@@ -18,6 +18,7 @@ import { IconPicker } from '@/components/Sidebar'
 import { CoverImage } from '@/components/CoverImage'
 import type { BookType } from '@/lib/books'
 import { invalidateBookTypesCache } from '@/lib/bookTypes'
+import { BookAnimation } from '@/components/BookAnimation'
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -256,7 +257,7 @@ function UsersTab() {
 
       {loading ? (
         <div className="flex justify-center py-16">
-          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+          <BookAnimation variant="refresh" className="block w-10 h-10 text-primary" />
         </div>
       ) : (
         <div className="flex flex-col gap-2">
@@ -428,12 +429,21 @@ function ScannerTab() {
           </p>
         </div>
         <div className="px-4 py-3">
-          {typeSelector}
-          <button onClick={handleScan} disabled={scanning || importing}
-            className="mt-3 flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors disabled:opacity-50">
-            {scanning ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            {scanning ? 'Scanning…' : 'Scan Now'}
-          </button>
+          {scanning ? (
+            <div className="flex flex-col items-center justify-center py-4 gap-2">
+              <BookAnimation variant="refresh" className="block w-12 h-12 text-primary" />
+              <p className="text-sm text-muted-foreground">Scanning…</p>
+            </div>
+          ) : (
+            <>
+              {typeSelector}
+              <button onClick={handleScan} disabled={scanning || importing}
+                className="mt-3 flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors disabled:opacity-50">
+                <RefreshCw className="w-4 h-4" />
+                Scan Now
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -962,7 +972,7 @@ function AuditTab() {
 
       {loading ? (
         <div className="flex justify-center py-16">
-          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+          <BookAnimation variant="refresh" className="block w-10 h-10 text-primary" />
         </div>
       ) : items.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground text-sm">No audit entries yet.</div>
@@ -1172,7 +1182,7 @@ function SyncStatusTab() {
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+        <BookAnimation variant="refresh" className="block w-10 h-10 text-primary" />
       </div>
     )
   }
@@ -1379,7 +1389,7 @@ function DuplicatesTab() {
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+        <BookAnimation variant="refresh" className="block w-10 h-10 text-primary" />
       </div>
     )
   }
