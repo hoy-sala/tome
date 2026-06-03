@@ -155,7 +155,7 @@ The plugin menu is context-aware. It self-registers in the **wrench menu** (afte
 |---|---|
 | **Download full series** | Downloads all books in the current book's series. |
 | **Download rest of series** | Downloads books after the current volume only. |
-| **Sync now** | Pushes current position and flushes any pending offline sessions. |
+| **Sync now** | Pushes current position, highlights/notes, and flushes any pending offline sessions. |
 | **Enabled / Disabled** | Toggle sync on or off. |
 | **Pending sessions (N)** | Shows how many sessions are queued for sync. Tap for details. |
 
@@ -167,6 +167,28 @@ TomeSync registers two bindable gesture actions (KOReader **Settings → Taps an
 |---|---|
 | **TomeSync: Open menu** | Pops the full context-aware TomeSync menu as a standalone popup. |
 | **TomeSync: Browse series** | Jumps straight to the series browser/downloader. |
+| **TomeSync: Sync highlights** | Pushes the current book's highlights and notes to Tome immediately. |
+
+---
+
+## Highlights & notes sync
+
+Highlights and notes you make in KOReader sync to Tome — and **to your other
+KOReader devices**. They also appear in a **Highlights & Notes** section on the
+book's detail page (the highlighted text, your note, and the chapter). Sync happens
+automatically alongside position sync — when you open a book (pulls others'
+highlights), on suspend, on closing the book, and via **Sync now** — and can be
+triggered manually with the **TomeSync: Sync highlights** gesture.
+
+**How conflicts resolve.** Identity is the highlight's position, so the same
+passage highlighted on two devices is one highlight. Edits to the same highlight's
+note resolve last-write-wins (newest edit). Deletes propagate via tombstones — a
+highlight you remove on one device is removed on the others and won't reappear.
+Device→device sync needs both devices to have the **Tome-served copy** of the book
+(identical file → matching positions); a sideloaded different copy won't line up.
+
+Rendering highlights *inside the web reader* is a separate, later step — for now
+the web side shows them as a list on the detail page.
 
 ---
 
