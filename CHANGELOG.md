@@ -28,6 +28,12 @@ All notable changes to Tome are documented here. Format loosely follows
   layout. Bumps the plugin to build 15 (1.2.2).
 
 ### Fixed
+- **Relative timestamps no longer drift by your UTC offset.** The dashboard's
+  Reading Log (and the notification bell and API-token "last used" times)
+  showed sessions recorded minutes ago as "2h ago" for anyone not living on
+  UTC: those endpoints emitted timestamps without an explicit timezone, so the
+  browser parsed the UTC values as local time. All of them now carry the `Z`
+  suffix the rest of the API already used.
 - **The TomeSync plugin no longer breaks layout profiles that auto-execute on
   book open.** The "TomeSync: Server at X% (device: Y%)" message shown when
   another device had read ahead was a modal window, and KOReader delivers
