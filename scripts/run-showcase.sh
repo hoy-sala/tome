@@ -24,6 +24,12 @@ fi
 
 source .venv/bin/activate
 
+# Pull in API keys (Hardcover, Google Books) so metadata/wishlist search works —
+# without them the wishlist screenshots seed from degraded fallback sources.
+if [ -f .env ]; then
+  set -a; source .env; set +a
+fi
+
 echo "Starting showcase backend on :8090 (data/showcase/)"
 TOME_SECRET_KEY=dev \
 TOME_DATA_DIR=./data/showcase \

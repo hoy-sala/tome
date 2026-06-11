@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import type { WishCoverageVolume } from '@/lib/wishlist'
 
 const PILL_BASE = 'inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium border transition-all'
-const PILL_PRESENT = 'bg-green-500/10 border-green-500 text-green-600 dark:text-green-400 hover:bg-green-500/20'
+const PILL_PRESENT = 'bg-success/10 border-success text-success hover:bg-success/20'
 const PILL_MISSING = 'border-border text-muted-foreground/50'
 
 /**

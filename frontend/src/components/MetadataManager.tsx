@@ -89,7 +89,7 @@ function buildFieldRows(book: BookDetail, c: MetadataCandidate): FieldRow[] {
 
 function CompletenessBadge({ score, total }: { score: number; total: number }) {
   const pct = score / total
-  const color = pct >= 0.8 ? 'text-green-600 dark:text-green-400' : pct >= 0.5 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'
+  const color = pct >= 0.8 ? 'text-success' : pct >= 0.5 ? 'text-warning' : 'text-destructive'
   return <span className={cn('text-xs font-mono font-medium', color)}>{score}/{total}</span>
 }
 
@@ -97,7 +97,7 @@ function CompletenessBadge({ score, total }: { score: number; total: number }) {
 
 function Dot({ present }: { present: boolean }) {
   return (
-    <span className={cn('inline-block w-2 h-2 rounded-full', present ? 'bg-green-500' : 'bg-red-400')} />
+    <span className={cn('inline-block w-2 h-2 rounded-full', present ? 'bg-success' : 'bg-destructive')} />
   )
 }
 
@@ -164,7 +164,7 @@ function EditCell({ value, bookId, field, onSaved }: EditCellProps) {
       title={value || undefined}
     >
       {saving && <Loader2 className="inline h-3 w-3 animate-spin mr-1" />}
-      {saved && <Check className="inline h-3 w-3 text-green-500 mr-1" />}
+      {saved && <Check className="inline h-3 w-3 text-success mr-1" />}
       {value || <span className="text-muted-foreground/40 italic">—</span>}
     </span>
   )
@@ -329,7 +329,7 @@ function ReviewFlow({ queue, onBack, onBookUpdated }: ReviewFlowProps) {
   if (summary) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
-        <Check className="w-12 h-12 text-green-500" />
+        <Check className="w-12 h-12 text-success" />
         <h2 className="text-lg font-semibold">Review complete</h2>
         <p className="text-sm text-muted-foreground">
           Reviewed {queue.length} books — applied changes to {summary.applied}, skipped {summary.skipped}.
@@ -937,7 +937,7 @@ function ChapterAssignModal({ bookIds, open, bookTypes, onClose, onDone }: Chapt
                     <div key={b.id} className="flex items-center gap-2 px-3 py-1.5 text-xs">
                       <span className="text-muted-foreground truncate flex-1">{b.title}</span>
                       <span className="shrink-0 font-medium">
-                        {num !== null ? `Ch. ${num}` : <span className="text-yellow-500">?</span>}
+                        {num !== null ? `Ch. ${num}` : <span className="text-warning">?</span>}
                       </span>
                     </div>
                   )

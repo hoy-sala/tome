@@ -306,7 +306,7 @@ function UsersTab() {
                   </button>
                   {u.id !== me?.id && (
                     <button onClick={() => handleImpersonate(u.id)} disabled={impersonating === u.id}
-                      className="p-1.5 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-amber-500" title="Log in as this user">
+                      className="p-1.5 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-warning" title="Log in as this user">
                       {impersonating === u.id
                         ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                         : <LogIn className="w-3.5 h-3.5" />}
@@ -417,7 +417,7 @@ function ScannerTab() {
         ))}
       </select>
       {!defaultTypeId && (
-        <p className="text-xs text-amber-500 mt-1">
+        <p className="text-xs text-warning mt-1">
           Without a type, new books are only visible to admins until assigned.
         </p>
       )}
@@ -470,7 +470,7 @@ function ScannerTab() {
       </div>
 
       {lastResult && (
-        <div className="border border-green-500/30 bg-green-500/5 rounded-xl px-4 py-3 text-sm">
+        <div className="border border-success/30 bg-success/5 rounded-xl px-4 py-3 text-sm">
           <p className="font-medium text-foreground mb-1">
             {lastResult.type === 'scan' ? 'Scan' : 'Import'} complete
           </p>
@@ -574,7 +574,7 @@ function ServerTab() {
                 Covers will be re-extracted on next access.
               </p>
               {clearResult != null && (
-                <p className="text-xs text-green-600 mt-1">{clearResult} covers deleted.</p>
+                <p className="text-xs text-success mt-1">{clearResult} covers deleted.</p>
               )}
               {error && (
                 <p className="text-xs text-destructive mt-1">{error}</p>
@@ -898,21 +898,21 @@ const ACTION_CATEGORIES = [
 ]
 
 const ACTION_COLORS: Record<string, string> = {
-  'auth.login': 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
+  'auth.login': 'bg-success/10 text-success border-success/20',
   'auth.login_failed': 'bg-destructive/10 text-destructive border-destructive/20',
   'auth.logout': 'bg-muted text-muted-foreground border-border',
-  'auth.password_changed': 'bg-blue-500/10 text-blue-600 border-blue-500/20',
-  'auth.impersonated': 'bg-amber-500/10 text-amber-600 border-amber-500/20',
-  'books.downloaded': 'bg-violet-500/10 text-violet-600 border-violet-500/20',
-  'books.uploaded': 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
+  'auth.password_changed': 'bg-info/10 text-info border-info/20',
+  'auth.impersonated': 'bg-warning/10 text-warning border-warning/20',
+  'books.downloaded': 'bg-primary/10 text-primary border-primary/20',
+  'books.uploaded': 'bg-success/10 text-success border-success/20',
   'books.deleted': 'bg-destructive/10 text-destructive border-destructive/20',
-  'books.metadata_edited': 'bg-blue-500/10 text-blue-600 border-blue-500/20',
-  'books.bulk_metadata_edited': 'bg-blue-500/10 text-blue-600 border-blue-500/20',
-  'users.created': 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
-  'users.updated': 'bg-blue-500/10 text-blue-600 border-blue-500/20',
+  'books.metadata_edited': 'bg-info/10 text-info border-info/20',
+  'books.bulk_metadata_edited': 'bg-info/10 text-info border-info/20',
+  'users.created': 'bg-success/10 text-success border-success/20',
+  'users.updated': 'bg-info/10 text-info border-info/20',
   'users.deleted': 'bg-destructive/10 text-destructive border-destructive/20',
-  'libraries.created': 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
-  'libraries.updated': 'bg-blue-500/10 text-blue-600 border-blue-500/20',
+  'libraries.created': 'bg-success/10 text-success border-success/20',
+  'libraries.updated': 'bg-info/10 text-info border-info/20',
   'libraries.deleted': 'bg-destructive/10 text-destructive border-destructive/20',
 }
 
@@ -1086,9 +1086,9 @@ function relativeTime(iso: string | null): string {
 function StatusBadge({ status }: { status: SyncRecord['status'] }) {
   const cls =
     status === 'read'
-      ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+      ? 'bg-success/10 text-success border-success/20'
       : status === 'reading'
-        ? 'bg-blue-500/10 text-blue-600 border-blue-500/20'
+        ? 'bg-info/10 text-info border-info/20'
         : 'bg-muted text-muted-foreground border-border'
   return (
     <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap', cls)}>
@@ -1100,7 +1100,7 @@ function StatusBadge({ status }: { status: SyncRecord['status'] }) {
 function SourceBadge({ source }: { source: SyncRecord['source'] }) {
   const cls =
     source === 'tomesync'
-      ? 'bg-violet-500/10 text-violet-600 border-violet-500/20'
+      ? 'bg-primary/10 text-primary border-primary/20'
       : 'bg-muted text-muted-foreground border-border'
   return (
     <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap', cls)}>
@@ -1320,9 +1320,9 @@ const MATCH_REASON_LABEL: Record<DuplicateGroup['match_reason'], string> = {
 
 const MATCH_REASON_STYLE: Record<DuplicateGroup['match_reason'], string> = {
   content_hash: 'bg-destructive/10 text-destructive border-destructive/20',
-  isbn: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
+  isbn: 'bg-warning/10 text-warning border-warning/20',
   same_series_volume: 'bg-purple-500/10 text-purple-600 border-purple-500/20',
-  similar_title: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
+  similar_title: 'bg-info/10 text-info border-info/20',
 }
 
 function formatBytes(bytes: number | null): string {
@@ -1971,7 +1971,7 @@ function WishlistTab() {
                   {/* Single-book wishes: suggested-match hint */}
                   {wish.suggested_book_ids && wish.suggested_book_ids.length > 0 && wish.status === 'open' && fulfillingId !== wish.id && !(wish.series && wish.series_index == null) && (
                     <div className="mt-1.5 flex items-center gap-1.5">
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20 font-medium">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-warning/10 text-warning border border-warning/20 font-medium">
                         {wish.suggested_book_ids.length} suggested match{wish.suggested_book_ids.length > 1 ? 'es' : ''}
                       </span>
                     </div>
@@ -2169,8 +2169,8 @@ function EmailTab() {
         {smtpStatus?.configured ? (
           <div className="space-y-3">
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-green-500" />
-              <span className="text-xs font-medium text-green-600 dark:text-green-400">Configured</span>
+              <div className="w-2 h-2 rounded-full bg-success" />
+              <span className="text-xs font-medium text-success">Configured</span>
             </div>
             <div className="rounded-lg bg-muted/60 border border-border text-xs divide-y divide-border/50">
               <div className="flex items-center gap-3 px-3 py-2">
@@ -2208,14 +2208,14 @@ function EmailTab() {
                 {testSending ? 'Sending...' : 'Test'}
               </button>
             </form>
-            {testResult?.ok && <p className="text-xs text-green-500">Test email sent successfully.</p>}
+            {testResult?.ok && <p className="text-xs text-success">Test email sent successfully.</p>}
             {testResult && !testResult.ok && <p className="text-xs text-destructive">{testResult.error}</p>}
           </div>
         ) : (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-amber-500" />
-              <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Not configured</span>
+              <div className="w-2 h-2 rounded-full bg-warning" />
+              <span className="text-xs font-medium text-warning dark:text-warning">Not configured</span>
             </div>
             <p className="text-xs text-muted-foreground">
               Set the following environment variables to enable Send to Device:
@@ -2284,7 +2284,7 @@ function EmailTab() {
                 <span className="text-muted-foreground truncate">{h.device_name || h.device_email}</span>
                 <span className={cn(
                   'text-xs font-medium',
-                  h.status === 'ok' ? 'text-green-600 dark:text-green-400' : 'text-destructive'
+                  h.status === 'ok' ? 'text-success' : 'text-destructive'
                 )}>
                   {h.status === 'ok' ? 'Sent' : 'Failed'}
                 </span>

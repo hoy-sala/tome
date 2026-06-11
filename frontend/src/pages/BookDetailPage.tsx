@@ -506,9 +506,9 @@ export function BookDetailPage() {
             'px-2.5 py-1 rounded-md text-xs font-medium border transition-all capitalize',
             bookStatus === s
               ? s === 'reading'
-                ? 'bg-yellow-400/10 border-yellow-400 text-yellow-600 dark:text-yellow-400 animate-[pop_0.2s_ease-out]'
+                ? 'bg-warning/10 border-warning text-warning animate-[pop_0.2s_ease-out]'
                 : s === 'read'
-                  ? 'bg-green-500/10 border-green-500 text-green-600 dark:text-green-400 animate-[pop_0.2s_ease-out]'
+                  ? 'bg-success/10 border-success text-success animate-[pop_0.2s_ease-out]'
                   : 'bg-muted border-border text-foreground animate-[pop_0.2s_ease-out]'
               : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
           )}
@@ -809,14 +809,14 @@ export function BookDetailPage() {
                   <button
                     onClick={handleDelete}
                     disabled={deleting}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-destructive text-white hover:opacity-90 transition-all disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-transparent bg-destructive text-white hover:opacity-90 transition-all disabled:opacity-50"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     {deleting ? 'Deleting…' : 'Confirm'}
                   </button>
                   <button
                     onClick={() => setConfirmDelete(false)}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-transparent text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
                   >
                     <X className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">Cancel</span>

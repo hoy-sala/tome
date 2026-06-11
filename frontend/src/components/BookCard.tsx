@@ -31,12 +31,14 @@ interface BookCardProps {
   readingStatus?: ReadingStatus
   progressPct?: number | null
   index?: number
+  // Set as data-flip-id on the root so a parent grid can FLIP-animate reflows
+  flipId?: string
 }
 
 export function BookCard({
   book, view, selected, focused, onSelect,
   onTagClick: _onTagClick, onSeriesClick, onAuthorClick,
-  readingStatus, progressPct,
+  readingStatus, progressPct, flipId,
 }: BookCardProps) {
   const navigate = useNavigate()
   const bookTypes = useBookTypes()
@@ -62,9 +64,10 @@ export function BookCard({
   const hasReadableFile = book.files?.some(f => ['epub', 'cbz', 'cbr', 'pdf'].includes(f.format))
 
   // Progress bar width for the cover bottom strip (progressPct is 0-1 from the API)
+  // Floor at 4% so a just-started book still shows a visible nub instead of nothing
   const barWidth =
     readingStatus === 'read' ? 100
-    : readingStatus === 'reading' ? Math.round((progressPct ?? 0.15) * 100)
+    : readingStatus === 'reading' ? Math.max(4, Math.round((progressPct ?? 0.15) * 100))
     : 0
   const barColor =
     readingStatus === 'read' ? 'bg-primary'
@@ -196,6 +199,7 @@ export function BookCard({
   return (
     <div
       ref={cardRef as React.RefObject<HTMLDivElement>}
+      data-flip-id={flipId}
       className={cn('group flex flex-col cursor-pointer touch-feedback', onSelect && 'select-none')}
       style={{ perspective: '600px' }}
       onClick={onSelect ? onSelect : () => navigate(`/books/${book.id}`)}

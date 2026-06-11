@@ -231,7 +231,7 @@ export function BulkMetadataReviewModal({ bookIds, open, onClose, onApplied, onM
         <div className="flex-1 overflow-y-auto">
           {doneState && (
             <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
-              <Check className="w-12 h-12 text-green-500" />
+              <Check className="w-12 h-12 text-success" />
               <h2 className="text-lg font-semibold">Batch complete</h2>
               <p className="text-sm text-muted-foreground">
                 Applied metadata to {doneState.applied} books.

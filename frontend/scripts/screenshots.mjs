@@ -76,7 +76,11 @@ async function seedDemoWishes() {
       list.find(c => isAdams(c)) ||
       list[0]
     if (hit) {
-      await wapi('/api/wishlist', { method: 'POST', body: JSON.stringify({ title: hit.title, author: hit.author, cover_url: hit.cover_url, source: hit.source, source_id: hit.source_id, isbn: hit.isbn }) })
+      // Use the showcase library's own cover (the book exists locally — the
+      // fulfill demo links it) instead of trusting external cover CDNs.
+      // Must be absolute: the API rejects non-http(s) cover URLs.
+      const cover = bookIds.hitchhiker ? `${API}/api/books/${bookIds.hitchhiker}/cover` : hit.cover_url
+      await wapi('/api/wishlist', { method: 'POST', body: JSON.stringify({ title: hit.title, author: hit.author, cover_url: cover, source: hit.source, source_id: hit.source_id, isbn: hit.isbn }) })
     }
   } catch { /* best effort */ }
   // Whole-series wish: The Good Guys via series search (canonical id, true total,
@@ -183,17 +187,17 @@ const SHOTS = [
     viewport: { width: 1600, height: 2000, deviceScaleFactor: 2 },
     settle: 1000,
     after: async (page) => {
-      await page.locator('span:text-is("Appearance")').first().scrollIntoViewIfNeeded().catch(() => {})
+      await page.locator('h2:text-is("Appearance")').first().scrollIntoViewIfNeeded().catch(() => {})
       await page.waitForTimeout(300)
       // Add padding around the section element by expanding its box via a wrapper
       await page.evaluate(() => {
         const section = document.querySelector('section:has(span)')
         const sections = [...document.querySelectorAll('section')]
-        const target = sections.find(s => s.querySelector('span')?.textContent?.trim() === 'Appearance')
+        const target = sections.find(s => s.querySelector('h2')?.textContent?.trim() === 'Appearance')
         if (target) target.style.padding = '48px 32px'
       })
     },
-    element: 'section:has(span:text-is("Appearance"))',
+    element: 'section:has(h2:text-is("Appearance"))',
   },
   {
     name: 'book-detail-edit',
@@ -288,11 +292,11 @@ const SHOTS = [
     after: async (page) => {
       await page.evaluate(() => {
         const sections = [...document.querySelectorAll('section')]
-        const target = sections.find(s => s.querySelector('span')?.textContent?.trim() === 'Send to Device')
+        const target = sections.find(s => s.querySelector('h2')?.textContent?.trim() === 'Send to Device')
         if (target) target.style.padding = '48px 32px'
       })
     },
-    element: 'section:has(span:text-is("Send to Device"))',
+    element: 'section:has(h2:text-is("Send to Device"))',
   },
   {
     name: 'settings-send-to-device-guide',
@@ -304,11 +308,11 @@ const SHOTS = [
       await page.waitForTimeout(500)
       await page.evaluate(() => {
         const sections = [...document.querySelectorAll('section')]
-        const target = sections.find(s => s.querySelector('span')?.textContent?.trim() === 'Send to Device')
+        const target = sections.find(s => s.querySelector('h2')?.textContent?.trim() === 'Send to Device')
         if (target) target.style.padding = '48px 32px'
       })
     },
-    element: 'section:has(span:text-is("Send to Device"))',
+    element: 'section:has(h2:text-is("Send to Device"))',
   },
   {
     name: 'admin-email',
@@ -330,11 +334,11 @@ const SHOTS = [
     after: async (page) => {
       await page.evaluate(() => {
         const sections = [...document.querySelectorAll('section')]
-        const target = sections.find(s => s.querySelector('span')?.textContent?.trim() === 'Send to Device')
+        const target = sections.find(s => s.querySelector('h2')?.textContent?.trim() === 'Send to Device')
         if (target) target.style.padding = '48px 32px'
       })
     },
-    element: 'section:has(span:text-is("Send to Device"))',
+    element: 'section:has(h2:text-is("Send to Device"))',
   },
   {
     name: 'settings-send-to-device-prefilled',
@@ -347,11 +351,11 @@ const SHOTS = [
       await page.waitForTimeout(200)
       await page.evaluate(() => {
         const sections = [...document.querySelectorAll('section')]
-        const target = sections.find(s => s.querySelector('span')?.textContent?.trim() === 'Send to Device')
+        const target = sections.find(s => s.querySelector('h2')?.textContent?.trim() === 'Send to Device')
         if (target) target.style.padding = '48px 32px'
       })
     },
-    element: 'section:has(span:text-is("Send to Device"))',
+    element: 'section:has(h2:text-is("Send to Device"))',
   },
   {
     name: 'settings-send-to-device-added',
@@ -361,11 +365,11 @@ const SHOTS = [
     after: async (page) => {
       await page.fill('input[placeholder="My Kindle"]', "Benedict's Kindle").catch(() => {})
       await page.fill('input[placeholder="user_abc@kindle.com"]', 'benedict_a1b2c3@kindle.com').catch(() => {})
-      await page.locator('section:has(span:text-is("Send to Device")) button:has-text("Add")').first().click().catch(() => {})
+      await page.locator('section:has(h2:text-is("Send to Device")) button:has-text("Add")').first().click().catch(() => {})
       await page.waitForTimeout(900)
       await page.evaluate(() => {
         const sections = [...document.querySelectorAll('section')]
-        const target = sections.find(s => s.querySelector('span')?.textContent?.trim() === 'Send to Device')
+        const target = sections.find(s => s.querySelector('h2')?.textContent?.trim() === 'Send to Device')
         if (target) target.style.padding = '48px 32px'
       })
     },
@@ -377,7 +381,7 @@ const SHOTS = [
         await fetch(`${api}/api/devices/${d.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }).catch(() => {})
       }
     },
-    element: 'section:has(span:text-is("Send to Device"))',
+    element: 'section:has(h2:text-is("Send to Device"))',
   },
   // Send modal — single book. Requires SMTP configured + at least one device.
   {
@@ -500,10 +504,10 @@ const SHOTS = [
       await page.locator('button:has-text("Wishlist")').first().click().catch(() => {})
       await page.waitForTimeout(800)
       // Open the Fulfill picker on the Hitchhiker's (single-book) wish row.
-      await page.locator('div.rounded-xl:has(p:has-text("Hitchhiker")) button:has-text("Fulfill")').first().click().catch(() => {})
+      await page.locator('div.rounded-xl:has(p:has-text("Hitch")) button:has-text("Fulfill")').first().click().catch(() => {})
       await page.waitForTimeout(700)
     },
-    element: 'div.rounded-xl:has(p:has-text("Hitchhiker"))',
+    element: 'div.rounded-xl:has(p:has-text("Hitch"))',
   },
 
   // Mobile (PWA)
@@ -568,7 +572,7 @@ async function login() {
 
 async function resolveBookIds(token) {
   // Look up book IDs by title. Keeps the script working across re-seeds.
-  const wanted = { frankenstein: 'Frankenstein', goodGuys2: 'Heir Today, Pawn Tomorrow' }
+  const wanted = { frankenstein: 'Frankenstein', goodGuys2: 'Heir Today, Pawn Tomorrow', hitchhiker: "The Hitchhiker's Guide to the Galaxy" }
   for (const [key, title] of Object.entries(wanted)) {
     try {
       const r = await fetch(`${API}/api/books?q=${encodeURIComponent(title)}&per_page=5`, {

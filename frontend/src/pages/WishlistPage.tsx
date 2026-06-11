@@ -47,7 +47,7 @@ export function WishlistPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [addOpen, setAddOpen] = useState(false)
-  const [fulfilledOpen, setFulfilledOpen] = useState(false)
+  const [fulfilledOpen, setFulfilledOpen] = useState(true)
   const [deleting, setDeleting] = useState<number | null>(null)
 
   const canWish = isMember(user)
@@ -139,30 +139,39 @@ export function WishlistPage() {
           <>
             {/* Open wishes */}
             <div>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-semibold text-foreground">
-                  Wishlist
-                  {openWishes.length > 0 && (
+              {/* The top bar already says "Wishlist" — only label the section when there's a list to label */}
+              {openWishes.length > 0 && (
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-sm font-semibold text-foreground">
+                    Open
                     <span className="ml-2 text-xs font-normal text-muted-foreground">({openWishes.length})</span>
-                  )}
-                </h2>
-                <a
-                  href={docsLink(DOCS.wishlist)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
-                >
-                  Learn more <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
+                  </h2>
+                  <a
+                    href={docsLink(DOCS.wishlist)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                  >
+                    Learn more <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              )}
 
               {openWishes.length === 0 ? (
-                <div className="flex flex-col items-center gap-4 py-16 text-center">
+                <div className="flex flex-col items-center gap-4 py-12 text-center">
                   <Sparkles className="w-12 h-12 text-muted-foreground/30" />
                   <div>
                     <p className="text-sm font-medium text-foreground mb-1">Your wishlist is empty</p>
                     <p className="text-xs text-muted-foreground">
-                      Add books you'd like to see in the library.
+                      Add books you'd like to see in the library.{' '}
+                      <a
+                        href={docsLink(DOCS.wishlist)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline underline-offset-2 hover:text-primary transition-colors"
+                      >
+                        Learn more
+                      </a>
                     </p>
                   </div>
                   <button
@@ -243,7 +252,7 @@ export function WishlistPage() {
                         <div className="flex-1 min-w-0 flex flex-col gap-0.5">
                           <p className="text-sm font-medium text-foreground leading-snug line-clamp-2">{w.title}</p>
                           {w.author && <p className="text-xs text-muted-foreground truncate">{w.author}</p>}
-                          <span className="mt-1 self-start text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 font-medium">
+                          <span className="mt-1 self-start text-[10px] px-1.5 py-0.5 rounded bg-success/10 text-success border border-success/20 font-medium">
                             Fulfilled
                           </span>
                           {w.fulfilled_book_id && (

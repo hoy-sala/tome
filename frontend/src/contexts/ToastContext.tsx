@@ -75,18 +75,18 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             className={cn(
               'flex items-start gap-3 px-4 py-3 rounded-xl shadow-xl text-sm border bg-card pointer-events-auto',
               'border-l-[3px]',
-              t.type === 'success' && 'border-l-green-500 border-border',
+              t.type === 'success' && 'border-l-success border-border',
               t.type === 'error' && 'border-l-destructive border-border',
-              t.type === 'info' && 'border-l-blue-500 border-border',
+              t.type === 'info' && 'border-l-info border-border',
               t.exiting
                 ? 'animate-out fade-out duration-300'
                 : 'animate-in slide-in-from-right-4 fade-in duration-200',
             )}
           >
             <span className="shrink-0 mt-0.5">
-              {t.type === 'success' && <Check className="w-4 h-4 text-green-500" />}
+              {t.type === 'success' && <Check className="w-4 h-4 text-success" />}
               {t.type === 'error' && <AlertCircle className="w-4 h-4 text-destructive" />}
-              {t.type === 'info' && <Info className="w-4 h-4 text-blue-500" />}
+              {t.type === 'info' && <Info className="w-4 h-4 text-info" />}
             </span>
             <span className="flex-1 text-foreground leading-snug">{t.message}</span>
             <button

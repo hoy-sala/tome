@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useCallback, type ReactNode } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import {
   BookOpen, Upload, Search, X, Home, ChevronRight,
   LayoutGrid, List,
-  ChevronUp, ChevronDown, SlidersHorizontal, LayoutList, Loader2,
+  ChevronUp, ChevronDown, SlidersHorizontal, Loader2,
   Library as LibraryIcon, CheckSquare, XSquare, Download, Pencil, Menu,
   Flame, BookCheck, Clock, BookOpenCheck, Play, CheckCheck, Trash2, Settings2,
 } from 'lucide-react'
@@ -95,6 +95,10 @@ const SORT_LABELS: Record<SortField, string> = {
 }
 
 const VIEW_KEY = 'tome_view'
+const GRID_SIZE_KEY = 'tome_grid_size'
+const GRID_SIZE_MIN = 110
+const GRID_SIZE_MAX = 240
+type ViewPref = 'grid' | 'list'
 const SORT_KEY = 'tome_sort'
 const ORDER_KEY = 'tome_order'
 
@@ -236,16 +240,6 @@ function relativeTime(isoString: string): string {
   return `${Math.floor(diff / 86400)}d ago`
 }
 
-function StatPill({ icon, value, label }: { icon: ReactNode; value: string; label: string }) {
-  return (
-    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-primary/5 border border-primary/10">
-      <span className="text-primary/60">{icon}</span>
-      <span className="text-sm font-semibold text-foreground">{value}</span>
-      <span className="text-xs text-muted-foreground">{label}</span>
-    </div>
-  )
-}
-
 export function DashboardPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -254,14 +248,22 @@ export function DashboardPage() {
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null)
 
   // ── View / sort (persisted) ───────────────────────────────────────────────
-  const [view, setView] = useState<ViewMode>(() =>
-    (localStorage.getItem(VIEW_KEY) as ViewMode | null) ?? 'large')
+  // Two view modes (grid/list) + a cover-size slider for the grid. Old installs
+  // stored 'large' | 'small' — those migrate to grid at the matching size.
+  const [view, setView] = useState<ViewPref>(() =>
+    localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'grid')
+  const [gridSize, setGridSize] = useState<number>(() => {
+    const stored = Number(localStorage.getItem(GRID_SIZE_KEY))
+    if (stored >= GRID_SIZE_MIN && stored <= GRID_SIZE_MAX) return stored
+    return localStorage.getItem(VIEW_KEY) === 'small' ? 120 : 180
+  })
   const [sort, setSort] = useState<SortField>(() =>
     (localStorage.getItem(SORT_KEY) as SortField | null) ?? 'title')
   const [order, setOrder] = useState<SortOrder>(() =>
     (localStorage.getItem(ORDER_KEY) as SortOrder | null) ?? 'asc')
 
-  function persistView(v: ViewMode) { setView(v); localStorage.setItem(VIEW_KEY, v) }
+  function persistView(v: ViewPref) { setView(v); localStorage.setItem(VIEW_KEY, v) }
+  function persistGridSize(s: number) { setGridSize(s); localStorage.setItem(GRID_SIZE_KEY, String(s)) }
   function persistSort(s: SortField) { setSort(s); localStorage.setItem(SORT_KEY, s) }
   function persistOrder(o: SortOrder) { setOrder(o); localStorage.setItem(ORDER_KEY, o) }
 
@@ -398,9 +400,9 @@ export function DashboardPage() {
     if (!status || status === 'unknown') return null
     const cls =
       status === 'ongoing'
-        ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+        ? 'bg-warning/15 text-warning'
         : status === 'finished'
-        ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
+        ? 'bg-success/15 text-success'
         : /* hiatus */ 'bg-muted text-muted-foreground'
     return (
       <span className={cn('inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide leading-none', cls)}>
@@ -619,6 +621,48 @@ export function DashboardPage() {
   // ── Books + facets ────────────────────────────────────────────────────────
   const [books, setBooks] = useState<Book[]>([])
   const { handleToggle } = useShiftSelect(books.map(b => b.id))
+
+  // FLIP-animate the books grid through cover-size reflows: when the column
+  // count changes, cards glide from their old box to the new one instead of
+  // teleporting. Rendered card width is a step function of the slider (1fr
+  // stretching), so easing the size value itself does nothing — the motion
+  // has to come from animating the reflow.
+  const booksGridRef = useRef<HTMLDivElement | null>(null)
+  const flipRectsRef = useRef<Map<string, { left: number; top: number; width: number }>>(new Map())
+  useLayoutEffect(() => {
+    const el = booksGridRef.current
+    const prev = flipRectsRef.current
+    const next = new Map<string, { left: number; top: number; width: number }>()
+    if (el) {
+      const moved: HTMLElement[] = []
+      for (const child of Array.from(el.children) as HTMLElement[]) {
+        const id = child.dataset.flipId
+        if (!id) continue
+        // offset* is layout-relative (scroll- and transform-independent)
+        next.set(id, { left: child.offsetLeft, top: child.offsetTop, width: child.offsetWidth })
+        const a = prev.get(id)
+        const b = next.get(id)!
+        if (!a || (a.left === b.left && a.top === b.top && a.width === b.width)) continue
+        const scale = a.width / b.width
+        child.style.transition = 'none'
+        child.style.transformOrigin = 'top left'
+        child.style.transform = `translate(${a.left - b.left}px, ${a.top - b.top}px) scale(${scale})`
+        moved.push(child)
+      }
+      if (moved.length > 0) {
+        // One synchronous reflow commits the inverted transforms before they
+        // transition back — a lone rAF can collapse into the same style flush
+        void el.offsetWidth
+        for (const child of moved) {
+          child.style.transition = 'transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1)'
+          child.style.transform = ''
+        }
+      }
+    }
+    flipRectsRef.current = next
+    // books in the deps so positions are (re)captured when the list loads or
+    // changes — without it the post-load baseline is empty and nothing animates
+  }, [gridSize, view, books])
   const [totalCount, setTotalCount] = useState<number | null>(null)
   const [readingStatuses, setReadingStatuses] = useState<Record<number, { status: ReadingStatus; progress_pct: number | null }>>({})
   const [facets, setFacets] = useState<Facets>({ series: [], authors: [], tags: [], formats: [] })
@@ -807,7 +851,8 @@ export function DashboardPage() {
   }, [navigate])
 
   useEffect(() => {
-    api.get<Book[]>('/books?reading_status=reading&sort=added_at&order=desc&limit=20')
+    // status_updated = last reading activity, so the hero is the book you actually read last
+    api.get<Book[]>('/books?reading_status=reading&sort=status_updated&order=desc&limit=20')
       .then(books => {
         setContinueReading(books)
         if (books.length > 0) {
@@ -855,14 +900,32 @@ export function DashboardPage() {
   if (filterTag) saveableParams.tag = filterTag
   if (filterFormat) saveableParams.format = filterFormat
 
-  const gridClass = view === 'large'
-    ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4'
-    : view === 'small'
-    ? 'grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2'
-    : 'flex flex-col gap-2.5'
+  // Grid columns flow from the spring-smoothed cover size; card typography
+  // follows the slider value. view-fade covers the grid/list switch.
+  const cardView: ViewMode = view === 'list' ? 'list' : gridSize < 150 ? 'small' : 'large'
+  const gridClass = view === 'list'
+    ? 'flex flex-col gap-2.5 animate-[view-fade_0.25s_ease-out]'
+    : cn(
+        'grid transition-[gap] duration-300 ease-out animate-[view-fade_0.25s_ease-out]',
+        gridSize < 150 ? 'gap-2' : 'gap-4'
+      )
+  const gridStyle = view === 'list'
+    ? undefined
+    : { gridTemplateColumns: `repeat(auto-fill, minmax(${gridSize}px, 1fr))` }
 
   // Active library name for heading
   const activeLibraryName = filterLibrary ? libraries.find(l => l.id === filterLibrary)?.name : null
+
+  // Home quick stats
+  const homeStatItems: { value: string; label: string; icon: ReactNode }[] = homeStats ? [
+    // A zero-day streak is a sad opener — only lead with it when it exists
+    ...(homeStats.current_streak_days > 0
+      ? [{ value: String(homeStats.current_streak_days), label: 'Day streak', icon: <Flame className="w-5 h-5" /> }]
+      : []),
+    { value: String(homeStats.books_finished_30d), label: 'Finished · 30d', icon: <BookCheck className="w-5 h-5" /> },
+    { value: formatReadingTime(homeStats.reading_seconds_30d), label: 'Read · 30d', icon: <Clock className="w-5 h-5" /> },
+    { value: String(homeStats.pages_turned_30d), label: 'Pages · 30d', icon: <BookOpenCheck className="w-5 h-5" /> },
+  ] : []
 
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
@@ -970,29 +1033,25 @@ export function DashboardPage() {
             /* ── Home tab ────────────────────────────────────────────────── */
             <div className="flex flex-col gap-8">
 
-              {/* ── Quick Stats Strip ─────────────────────────────────────── */}
+              {/* ── Quick stats — flat hairline-divided panel ──────────────── */}
               {homeStats && (
-                <div className="flex flex-wrap gap-2">
-                  <StatPill
-                    icon={<Flame className="w-3.5 h-3.5" />}
-                    value={String(homeStats.current_streak_days)}
-                    label={homeStats.current_streak_days === 1 ? 'day streak' : 'day streak'}
-                  />
-                  <StatPill
-                    icon={<BookCheck className="w-3.5 h-3.5" />}
-                    value={String(homeStats.books_finished_30d)}
-                    label="finished (30d)"
-                  />
-                  <StatPill
-                    icon={<Clock className="w-3.5 h-3.5" />}
-                    value={formatReadingTime(homeStats.reading_seconds_30d)}
-                    label="read (30d)"
-                  />
-                  <StatPill
-                    icon={<BookOpenCheck className="w-3.5 h-3.5" />}
-                    value={String(homeStats.pages_turned_30d)}
-                    label="pages (30d)"
-                  />
+                <div className="rounded-xl border border-border bg-card px-5 py-4 grid grid-cols-2 gap-y-3 sm:flex w-full sm:w-fit">
+                  {homeStatItems.map((s, i) => (
+                    <div
+                      key={s.label}
+                      className={cn(
+                        'sm:px-5',
+                        i === 0 && 'sm:pl-0',
+                        i > 0 && 'sm:border-l sm:border-border/60'
+                      )}
+                    >
+                      <p className="text-xs text-muted-foreground/70">{s.label}</p>
+                      <p className="flex items-center gap-2 text-xl font-semibold tabular-nums text-foreground leading-tight">
+                        <span className="text-primary/60">{s.icon}</span>
+                        {s.value}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -1060,14 +1119,14 @@ export function DashboardPage() {
                     </button>
                   </div>
                 ) : (
-                  <div className={gridClass}>
+                  <div key={view} className={gridClass} style={gridStyle}>
                     {continueReading.map((book, i) => {
                       const status = readingStatuses[book.id]
                       return (
                         <BookCard
-                          key={`${view}-${book.id}`}
+                          key={`${cardView}-${book.id}`}
                           book={book}
-                          view={view}
+                          view={cardView}
                           index={i}
                           selected={false}
                           onTagClick={tag => setSearchParams(prev => { const p = new URLSearchParams(prev); p.set('tab', 'books'); p.set('tag', tag); p.delete('saved_filter'); return p })}
@@ -1577,10 +1636,29 @@ export function DashboardPage() {
             )}
 
             <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5">
+              <input
+                type="range"
+                min={GRID_SIZE_MIN}
+                max={GRID_SIZE_MAX}
+                step={10}
+                value={gridSize}
+                onChange={e => persistGridSize(Number(e.target.value))}
+                title="Cover size"
+                aria-label="Cover size"
+                tabIndex={view === 'grid' ? 0 : -1}
+                className={cn(
+                  'cover-slider transition-all duration-200',
+                  view === 'grid'
+                    ? 'w-20 sm:w-24 opacity-100 mx-2'
+                    : 'w-0 opacity-0 mx-0 pointer-events-none'
+                )}
+                style={{
+                  background: `linear-gradient(to right, var(--primary) ${((gridSize - GRID_SIZE_MIN) / (GRID_SIZE_MAX - GRID_SIZE_MIN)) * 100}%, var(--input) 0)`,
+                }}
+              />
               {([
-                { mode: 'large' as ViewMode, Icon: LayoutGrid, title: 'Large covers' },
-                { mode: 'small' as ViewMode, Icon: LayoutList, title: 'Small covers' },
-                { mode: 'list' as ViewMode, Icon: List, title: 'List view' },
+                { mode: 'grid' as ViewPref, Icon: LayoutGrid, title: 'Grid view' },
+                { mode: 'list' as ViewPref, Icon: List, title: 'List view' },
               ]).map(({ mode, Icon, title }) => (
                 <button key={mode} onClick={() => persistView(mode)} title={title} aria-label={title}
                   className={cn('p-1.5 rounded-md transition-all',
@@ -1824,12 +1902,13 @@ export function DashboardPage() {
               )}
             </div>
           ) : (
-            <div className={cn(gridClass, refreshing && 'opacity-50 transition-opacity duration-150')}>
+            <div key={view} ref={booksGridRef} className={cn(gridClass, refreshing && 'opacity-50 transition-opacity duration-150')} style={gridStyle}>
               {books.map((book, i) => (
                 <BookCard
-                  key={`${view}-${book.id}`}
+                  key={`${cardView}-${book.id}`}
+                  flipId={String(book.id)}
                   book={book}
-                  view={view}
+                  view={cardView}
                   index={i}
                   selected={selected.has(book.id)}
                   focused={focusedIndex === i}
