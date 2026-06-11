@@ -6,6 +6,27 @@ All notable changes to Tome are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Changed
+- **Reading Stats is now a fully customisable dashboard.** The page looks the
+  same on day one — the default boards replicate the old layout one-to-one —
+  but everything is now a tile on a drag-and-resize grid: hit **Edit** to
+  rearrange, resize, duplicate, or remove any tile (with undo), and configure
+  tiles individually — chart style (bar/line/area), per-tile timeframe, a
+  pick-your-own-metric stat card, and a Series Spotlight that focuses on a
+  series of your choice. Boards are per-user and saved on the server, so your
+  layout follows you across devices. Tabs are boards too: create new ones
+  empty, duplicated from the current board, from a built-in default, or
+  imported from a file — and share a board by exporting it as JSON. A camera
+  button saves any board as a PNG. The widget gallery has 35 entries, including
+  new ones the old page never had: a paginated session log on Overview, reading
+  by weekday, time-of-day split, time by format, recently finished, and a
+  monthly streak calendar.
+
+### Fixed
+- The 365-day reading heatmap bucketed days in UTC, so for anyone east of
+  Greenwich an evening session could light up the wrong day (and dent a streak's
+  look). It now uses local dates, matching how every other chart counts days.
+
 ## [1.4.0] — 2026-06-10
 
 ### Added
