@@ -22,8 +22,8 @@ function formatRelative(iso: string | null): string {
 }
 
 function dotColor(diff: number): string {
-  if (diff < FRESH_MS) return 'bg-emerald-500'
-  if (diff < RECENT_MS) return 'bg-amber-500'
+  if (diff < FRESH_MS) return 'bg-success'
+  if (diff < RECENT_MS) return 'bg-warning'
   return 'bg-muted-foreground/40'
 }
 

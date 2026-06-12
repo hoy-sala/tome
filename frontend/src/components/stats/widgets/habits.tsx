@@ -23,7 +23,6 @@ import { useChartPalette } from '@/lib/useChartPalette'
 import { HourDowHeatmap } from '@/components/stats/HourDowHeatmap'
 import { ChartTooltip, type StatsResponse, type CompletionEstimate } from '@/components/stats/shared'
 
-const PACE_COLOR = '#10b981'
 
 export function HourDowCard({ data }: { data: StatsResponse['hour_dow_heatmap'] }) {
   const { accent } = useChartColors()
@@ -88,7 +87,7 @@ export function SessionTimeline({ sessions }: { sessions: StatsResponse['session
 }
 
 export function ReadingPaceChart({ pace }: { pace: StatsResponse['reading_pace'] }) {
-  const { tick, cursor } = useChartColors()
+  const { accent, tick, cursor } = useChartColors()
   if (pace.length === 0) return <p className="text-sm text-muted-foreground text-center py-12">No paced sessions.</p>
   const avg = pace.reduce((s, p) => s + p.pages_per_min, 0) / pace.length
   return (
@@ -113,7 +112,7 @@ export function ReadingPaceChart({ pace }: { pace: StatsResponse['reading_pace']
               )
             }}
           />
-          <Area dataKey="pages_per_min" fill={PACE_COLOR} fillOpacity={0.15} stroke={PACE_COLOR} strokeWidth={2} />
+          <Area dataKey="pages_per_min" fill={accent} fillOpacity={0.15} stroke={accent} strokeWidth={2} />
         </AreaChart>
       </ResponsiveContainer>
       <p className="text-xs text-muted-foreground text-center shrink-0">avg {avg.toFixed(1)} pages/min</p>
@@ -122,7 +121,7 @@ export function ReadingPaceChart({ pace }: { pace: StatsResponse['reading_pace']
 }
 
 export function ReadingSpeedTrend({ pace }: { pace: StatsResponse['reading_pace'] }) {
-  const { tick, cursor } = useChartColors()
+  const { accent, tick, cursor } = useChartColors()
   if (pace.length < 4) return <p className="text-sm text-muted-foreground text-center py-12">Not enough sessions yet.</p>
   const paceData = [...pace].reverse()
   const half = Math.floor(paceData.length / 2)
@@ -134,8 +133,8 @@ export function ReadingSpeedTrend({ pace }: { pace: StatsResponse['reading_pace'
   return (
     <div className="flex h-full flex-col gap-3">
       <div className="flex items-center gap-2 shrink-0">
-        {trending === 'up' ? <TrendingUp className="w-4 h-4 text-emerald-500" /> : trending === 'down' ? <TrendingDown className="w-4 h-4 text-red-500" /> : <Zap className="w-4 h-4 text-muted-foreground" />}
-        <span className={cn('text-sm font-semibold', trending === 'up' ? 'text-emerald-500' : trending === 'down' ? 'text-red-500' : 'text-muted-foreground')}>
+        {trending === 'up' ? <TrendingUp className="w-4 h-4 text-success" /> : trending === 'down' ? <TrendingDown className="w-4 h-4 text-destructive" /> : <Zap className="w-4 h-4 text-muted-foreground" />}
+        <span className={cn('text-sm font-semibold', trending === 'up' ? 'text-success' : trending === 'down' ? 'text-destructive' : 'text-muted-foreground')}>
           {trending === 'up' ? `Reading speed up ${pctDiff}%` : trending === 'down' ? `Reading speed down ${Math.abs(pctDiff)}%` : 'Reading speed steady'}
         </span>
         <span className="text-xs text-muted-foreground ml-1">({secondAvg.toFixed(1)} vs {firstAvg.toFixed(1)} pages/min)</span>
@@ -159,7 +158,7 @@ export function ReadingSpeedTrend({ pace }: { pace: StatsResponse['reading_pace'
               )
             }}
           />
-          <Area dataKey="pages_per_min" fill={PACE_COLOR} fillOpacity={0.15} stroke={PACE_COLOR} strokeWidth={2} />
+          <Area dataKey="pages_per_min" fill={accent} fillOpacity={0.15} stroke={accent} strokeWidth={2} />
         </AreaChart>
       </ResponsiveContainer>
     </div>
@@ -210,11 +209,11 @@ export function PeriodComparison({ comparison }: { comparison: NonNullable<Stats
   const down = comparison.pct_change !== null && comparison.pct_change < 0
   return (
     <div className="flex h-full items-center gap-4">
-      <div className={cn('p-2 rounded-lg shrink-0', up ? 'bg-emerald-500/10' : down ? 'bg-red-500/10' : 'bg-muted')}>
-        {comparison.pct_change === null ? <Minus className="w-5 h-5 text-muted-foreground" /> : up ? <TrendingUp className="w-5 h-5 text-emerald-500" /> : down ? <TrendingDown className="w-5 h-5 text-red-500" /> : <Minus className="w-5 h-5 text-muted-foreground" />}
+      <div className={cn('p-2 rounded-lg shrink-0', up ? 'bg-success/10' : down ? 'bg-destructive/10' : 'bg-muted')}>
+        {comparison.pct_change === null ? <Minus className="w-5 h-5 text-muted-foreground" /> : up ? <TrendingUp className="w-5 h-5 text-success" /> : down ? <TrendingDown className="w-5 h-5 text-destructive" /> : <Minus className="w-5 h-5 text-muted-foreground" />}
       </div>
       <div className="flex-1 min-w-0">
-        <p className={cn('text-lg font-bold', up ? 'text-emerald-500' : down ? 'text-red-500' : 'text-muted-foreground')}>
+        <p className={cn('text-lg font-bold', up ? 'text-success' : down ? 'text-destructive' : 'text-muted-foreground')}>
           {comparison.pct_change === null
             ? 'No previous data to compare'
             : comparison.pct_change === 0 && comparison.current_seconds === 0

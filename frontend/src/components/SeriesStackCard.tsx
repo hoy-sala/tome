@@ -40,7 +40,7 @@ export function SeriesStackCard({ book, count, view, focused, index = 0, onOpen 
         className={cn(
           'group flex items-center gap-3 px-3 py-2.5 rounded-lg border bg-card cursor-pointer transition-all duration-150 touch-feedback',
           'border-border hover:bg-accent hover:border-primary/20',
-          focused && 'ring-2 ring-blue-500 ring-offset-1 ring-offset-background',
+          focused && 'ring-2 ring-ring ring-offset-1 ring-offset-background',
         )}
       >
         <div className="relative w-9 h-12 shrink-0">
@@ -118,7 +118,7 @@ export function SeriesStackCard({ book, count, view, focused, index = 0, onOpen 
             className={cn(
               'relative aspect-[2/3] bg-muted overflow-hidden rounded-xl shadow-sm border border-border',
               'transition-transform duration-300 ease-out group-hover:shadow-lg group-hover:shadow-accent-soft group-hover:-translate-y-0.5',
-              focused && 'ring-2 ring-blue-500 ring-offset-2 ring-offset-background',
+              focused && 'ring-2 ring-ring ring-offset-2 ring-offset-background',
             )}
           >
             <CoverImage

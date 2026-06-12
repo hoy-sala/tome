@@ -76,7 +76,11 @@ async function seedDemoWishes() {
       list.find(c => isAdams(c)) ||
       list[0]
     if (hit) {
-      await wapi('/api/wishlist', { method: 'POST', body: JSON.stringify({ title: hit.title, author: hit.author, cover_url: hit.cover_url, source: hit.source, source_id: hit.source_id, isbn: hit.isbn }) })
+      // Use the showcase library's own cover (the book exists locally — the
+      // fulfill demo links it) instead of trusting external cover CDNs.
+      // Must be absolute: the API rejects non-http(s) cover URLs.
+      const cover = bookIds.hitchhiker ? `${API}/api/books/${bookIds.hitchhiker}/cover` : hit.cover_url
+      await wapi('/api/wishlist', { method: 'POST', body: JSON.stringify({ title: hit.title, author: hit.author, cover_url: cover, source: hit.source, source_id: hit.source_id, isbn: hit.isbn }) })
     }
   } catch { /* best effort */ }
   // Whole-series wish: The Good Guys via series search (canonical id, true total,
@@ -107,11 +111,27 @@ const SHOTS = [
   // Per-card element-bounded stats shots for /docs/stats. Each card gets its
   // own tight crop so the docs can interleave shot + description per H3.
   // Overview tab
-  { name: 'stats-totals',             path: '/stats', viewport: { width: 1400, height: 1200, deviceScaleFactor: 2 }, settle: 1500, element: 'div[class*="lg:grid-cols-6"]' },
+  // The headline stats are six separate dashboard tiles (no shared wrapper) —
+  // union-clip them. :has(p.font-bold.tabular-nums) picks the stat tile over
+  // the "Books Finished" chart widget that shares a title.
+  { name: 'stats-totals',             path: '/stats', viewport: { width: 1600, height: 1200, deviceScaleFactor: 2 }, settle: 1500,
+    elements: ['Reading Time', 'Sessions', 'Books Finished', 'Streak', 'Pages Turned', 'Completion Rate']
+      .map((t) => `div.rounded-xl:has(h3:text-is("${t}")):has(p.font-bold.tabular-nums)`) },
   { name: 'stats-currently-reading',  path: '/stats', viewport: { width: 1400, height: 1200, deviceScaleFactor: 2 }, settle: 1500, element: 'div.rounded-xl:has(h3:text-is("Currently Reading"))' },
   { name: 'stats-time-per-day',       path: '/stats', viewport: { width: 1400, height: 1200, deviceScaleFactor: 2 }, settle: 1500, element: 'div.rounded-xl:has(h3:text-is("Reading Time per Day"))' },
   { name: 'stats-top-books',          path: '/stats', viewport: { width: 1400, height: 1200, deviceScaleFactor: 2 }, settle: 1500, element: 'div.rounded-xl:has(h3:text-is("Top Books by Reading Time"))' },
   { name: 'stats-activity-grid',      path: '/stats', viewport: { width: 1400, height: 1200, deviceScaleFactor: 2 }, settle: 1500, element: 'div.rounded-xl:has(h3:has-text("Reading Activity"))' },
+
+  // Add-tile gallery modal — enter edit mode, open the gallery. The mini
+  // previews render live charts, so give them a beat to paint.
+  { name: 'stats-add-tile', path: '/stats', viewport: { width: 1600, height: 1300, deviceScaleFactor: 2 }, settle: 1500,
+    after: async (p) => {
+      await p.locator('button:has-text("Edit")').first().click()
+      await p.waitForTimeout(600)
+      await p.locator('button:has-text("Add tile")').first().click()
+      await p.waitForTimeout(1500)
+    },
+    element: 'div.max-w-3xl:has(h2:text-is("Add a widget"))' },
 
   // Habits tab — click the Habits pill first
   { name: 'stats-heatmap',           path: '/stats', viewport: { width: 1400, height: 1400, deviceScaleFactor: 2 }, settle: 1500, after: async (p) => { await p.locator('button:has-text("habits")').first().click().catch(() => {}); await p.waitForTimeout(700) }, element: 'div.rounded-xl:has(h3:has-text("Reading Intensity"))' },
@@ -120,7 +140,7 @@ const SHOTS = [
   { name: 'stats-monthly-comparison', path: '/stats', viewport: { width: 1400, height: 1400, deviceScaleFactor: 2 }, settle: 1500, after: async (p) => { await p.locator('button:has-text("habits")').first().click().catch(() => {}); await p.waitForTimeout(700) }, element: 'div.rounded-xl:has(h3:has-text("Last 12 Months"))' },
 
   // Library tab — click the Library pill first
-  { name: 'stats-series-completion', path: '/stats', viewport: { width: 1400, height: 1400, deviceScaleFactor: 2 }, settle: 1500, after: async (p) => { await p.locator('button:has-text("library")').first().click().catch(() => {}); await p.waitForTimeout(700) }, element: 'div:has(> h2:has-text("Series Completion"))' },
+  { name: 'stats-series-completion', path: '/stats', viewport: { width: 1400, height: 1400, deviceScaleFactor: 2 }, settle: 1500, after: async (p) => { await p.locator('button:has-text("library")').first().click().catch(() => {}); await p.waitForTimeout(700) }, element: 'div.rounded-xl:has(h3:text-is("Series Completion"))' },
   { name: 'stats-author-affinity',   path: '/stats', viewport: { width: 1400, height: 1400, deviceScaleFactor: 2 }, settle: 1500, after: async (p) => { await p.locator('button:has-text("library")').first().click().catch(() => {}); await p.waitForTimeout(700) }, element: 'div.rounded-xl:has(h3:text-is("Top Authors by Reading Time"))' },
   { name: 'stats-completion-by-type',path: '/stats', viewport: { width: 1400, height: 1400, deviceScaleFactor: 2 }, settle: 1500, after: async (p) => { await p.locator('button:has-text("library")').first().click().catch(() => {}); await p.waitForTimeout(700) }, element: 'div.rounded-xl:has(h3:has-text("Finish Rate per Book Category"))' },
   { name: 'stats-category-breakdown',path: '/stats', viewport: { width: 1400, height: 1400, deviceScaleFactor: 2 }, settle: 1500, after: async (p) => { await p.locator('button:has-text("library")').first().click().catch(() => {}); await p.waitForTimeout(700) }, element: 'div.rounded-xl:has(h3:text-is("Category Breakdown"))' },
@@ -183,17 +203,17 @@ const SHOTS = [
     viewport: { width: 1600, height: 2000, deviceScaleFactor: 2 },
     settle: 1000,
     after: async (page) => {
-      await page.locator('span:text-is("Appearance")').first().scrollIntoViewIfNeeded().catch(() => {})
+      await page.locator('h2:text-is("Appearance")').first().scrollIntoViewIfNeeded().catch(() => {})
       await page.waitForTimeout(300)
       // Add padding around the section element by expanding its box via a wrapper
       await page.evaluate(() => {
         const section = document.querySelector('section:has(span)')
         const sections = [...document.querySelectorAll('section')]
-        const target = sections.find(s => s.querySelector('span')?.textContent?.trim() === 'Appearance')
+        const target = sections.find(s => s.querySelector('h2')?.textContent?.trim() === 'Appearance')
         if (target) target.style.padding = '48px 32px'
       })
     },
-    element: 'section:has(span:text-is("Appearance"))',
+    element: 'section:has(h2:text-is("Appearance"))',
   },
   {
     name: 'book-detail-edit',
@@ -288,11 +308,11 @@ const SHOTS = [
     after: async (page) => {
       await page.evaluate(() => {
         const sections = [...document.querySelectorAll('section')]
-        const target = sections.find(s => s.querySelector('span')?.textContent?.trim() === 'Send to Device')
+        const target = sections.find(s => s.querySelector('h2')?.textContent?.trim() === 'Send to Device')
         if (target) target.style.padding = '48px 32px'
       })
     },
-    element: 'section:has(span:text-is("Send to Device"))',
+    element: 'section:has(h2:text-is("Send to Device"))',
   },
   {
     name: 'settings-send-to-device-guide',
@@ -304,11 +324,11 @@ const SHOTS = [
       await page.waitForTimeout(500)
       await page.evaluate(() => {
         const sections = [...document.querySelectorAll('section')]
-        const target = sections.find(s => s.querySelector('span')?.textContent?.trim() === 'Send to Device')
+        const target = sections.find(s => s.querySelector('h2')?.textContent?.trim() === 'Send to Device')
         if (target) target.style.padding = '48px 32px'
       })
     },
-    element: 'section:has(span:text-is("Send to Device"))',
+    element: 'section:has(h2:text-is("Send to Device"))',
   },
   {
     name: 'admin-email',
@@ -330,11 +350,11 @@ const SHOTS = [
     after: async (page) => {
       await page.evaluate(() => {
         const sections = [...document.querySelectorAll('section')]
-        const target = sections.find(s => s.querySelector('span')?.textContent?.trim() === 'Send to Device')
+        const target = sections.find(s => s.querySelector('h2')?.textContent?.trim() === 'Send to Device')
         if (target) target.style.padding = '48px 32px'
       })
     },
-    element: 'section:has(span:text-is("Send to Device"))',
+    element: 'section:has(h2:text-is("Send to Device"))',
   },
   {
     name: 'settings-send-to-device-prefilled',
@@ -347,11 +367,11 @@ const SHOTS = [
       await page.waitForTimeout(200)
       await page.evaluate(() => {
         const sections = [...document.querySelectorAll('section')]
-        const target = sections.find(s => s.querySelector('span')?.textContent?.trim() === 'Send to Device')
+        const target = sections.find(s => s.querySelector('h2')?.textContent?.trim() === 'Send to Device')
         if (target) target.style.padding = '48px 32px'
       })
     },
-    element: 'section:has(span:text-is("Send to Device"))',
+    element: 'section:has(h2:text-is("Send to Device"))',
   },
   {
     name: 'settings-send-to-device-added',
@@ -361,11 +381,11 @@ const SHOTS = [
     after: async (page) => {
       await page.fill('input[placeholder="My Kindle"]', "Benedict's Kindle").catch(() => {})
       await page.fill('input[placeholder="user_abc@kindle.com"]', 'benedict_a1b2c3@kindle.com').catch(() => {})
-      await page.locator('section:has(span:text-is("Send to Device")) button:has-text("Add")').first().click().catch(() => {})
+      await page.locator('section:has(h2:text-is("Send to Device")) button:has-text("Add")').first().click().catch(() => {})
       await page.waitForTimeout(900)
       await page.evaluate(() => {
         const sections = [...document.querySelectorAll('section')]
-        const target = sections.find(s => s.querySelector('span')?.textContent?.trim() === 'Send to Device')
+        const target = sections.find(s => s.querySelector('h2')?.textContent?.trim() === 'Send to Device')
         if (target) target.style.padding = '48px 32px'
       })
     },
@@ -377,7 +397,7 @@ const SHOTS = [
         await fetch(`${api}/api/devices/${d.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }).catch(() => {})
       }
     },
-    element: 'section:has(span:text-is("Send to Device"))',
+    element: 'section:has(h2:text-is("Send to Device"))',
   },
   // Send modal — single book. Requires SMTP configured + at least one device.
   {
@@ -500,15 +520,17 @@ const SHOTS = [
       await page.locator('button:has-text("Wishlist")').first().click().catch(() => {})
       await page.waitForTimeout(800)
       // Open the Fulfill picker on the Hitchhiker's (single-book) wish row.
-      await page.locator('div.rounded-xl:has(p:has-text("Hitchhiker")) button:has-text("Fulfill")').first().click().catch(() => {})
+      await page.locator('div.rounded-xl:has(p:has-text("Hitch")) button:has-text("Fulfill")').first().click().catch(() => {})
       await page.waitForTimeout(700)
     },
-    element: 'div.rounded-xl:has(p:has-text("Hitchhiker"))',
+    element: 'div.rounded-xl:has(p:has-text("Hitch"))',
   },
 
   // Mobile (PWA)
   { name: 'mobile-home', path: '/', mobile: true, waitFor: 'h2, h3, [class*="streak"]' },
-  { name: 'mobile-stats', path: '/stats', mobile: true, settle: 1200 },
+  // The dashboard remembers the active board server-side, so a previous shot's
+  // Habits/Library click would leak in — force the Overview pill.
+  { name: 'mobile-stats', path: '/stats', mobile: true, settle: 1200, after: async (p) => { await p.locator('button:has-text("overview")').first().click().catch(() => {}); await p.waitForTimeout(700) } },
   { name: 'mobile-series', path: '/?tab=series', mobile: true, settle: 800 },
   {
     name: 'mobile-reader',
@@ -568,7 +590,7 @@ async function login() {
 
 async function resolveBookIds(token) {
   // Look up book IDs by title. Keeps the script working across re-seeds.
-  const wanted = { frankenstein: 'Frankenstein', goodGuys2: 'Heir Today, Pawn Tomorrow' }
+  const wanted = { frankenstein: 'Frankenstein', goodGuys2: 'Heir Today, Pawn Tomorrow', hitchhiker: "The Hitchhiker's Guide to the Galaxy" }
   for (const [key, title] of Object.entries(wanted)) {
     try {
       const r = await fetch(`${API}/api/books?q=${encodeURIComponent(title)}&per_page=5`, {
@@ -619,7 +641,7 @@ async function maskModalBackdrop(page) {
 async function captureShot(browser, token, shot) {
   const context = await browser.newContext(shot.mobile ? MOBILE : { viewport: shot.viewport })
   const theme = THEME ?? shot.theme ?? 'light'
-  const prefs = { ...(shot.prefs ?? {}) }
+  const prefs = { tome_stats_hint: '1', ...(shot.prefs ?? {}) }
   // Reader has its own theme (light/sepia/dark) stored separately. For shots
   // that render the reader, mirror the app theme — amber → sepia (amber isn't
   // a valid reader theme).
@@ -641,6 +663,38 @@ async function captureShot(browser, token, shot) {
   if (shot.after) await shot.after(page)
   if (shot.settle) await page.waitForTimeout(shot.settle)
   const file = path.join(OUT, `${shot.name}.png`)
+  // Union-of-elements screenshot: clips to the union bounding box of every
+  // selector match plus padding. For content that is N sibling tiles with no
+  // shared wrapper — e.g. the stats dashboard's headline stat row, where the
+  // grid items are absolutely-positioned siblings of every other tile.
+  if (shot.elements) {
+    const pad = shot.elementsPad ?? 16
+    let box = null
+    for (const sel of shot.elements) {
+      for (const loc of await page.locator(sel).all()) {
+        const b = await loc.boundingBox()
+        if (!b) continue
+        box = box
+          ? {
+              x: Math.min(box.x, b.x),
+              y: Math.min(box.y, b.y),
+              right: Math.max(box.right, b.x + b.width),
+              bottom: Math.max(box.bottom, b.y + b.height),
+            }
+          : { x: b.x, y: b.y, right: b.x + b.width, bottom: b.y + b.height }
+      }
+    }
+    if (!box) throw new Error(`${shot.name}: no elements matched`)
+    const clip = {
+      x: Math.max(0, box.x - pad),
+      y: Math.max(0, box.y - pad),
+      width: box.right - box.x + pad * 2,
+      height: box.bottom - box.y + pad * 2,
+    }
+    await page.screenshot({ path: file, clip })
+    await context.close()
+    return file
+  }
   // Element-bounded screenshot: crops exactly to the target element's bounding
   // box, ideal for capturing a single section or modal without manual clip math.
   if (shot.element) {

@@ -271,7 +271,7 @@ export function UploadModal({ isOpen, onClose, onDone, onUploaded, onWishMatches
                       <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                     )}
                     {item.status === 'done' && (
-                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                      <CheckCircle2 className="w-4 h-4 text-success" />
                     )}
                     {item.status === 'error' && (
                       <AlertCircle className="w-4 h-4 text-destructive" />
@@ -291,8 +291,8 @@ export function UploadModal({ isOpen, onClose, onDone, onUploaded, onWishMatches
             <div className={cn(
               'flex items-center gap-2 px-3 py-2 rounded-lg text-sm',
               summary.failed === 0
-                ? 'bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/20'
-                : 'bg-yellow-400/10 text-yellow-700 dark:text-yellow-400 border border-yellow-400/20'
+                ? 'bg-success/10 text-success border border-success/20'
+                : 'bg-warning/10 text-warning border border-warning/20'
             )}>
               {summary.failed === 0
                 ? <CheckCircle2 className="w-4 h-4 shrink-0" />

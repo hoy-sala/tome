@@ -257,7 +257,7 @@ export function SessionLog() {
   }
   return (
     <div className="flex flex-col gap-0">
-      <div className="hidden sm:grid grid-cols-[1fr_120px_80px_80px_40px] gap-2 px-2 pb-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide border-b border-border">
+      <div className="hidden sm:grid grid-cols-[1fr_120px_80px_80px_40px] gap-2 px-2 pb-2 text-[11px] font-medium text-muted-foreground border-b border-border">
         <span>Book</span>
         <span>Date</span>
         <span>Duration</span>

@@ -149,7 +149,7 @@ function ContentTypeBadge({ type }: { type: string }) {
     <span className={cn(
       'text-[10px] font-medium px-1.5 py-0.5 rounded border capitalize',
       isChapter
-        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+        ? 'bg-warning/10 text-warning border-warning/20'
         : 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20'
     )}>
       {type}
@@ -1236,7 +1236,7 @@ export function BinderyPage() {
               {/* Section header */}
               <div className="flex items-center justify-between px-4 py-2.5 bg-muted/30 border-b border-border">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Recently Imported</span>
+                  <span className="font-display text-sm text-foreground">Recently Imported</span>
                   <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
                     {unreviewed.length}
                   </span>

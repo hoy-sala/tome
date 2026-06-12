@@ -594,7 +594,7 @@ export function SettingsPage() {
                 </button>
               </form>
               {profileError && <p className="text-xs text-destructive mt-2">{profileError}</p>}
-              {profileSuccess && <p className="text-xs text-green-500 mt-2">Profile updated</p>}
+              {profileSuccess && <p className="text-xs text-success mt-2">Profile updated</p>}
             </div>
 
             {/* Password */}
@@ -624,7 +624,7 @@ export function SettingsPage() {
                   error={!!(pwError && confirmPassword && newPassword !== confirmPassword)}
                 />
                 {pwError && <p className="text-xs text-destructive pt-0.5">{pwError}</p>}
-                {pwSuccess && <p className="text-xs text-green-500 pt-0.5">Password updated successfully</p>}
+                {pwSuccess && <p className="text-xs text-success pt-0.5">Password updated successfully</p>}
                 <div className="pt-1">
                   <button
                     type="submit"
@@ -647,7 +647,7 @@ export function SettingsPage() {
                   <div className={cn(
                     'flex items-center gap-2 text-sm p-3 rounded-lg mb-3 border',
                     ssoMsg.ok
-                      ? 'text-green-500 bg-green-500/10 border-green-500/20'
+                      ? 'text-success bg-success/10 border-success/20'
                       : 'text-destructive bg-destructive/10 border-destructive/20'
                   )}>
                     {ssoMsg.ok ? <Check className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
@@ -656,7 +656,7 @@ export function SettingsPage() {
                 )}
                 {user?.oidc_linked ? (
                   <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Check className="w-4 h-4 text-green-500" />
+                    <Check className="w-4 h-4 text-success" />
                     Your account is linked to SSO — you can sign in with your identity provider.
                   </p>
                 ) : (
@@ -715,7 +715,7 @@ export function SettingsPage() {
               </form>
               {qcError && <p className="text-xs text-destructive mt-2">{qcError}</p>}
               {qcSuccess && (
-                <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400 mt-2">
+                <div className="flex items-center gap-1.5 text-xs text-success mt-2">
                   <CheckCircle className="w-3.5 h-3.5" />
                   Device authorized — the new device is now signed in.
                 </div>
@@ -729,36 +729,41 @@ export function SettingsPage() {
         <section>
           <SectionHeader title="Appearance" />
 
-          {/* Built-in themes */}
-          <div className="mt-4 grid grid-cols-3 sm:grid-cols-4 gap-2">
-            {THEMES.map(theme => {
-              const active = activeTheme === theme.id
-              return (
-                <button
-                  key={theme.id}
-                  onClick={() => handleThemeSelect(theme.id)}
-                  className={cn(
-                    'group relative rounded-lg overflow-hidden transition-all duration-150',
-                    active
-                      ? 'ring-2 ring-primary ring-offset-2 ring-offset-background shadow-md'
-                      : 'ring-1 ring-border hover:ring-primary/40 hover:shadow-sm'
-                  )}
-                  title={theme.label}
-                >
-                  <div className="h-10 w-full flex items-end p-1.5 gap-1" style={{ background: theme.preview.bg }}>
-                    <div className="flex-1 h-4 rounded opacity-90" style={{ background: theme.preview.card }} />
-                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: theme.preview.primary }} />
-                  </div>
-                  <div className="px-1.5 py-1 flex items-center justify-between gap-1" style={{ background: theme.preview.card }}>
-                    <span className="text-[10px] font-medium leading-tight truncate" style={{ color: theme.preview.text }}>
-                      {theme.label}
-                    </span>
-                    {active && <Check className="w-2.5 h-2.5 shrink-0" style={{ color: theme.preview.primary }} />}
-                  </div>
-                </button>
-              )
-            })}
-          </div>
+          {/* Built-in themes — neutral core + warm pair */}
+          {([['Core', 'core'], ['Warm', 'warm']] as const).map(([groupLabel, group]) => (
+            <div key={group} className="mt-4">
+              <p className="text-xs text-muted-foreground mb-1.5">{groupLabel}</p>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {THEMES.filter(t => t.group === group).map(theme => {
+                  const active = activeTheme === theme.id
+                  return (
+                    <button
+                      key={theme.id}
+                      onClick={() => handleThemeSelect(theme.id)}
+                      className={cn(
+                        'group relative rounded-lg overflow-hidden transition-all duration-150',
+                        active
+                          ? 'ring-2 ring-primary ring-offset-2 ring-offset-background shadow-md'
+                          : 'ring-1 ring-border hover:ring-primary/40 hover:shadow-sm'
+                      )}
+                      title={theme.label}
+                    >
+                      <div className="h-10 w-full flex items-end p-1.5 gap-1" style={{ background: theme.preview.bg }}>
+                        <div className="flex-1 h-4 rounded opacity-90" style={{ background: theme.preview.card }} />
+                        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: theme.preview.primary }} />
+                      </div>
+                      <div className="px-1.5 py-1 flex items-center justify-between gap-1" style={{ background: theme.preview.card }}>
+                        <span className="text-[10px] font-medium leading-tight truncate" style={{ color: theme.preview.text }}>
+                          {theme.label}
+                        </span>
+                        {active && <Check className="w-2.5 h-2.5 shrink-0" style={{ color: theme.preview.primary }} />}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
 
           {/* Custom themes */}
           {customThemes.length > 0 && (
@@ -953,8 +958,8 @@ export function SettingsPage() {
                 </p>
 
                 {newPinResult && (
-                  <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-3 space-y-1">
-                    <p className="text-xs text-green-600 dark:text-green-400 font-medium">PIN created — copy it now, it won't be shown again.</p>
+                  <div className="rounded-lg bg-success/10 border border-success/20 p-3 space-y-1">
+                    <p className="text-xs text-success font-medium">PIN created — copy it now, it won't be shown again.</p>
                     <div className="flex items-center gap-2">
                       <code className="text-xs font-mono text-foreground break-all flex-1">{newPinResult}</code>
                       <button
@@ -1004,7 +1009,7 @@ export function SettingsPage() {
                   </p>
                 </div>
                 {kosyncStatus?.linked && (
-                  <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 shrink-0 mt-0.5">
+                  <span className="flex items-center gap-1 text-xs text-success shrink-0 mt-0.5">
                     <Check className="w-3 h-3" /> Linked
                     {kosyncStatus.synced_documents != null && (
                       <span className="text-muted-foreground ml-1">· {kosyncStatus.synced_documents} docs</span>
@@ -1043,7 +1048,7 @@ export function SettingsPage() {
                 </button>
               </form>
               {kosyncError && <p className="text-xs text-destructive">{kosyncError}</p>}
-              {kosyncSuccess && <p className="text-xs text-green-500">KOSync registered successfully</p>}
+              {kosyncSuccess && <p className="text-xs text-success">KOSync registered successfully</p>}
 
               <ConnectBlock rows={[
                 { label: 'URL', value: kosyncUrl, copy: true },
@@ -1103,8 +1108,8 @@ export function SettingsPage() {
                 </div>
 
                 {newKeyResult && (
-                  <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-3 space-y-1">
-                    <p className="text-xs text-green-600 dark:text-green-400 font-medium">Key created — copy it now, it won't be shown again.</p>
+                  <div className="rounded-lg bg-success/10 border border-success/20 p-3 space-y-1">
+                    <p className="text-xs text-success font-medium">Key created — copy it now, it won't be shown again.</p>
                     <div className="flex items-center gap-2">
                       <code className="text-xs font-mono text-foreground break-all flex-1">{newKeyResult}</code>
                       <button onClick={() => navigator.clipboard.writeText(newKeyResult)}
@@ -1167,9 +1172,9 @@ export function SettingsPage() {
 
               {smtpConfigured === false ? (
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2">
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-                    <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">Email delivery is not set up yet.</p>
+                  <div className="flex items-center gap-2 rounded-lg bg-warning/10 border border-warning/20 px-3 py-2">
+                    <AlertTriangle className="w-3.5 h-3.5 text-warning dark:text-warning shrink-0" />
+                    <p className="text-xs text-warning font-medium">Email delivery is not set up yet.</p>
                   </div>
                   <div className="rounded-lg border border-border overflow-hidden text-xs">
                     <button
@@ -1349,10 +1354,10 @@ export function SettingsPage() {
 
               {/* One-time token reveal */}
               {tokenRevealPlaintext && (
-                <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-4 space-y-3">
+                <div className="rounded-lg bg-warning/10 border border-warning/30 p-4 space-y-3">
                   <div className="flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                    <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                    <AlertTriangle className="w-4 h-4 text-warning dark:text-warning shrink-0 mt-0.5" />
+                    <p className="text-xs font-medium text-warning">
                       This is the only time you will see this token. Store it somewhere safe — it cannot be recovered.
                     </p>
                   </div>
@@ -1365,7 +1370,7 @@ export function SettingsPage() {
                       className="p-1.5 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground shrink-0"
                       title="Copy token"
                     >
-                      {tokenCopied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                      {tokenCopied ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                   <button
@@ -1415,7 +1420,7 @@ export function SettingsPage() {
                         <span className="flex items-center gap-1.5 font-medium text-foreground flex-1 truncate min-w-0">
                           {tok.name}
                           {(tok.scope ?? 'full') === 'readonly' && (
-                            <span className="shrink-0 px-1 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                            <span className="shrink-0 px-1 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide bg-info/10 text-info border border-info/20">
                               Read-only
                             </span>
                           )}
@@ -1540,12 +1545,12 @@ function relativeTime(iso: string): string {
 function SectionHeader({ title, subtle = false }: { title: string; subtle?: boolean }) {
   return (
     <div className="flex items-center gap-3">
-      <span className={cn(
-        'text-xs font-semibold uppercase tracking-wider',
-        subtle ? 'text-muted-foreground/50' : 'text-muted-foreground'
+      <h2 className={cn(
+        'font-display text-base font-normal',
+        subtle ? 'text-muted-foreground' : 'text-foreground'
       )}>
         {title}
-      </span>
+      </h2>
       <div className={cn('flex-1 h-px', subtle ? 'bg-border/50' : 'bg-border')} />
     </div>
   )
@@ -1571,7 +1576,7 @@ function ConnectBlock({ rows }: { rows: { label: string; value: string; copy?: b
               className="p-1 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground shrink-0"
               title="Copy"
             >
-              {copied === value ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+              {copied === value ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
             </button>
           )}
         </div>

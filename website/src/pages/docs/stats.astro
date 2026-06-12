@@ -6,15 +6,50 @@ import Callout from '../../components/Callout.astro'
 import { ThemedShot } from '../../components/ThemedShot'
 import { withBase } from '../../lib/path'
 ---
-<DocsLayout title="Reading stats" description="Streaks, heatmaps, reading pace, completion estimates, and a year-in-review built from real session data.">
+<DocsLayout title="Reading stats" description="A fully customisable stats dashboard — streaks, heatmaps, reading pace, completion estimates, and a year-in-review built from real session data.">
   <SectionHero section="features" />
   <h1>Reading stats</h1>
   <p>
-    Tome's stats screens are built from real session data — every minute logged by the web reader
+    Tome's stats are built from real session data — every minute logged by the web reader
     and every session the TomeSync KOReader plugin reports. No estimates from page counts, no
     fudge factors, no guessing. If a chart is empty, it's because the data isn't there yet.
   </p>
+  <p>
+    The page itself is a dashboard: every chart on it is a tile on a drag-and-resize grid, and
+    the three boards it ships with — Overview, Habits, and Library — are just the defaults.
+  </p>
   <DocsMeta />
+
+  <h2>Make it yours</h2>
+  <p>
+    Hit <strong>Edit</strong> and the grid opens up: drag tiles by their header, resize them by
+    the corner handle, remove or duplicate them, and undo a removal straight from the toast.
+    <strong>Add tile</strong> opens a gallery of 35 widgets with live previews — everything
+    documented below, plus extras like a paginated session log, reading by weekday, a
+    time-of-day split, time by format, recently finished, and a monthly streak calendar.
+  </p>
+  <div class="docs-shot-bare">
+    <ThemedShot client:load name="stats-add-tile" alt="The add-widget gallery: live previews of all 35 widgets, with search and on-board filters" />
+  </div>
+  <p>
+    Tiles are individually configurable where it makes sense: chart tiles switch between bar,
+    line, and area; time-series tiles can follow the page's range picker or pin their own
+    window; the Custom Stat tile counts whichever metric you pick; Series Spotlight focuses on
+    one series of your choice.
+  </p>
+  <p>
+    Tabs are boards. Create new ones — empty, duplicated from the current board, or from the
+    built-in defaults — rename them with a double-click, and delete the ones you don't want
+    (undo included). Layouts are saved per-user <em>on the server</em>, so your boards follow
+    you to every device; a board can also be exported as JSON to share and imported on another
+    account, and the camera button saves any board as a PNG image.
+  </p>
+
+  <Callout variant="tip" title="Reset is always safe">
+    The default boards replicate everything documented on this page. If you edit one of them
+    into a corner, <strong>Reset</strong> in the edit toolbar brings it back to its stock
+    layout — your other boards aren't touched.
+  </Callout>
 
   <h2>Where the data comes from</h2>
   <p>
@@ -38,8 +73,11 @@ import { withBase } from '../../lib/path'
     Two users in different time zones see different "today."
   </Callout>
 
-  <h2>Overview tab</h2>
-  <p>The "where am I right now?" dashboard. Designed to be glanceable.</p>
+  <h2>Overview board</h2>
+  <p>
+    The "where am I right now?" board. Designed to be glanceable. Like every section below,
+    each chart here is a tile — what follows describes the default layout.
+  </p>
 
   <h3>Totals + streak</h3>
   <div class="docs-shot-bare">
@@ -96,8 +134,8 @@ import { withBase } from '../../lib/path'
     weekend regulars.
   </p>
 
-  <h2>Habits tab</h2>
-  <p>The "when and how do I read?" dashboard.</p>
+  <h2>Habits board</h2>
+  <p>The "when and how do I read?" board.</p>
 
   <h3>Hour × day-of-week heatmap</h3>
   <div class="docs-shot-bare">
@@ -148,8 +186,8 @@ import { withBase } from '../../lib/path'
     month-on-month is more legible than week-on-week.
   </p>
 
-  <h2>Library tab</h2>
-  <p>The "what have I been reading?" dashboard. Focused on books, not on time.</p>
+  <h2>Library board</h2>
+  <p>The "what have I been reading?" board. Focused on books, not on time.</p>
 
   <h3>Series completion ladder</h3>
   <div class="docs-shot-bare">
@@ -222,6 +260,7 @@ import { withBase } from '../../lib/path'
     <li><code>GET /api/stats/completion-estimates</code> — projected finish dates for in-progress books.</li>
     <li><code>GET /api/stats/sessions</code> — paged session list, oldest first.</li>
     <li><code>DELETE /api/stats/sessions/{`{id}`}</code> — delete a misfire.</li>
+    <li><code>GET /api/stats/dashboard</code> / <code>PUT /api/stats/dashboard</code> — your saved boards (opaque JSON, 256&nbsp;KB cap). This is what syncs layouts across devices.</li>
   </ul>
   <p>
     Authenticate with an <a href={withBase("/docs/api-tokens")}>API token</a> or a JWT. Times are UTC in the

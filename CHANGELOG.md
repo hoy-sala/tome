@@ -43,6 +43,56 @@ All notable changes to Tome are documented here. Format loosely follows
   (build 19 / 1.4.0)
 
 ### Changed
+- **Pick your own cover size.** The library's three fixed views (large grid,
+  small grid, list) become two — grid and list — with a slider next to the
+  view toggle that sets the cover size anywhere between dense and poster-sized.
+  Columns flow to fit, card text scales with the size, and your old
+  large/small preference migrates to the matching slider position. Layout
+  changes animate: covers glide into their new positions when the grid
+  reflows — including when you change filters or sorting — and the grid/list
+  switch fades instead of hard-cutting.
+- **A new look: oxblood, paper, and a proper display face.** Tome's violet
+  accent is gone — the new identity is a deep bookbinding-leather red (oxblood
+  in the light themes, a dusty rosewood in the dark ones) on warm paper
+  neutrals, with headings set in Bricolage Grotesque. Smaller refinements ride
+  along: the book-detail reading stats collapse from a wall of bordered
+  mini-tiles into one quiet panel, section headers drop the ALL-CAPS treatment
+  (the stats dashboard's tile titles and table headers included, so long labels
+  like "Completion Rate" no longer clip — and dashboard tiles sit flat instead
+  of floating on a shadow outside of edit mode),
+  cover hover-tilt is subtler, the grid no longer re-runs its entrance
+  animation on every filter change, and grid cards lose the repetitive
+  book-type pill (list view keeps it). The series page's reading stats get the
+  same flattened one-panel treatment as the book detail page, the Settings
+  section headers move to the display face, the admin audit-log and sync badges
+  trade the last of the violet for the new accent, and the book-detail delete
+  confirmation no longer makes the toolbar buttons shift by a border's width.
+- **One green, one blue, one amber.** Success, info, and warning colors across
+  the app (audit-log badges, settings notices, upload states, toasts, sync
+  dots, library-health panels and more) now come from three theme-aware tokens
+  tuned to the new identity — dusty and low-chroma like the rosewood accent —
+  instead of ~80 hardcoded Tailwind greens, blues, and ambers that each picked
+  their own shade. The stats dashboard joins in: the Reading Pace charts trade
+  their hardcoded green for the chart accent, and trend indicators and the
+  100%-complete series bar use the semantic tokens. Book-type and file-format
+  color labels keep their palette.
+- The Wishlist page no longer repeats its own title above the list: the
+  in-page section header now reads "Open (N)" (pairing with "Fulfilled"), and
+  on an empty wishlist it disappears entirely — the empty state moves up and
+  carries the "Learn more" link inline. The Fulfilled section also starts
+  expanded instead of hiding its cards behind a collapsed row.
+- **A calmer Home tab.** The four boxed stat chips become one quiet
+  hairline-divided panel (icons intact, and a zero-day streak no longer leads
+  the page), Continue Reading is ordered by when you last read instead of when
+  the book was added, and reading-progress strips on grid covers get a minimum
+  width so a just-started book shows a visible nub. The sidebar's collapse
+  toggle moves from its own orphaned row down to the user footer, the Shelves
+  section header only appears once you have shelves, and empty-library counts
+  render muted.
+- **Five themes, structured.** The theme lineup is now a neutral pair
+  (Light/Dark), a warm pair (Amber and the new **Ember**, a cappuccino dark),
+  and a new true-black **Black** theme for OLED screens. The pickers in
+  Settings, the sidebar menu, and the login screen group them accordingly.
 - **KOReader plugin: clearer menu.** The ambiguous in-book "Enabled (tap to
   disable)" entry is now "Tracking: on (tap to pause)" — it pauses automatic
   session tracking and syncing for the current KOReader run (it was never a

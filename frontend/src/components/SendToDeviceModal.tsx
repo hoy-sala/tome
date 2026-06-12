@@ -130,7 +130,7 @@ export function SendToDeviceModal({ open, onClose, books }: SendToDeviceModalPro
               </div>
             ) : smtpConfigured === false ? (
               <div className="text-center py-4 space-y-2">
-                <AlertTriangle className="w-8 h-8 text-amber-500 mx-auto" />
+                <AlertTriangle className="w-8 h-8 text-warning mx-auto" />
                 <p className="text-sm font-medium text-foreground">Email delivery is not set up yet</p>
                 <p className="text-xs text-muted-foreground">
                   See Settings for setup instructions.
@@ -209,7 +209,7 @@ export function SendToDeviceModal({ open, onClose, books }: SendToDeviceModalPro
                   <p className="text-xs text-muted-foreground">
                     File size: {formatBytes(selectedFile.file_size)}
                     {selectedFile.file_size > 25 * 1024 * 1024 && (
-                      <span className="text-amber-500 ml-1">(exceeds 25 MB email limit)</span>
+                      <span className="text-warning ml-1">(exceeds 25 MB email limit)</span>
                     )}
                   </p>
                 )}

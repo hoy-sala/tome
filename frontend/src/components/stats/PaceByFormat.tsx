@@ -1,4 +1,5 @@
 import { ProgressRow } from './ProgressRow'
+import { useChartAccent } from '@/lib/useChartAccent'
 
 interface FormatPace {
   format: string
@@ -9,6 +10,7 @@ interface FormatPace {
 }
 
 export function PaceByFormat({ data }: { data: FormatPace[] }) {
+  const accent = useChartAccent()
   if (!data || data.length === 0) {
     return (
       <p className="text-sm text-muted-foreground text-center py-4">No pace data by format.</p>
@@ -26,7 +28,7 @@ export function PaceByFormat({ data }: { data: FormatPace[] }) {
           value={`${f.pages_per_min} p/min`}
           pct={(f.pages_per_min / maxPpm) * 100}
           sub={`${f.sessions} session${f.sessions !== 1 ? 's' : ''} · ${f.pages} pages`}
-          color="#10b981"
+          color={accent}
         />
       ))}
     </div>

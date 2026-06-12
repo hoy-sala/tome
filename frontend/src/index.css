@@ -19,6 +19,9 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-info: var(--info);
+  --color-warning: var(--warning);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -29,51 +32,94 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
+/* Light — near-neutral paper + oxblood (bookbinding leather).
+   Kept a touch off pure white, but visibly cooler than Amber —
+   Light/Dark are the neutral pair, Amber/Ember the warm pair. */
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.50 0.27 285);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.50 0.27 285);
-  --chart-accent: oklch(0.50 0.27 285);
-  --accent-soft: oklch(0.50 0.27 285 / 0.12);
+  --background: oklch(0.975 0.003 85);
+  --foreground: oklch(0.21 0.012 60);
+  --card: oklch(0.995 0.002 85);
+  --card-foreground: oklch(0.21 0.012 60);
+  --popover: oklch(0.995 0.002 85);
+  --popover-foreground: oklch(0.21 0.012 60);
+  --primary: oklch(0.45 0.115 18);
+  --primary-foreground: oklch(0.98 0.005 85);
+  --secondary: oklch(0.94 0.004 85);
+  --secondary-foreground: oklch(0.27 0.012 60);
+  --muted: oklch(0.94 0.004 85);
+  --muted-foreground: oklch(0.50 0.010 70);
+  --accent: oklch(0.93 0.006 40);
+  --accent-foreground: oklch(0.25 0.012 60);
+  --destructive: oklch(0.55 0.21 30);
+  --success: oklch(0.52 0.10 155);
+  --info: oklch(0.50 0.09 245);
+  --warning: oklch(0.58 0.12 70);
+  --border: oklch(0.90 0.005 85);
+  --input: oklch(0.88 0.005 85);
+  --ring: oklch(0.45 0.115 18);
+  --chart-accent: oklch(0.52 0.13 18);
+  --accent-soft: oklch(0.45 0.115 18 / 0.12);
 }
 
+/* Dark — near-neutral with a trace of warmth (not zinc, not espresso)
+   + dusty rosewood. The accent stays calm because its chroma is low,
+   not because the surfaces are brown. */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.60 0.24 285);
-  --primary-foreground: oklch(0.13 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.60 0.24 285);
-  --chart-accent: oklch(0.60 0.24 285);
-  --accent-soft: oklch(0.60 0.24 285 / 0.15);
+  --background: oklch(0.16 0.004 60);
+  --foreground: oklch(0.955 0.004 80);
+  --card: oklch(0.21 0.005 60);
+  --card-foreground: oklch(0.955 0.004 80);
+  --popover: oklch(0.21 0.005 60);
+  --popover-foreground: oklch(0.955 0.004 80);
+  --primary: oklch(0.63 0.10 22);
+  --primary-foreground: oklch(0.98 0.005 18);
+  --secondary: oklch(0.265 0.005 60);
+  --secondary-foreground: oklch(0.955 0.004 80);
+  --muted: oklch(0.265 0.005 60);
+  --muted-foreground: oklch(0.71 0.008 70);
+  --accent: oklch(0.265 0.005 60);
+  --accent-foreground: oklch(0.955 0.004 80);
+  --destructive: oklch(0.70 0.19 28);
+  --success: oklch(0.72 0.10 155);
+  --info: oklch(0.72 0.09 245);
+  --warning: oklch(0.78 0.11 75);
+  --border: oklch(0.95 0.008 60 / 11%);
+  --input: oklch(0.95 0.008 60 / 15%);
+  --ring: oklch(0.63 0.10 22);
+  --chart-accent: oklch(0.63 0.10 22);
+  --accent-soft: oklch(0.63 0.10 22 / 0.16);
+}
+
+/* Ember — the warm cappuccino dark: espresso surfaces, same rosewood accent.
+   Dark counterpart to Amber. Applied alongside .dark; overrides surfaces only. */
+.theme-ember {
+  --background: oklch(0.175 0.012 60);
+  --card: oklch(0.225 0.014 60);
+  --popover: oklch(0.225 0.014 60);
+  --secondary: oklch(0.28 0.015 60);
+  --muted: oklch(0.28 0.015 60);
+  --accent: oklch(0.28 0.015 60);
+  --muted-foreground: oklch(0.71 0.015 70);
+  --border: oklch(0.95 0.015 60 / 11%);
+  --input: oklch(0.95 0.015 60 / 15%);
+}
+
+/* Black — true-black OLED theme, same wine identity.
+   Class is applied alongside .dark, so it only needs to override surfaces. */
+.theme-black {
+  --background: oklch(0 0 0);
+  --card: oklch(0.145 0.003 60);
+  --popover: oklch(0.145 0.003 60);
+  --secondary: oklch(0.20 0.004 60);
+  --muted: oklch(0.20 0.004 60);
+  --accent: oklch(0.20 0.004 60);
+  --primary: oklch(0.66 0.10 22);
+  --ring: oklch(0.66 0.10 22);
+  --chart-accent: oklch(0.66 0.10 22);
+  --accent-soft: oklch(0.66 0.10 22 / 0.18);
+  --border: oklch(1 0 0 / 13%);
+  --input: oklch(1 0 0 / 17%);
 }
 
 /* Amber (warm parchment) theme */
@@ -93,6 +139,9 @@
   --accent: oklch(0.925 0.018 52);
   --accent-foreground: oklch(0.24 0.022 52);
   --destructive: oklch(0.55 0.2 25);
+  --success: oklch(0.51 0.10 150);
+  --info: oklch(0.50 0.085 245);
+  --warning: oklch(0.56 0.13 65);
   --border: oklch(0.89 0.012 70);
   --input: oklch(0.87 0.013 70);
   --ring: oklch(0.50 0.155 52);
@@ -107,6 +156,51 @@
 }
 .animate-card-appear {
   animation: card-appear 0.25s ease-out both;
+}
+
+/* Soft fade when the library switches between grid and list */
+@keyframes view-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Cover-size slider (library toolbar) — the filled-track background is set
+   inline from React since it depends on the current value */
+.cover-slider {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 0.25rem;
+  border-radius: 9999px;
+  cursor: pointer;
+}
+.cover-slider:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+.cover-slider::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 9999px;
+  background: var(--primary);
+  transition: transform 0.15s ease;
+}
+.cover-slider:hover::-webkit-slider-thumb,
+.cover-slider:active::-webkit-slider-thumb {
+  transform: scale(1.3);
+}
+.cover-slider::-moz-range-thumb {
+  width: 0.75rem;
+  height: 0.75rem;
+  border: none;
+  border-radius: 9999px;
+  background: var(--primary);
+  transition: transform 0.15s ease;
+}
+.cover-slider:hover::-moz-range-thumb,
+.cover-slider:active::-moz-range-thumb {
+  transform: scale(1.3);
 }
 
 /* Sidebar icon wiggle on hover */
@@ -269,6 +363,11 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Display face — characterful grotesque for headings, page titles, book titles.
+   UI chrome (buttons, labels, badges) stays on Onest. */
 h1, h2, h3, .font-display {
-  letter-spacing: -0.015em;
+  font-family: 'Bricolage Grotesque', 'Onest', system-ui, sans-serif;
+  font-variation-settings: 'opsz' 40;
+  letter-spacing: -0.02em;
+  font-weight: 600;
 }

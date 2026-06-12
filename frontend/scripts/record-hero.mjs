@@ -9,7 +9,7 @@ import { chromium } from 'playwright'
 import { rename, readdir, unlink } from 'node:fs/promises'
 import path from 'node:path'
 
-const BASE = 'http://localhost:5174'
+const BASE = process.env.TOME_SCREENSHOT_BASE ?? 'http://localhost:5174'
 const API = 'http://localhost:8090'
 const USER = 'benedict'
 const PASS = 'showcase'

@@ -237,8 +237,8 @@ export function LibraryHealthTab() {
       </div>
 
       {result && (
-        <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-4 text-xs space-y-1">
-          <p className="font-medium text-green-600 dark:text-green-400 flex items-center gap-1.5">
+        <div className="rounded-xl border border-success/20 bg-success/5 p-4 text-xs space-y-1">
+          <p className="font-medium text-success flex items-center gap-1.5">
             <Check className="w-3.5 h-3.5" />
             Reorganization complete
           </p>
@@ -256,8 +256,8 @@ export function LibraryHealthTab() {
       )}
 
       {purgeResult !== null && (
-        <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-4 text-xs space-y-1">
-          <p className="font-medium text-green-600 dark:text-green-400 flex items-center gap-1.5">
+        <div className="rounded-xl border border-success/20 bg-success/5 p-4 text-xs space-y-1">
+          <p className="font-medium text-success flex items-center gap-1.5">
             <Check className="w-3.5 h-3.5" />
             {purgeResult.length === 0 ? 'No empty folders found.' : `Removed ${purgeResult.length} empty folder${purgeResult.length !== 1 ? 's' : ''}.`}
           </p>
@@ -286,7 +286,7 @@ export function LibraryHealthTab() {
             {dryRunResult.moved.map((m, i) => (
               <li key={i} className="space-y-0.5">
                 <p className="text-muted-foreground line-through">{m.from}</p>
-                <p className="text-green-600 dark:text-green-400 flex items-center gap-1">
+                <p className="text-success flex items-center gap-1">
                   <ArrowRight className="w-3 h-3 shrink-0" />
                   {m.to}
                 </p>
@@ -365,7 +365,7 @@ export function LibraryHealthTab() {
                         <div className="min-w-0 space-y-1 text-xs">
                           <p className="font-medium truncate">{issue.title}</p>
                           <p className="text-muted-foreground line-through font-mono truncate">{issue.current_path}</p>
-                          <p className="text-green-600 dark:text-green-400 font-mono truncate flex items-center gap-1">
+                          <p className="text-success font-mono truncate flex items-center gap-1">
                             <ArrowRight className="w-3 h-3 shrink-0" />
                             {issue.expected_path}
                           </p>
@@ -383,7 +383,7 @@ export function LibraryHealthTab() {
 
       {healthData && healthData.misplaced_count === 0 && (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
-          <Check className="w-8 h-8 text-green-500" />
+          <Check className="w-8 h-8 text-success" />
           <p className="text-sm">All files are correctly placed.</p>
         </div>
       )}

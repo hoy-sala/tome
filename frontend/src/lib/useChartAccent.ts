@@ -31,11 +31,18 @@ export interface ChartColors {
   tick: string
   /** Recharts Tooltip `cursor` prop: subtle hover wash that works on light and dark. */
   cursor: { fill: string; fillOpacity: number }
+  /** Semantic success color, resolved for SVG/inline-style use (e.g. a 100% bar). */
+  success: string
 }
 
 function readChartColors(): ChartColors {
   const tick = readVar('--muted-foreground', TICK_FALLBACK)
-  return { accent: readChartAccent(), tick, cursor: { fill: tick, fillOpacity: 0.08 } }
+  return {
+    accent: readChartAccent(),
+    tick,
+    cursor: { fill: tick, fillOpacity: 0.08 },
+    success: readVar('--success', '#10b981'),
+  }
 }
 
 // Theme-resolved chart colors (accent + tick), reactive to theme switches.

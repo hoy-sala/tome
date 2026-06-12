@@ -1,11 +1,11 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { Fragment, useState, useRef, useEffect, useMemo } from 'react'
 import { useSearchParams, useLocation, Link } from 'react-router-dom'
 import * as LucideIcons from 'lucide-react'
 import {
   BookOpen, Plus, Pencil, Trash2,
   ChevronLeft, ChevronRight, Bookmark, Library as LibraryIcon, Layers, Home, BarChart3,
   Settings, Shield, LogOut, ChevronsUpDown, Lock, X, BookPlus, ExternalLink,
-  Sun, Moon, Flame, Check, Sparkles, Users,
+  Sun, Moon, MoonStar, Flame, Coffee, Check, Sparkles, Users,
   type LucideIcon,
 } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -284,17 +284,8 @@ export function Sidebar({ libraries, savedFilters, activeTab, onLibrariesChange,
         'hidden md:flex shrink-0 flex-col border-r border-border bg-card/30 transition-all duration-200',
         open ? 'w-52' : 'w-10'
       )}>
-        <button
-          onClick={toggleOpen}
-          className="flex items-center justify-center h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground transition-colors self-end"
-          title={open ? 'Collapse sidebar' : 'Expand sidebar'}
-          aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
-        >
-          {open ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-        </button>
-
         {!open && (
-          <div className="flex flex-col items-center flex-1 overflow-y-auto py-1 space-y-0.5 overscroll-contain">
+          <div className="flex flex-col items-center flex-1 overflow-y-auto py-2 space-y-0.5 overscroll-contain">
             <button
               onClick={onOpenHomeView}
               title="Home"
@@ -426,7 +417,7 @@ export function Sidebar({ libraries, savedFilters, activeTab, onLibrariesChange,
         )}
 
         {open && (
-          <nav className="flex-1 overflow-y-auto px-2 pb-4 space-y-4 overscroll-contain">
+          <nav className="flex-1 overflow-y-auto px-2 pt-3 pb-4 space-y-4 overscroll-contain">
             <div>
               <button
                 onClick={onOpenHomeView}
@@ -538,35 +529,37 @@ export function Sidebar({ libraries, savedFilters, activeTab, onLibrariesChange,
               ))}
             </Section>
 
-            <Section
-              title="Shelves"
-              icon={<Bookmark className="w-3 h-3" />}
-            >
-              {savedFilters.map(sf => (
-                <SidebarItem
-                  key={sf.id}
-                  label={sf.name}
-                  iconName={sf.icon ?? 'Bookmark'}
-                  active={activeSavedFilter === sf.id}
-                  onClick={() => selectSavedFilter(sf)}
-                  onEdit={() => openEditFilterModal(sf)}
-                  onDelete={async () => {
-                    await api.delete(`/saved-filters/${sf.id}`)
-                    if (activeSavedFilter === sf.id) selectAllBooks()
-                    onSavedFiltersChange()
-                  }}
-                />
-              ))}
-            </Section>
+            {savedFilters.length > 0 && (
+              <Section
+                title="Shelves"
+                icon={<Bookmark className="w-3 h-3" />}
+              >
+                {savedFilters.map(sf => (
+                  <SidebarItem
+                    key={sf.id}
+                    label={sf.name}
+                    iconName={sf.icon ?? 'Bookmark'}
+                    active={activeSavedFilter === sf.id}
+                    onClick={() => selectSavedFilter(sf)}
+                    onEdit={() => openEditFilterModal(sf)}
+                    onDelete={async () => {
+                      await api.delete(`/saved-filters/${sf.id}`)
+                      if (activeSavedFilter === sf.id) selectAllBooks()
+                      onSavedFiltersChange()
+                    }}
+                  />
+                ))}
+              </Section>
+            )}
           </nav>
         )}
 
         {/* User profile footer — single trigger, popover on click */}
         {open && (
-          <UserMenu user={user} logout={logout} />
+          <UserMenu user={user} logout={logout} onCollapse={toggleOpen} />
         )}
         {!open && (
-          <CollapsedUserMenu user={user} logout={logout} />
+          <CollapsedUserMenu user={user} logout={logout} onExpand={toggleOpen} />
         )}
       </aside>
 
@@ -695,26 +688,28 @@ export function Sidebar({ libraries, savedFilters, activeTab, onLibrariesChange,
                 ))}
               </Section>
 
-              <Section
-                title="Shelves"
-                icon={<Bookmark className="w-3 h-3" />}
-              >
-                {savedFilters.map(sf => (
-                  <SidebarItem
-                    key={sf.id}
-                    label={sf.name}
-                    iconName={sf.icon ?? 'Bookmark'}
-                    active={activeSavedFilter === sf.id}
-                    onClick={() => selectSavedFilter(sf)}
-                    onEdit={() => openEditFilterModal(sf)}
-                    onDelete={async () => {
-                      await api.delete(`/saved-filters/${sf.id}`)
-                      if (activeSavedFilter === sf.id) selectAllBooks()
-                      onSavedFiltersChange()
-                    }}
-                  />
-                ))}
-              </Section>
+              {savedFilters.length > 0 && (
+                <Section
+                  title="Shelves"
+                  icon={<Bookmark className="w-3 h-3" />}
+                >
+                  {savedFilters.map(sf => (
+                    <SidebarItem
+                      key={sf.id}
+                      label={sf.name}
+                      iconName={sf.icon ?? 'Bookmark'}
+                      active={activeSavedFilter === sf.id}
+                      onClick={() => selectSavedFilter(sf)}
+                      onEdit={() => openEditFilterModal(sf)}
+                      onDelete={async () => {
+                        await api.delete(`/saved-filters/${sf.id}`)
+                        if (activeSavedFilter === sf.id) selectAllBooks()
+                        onSavedFiltersChange()
+                      }}
+                    />
+                  ))}
+                </Section>
+              )}
             </nav>
 
             {/* Mobile user footer */}
@@ -780,7 +775,9 @@ export function Sidebar({ libraries, savedFilters, activeTab, onLibrariesChange,
 const THEME_OPTIONS: { id: ThemeId; icon: typeof Sun; label: string }[] = [
   { id: 'light', icon: Sun, label: 'Light' },
   { id: 'dark', icon: Moon, label: 'Dark' },
+  { id: 'black', icon: MoonStar, label: 'Black' },
   { id: 'amber', icon: Flame, label: 'Amber' },
+  { id: 'ember', icon: Coffee, label: 'Ember' },
 ]
 
 function ThemeMenuItems({ itemClass }: { itemClass: string }) {
@@ -788,15 +785,18 @@ function ThemeMenuItems({ itemClass }: { itemClass: string }) {
   return (
     <>
       {THEME_OPTIONS.map(({ id, icon: Icon, label }) => (
-        <button
-          key={id}
-          onClick={() => { applyTheme(id); setCurrent(id) }}
-          className={itemClass}
-        >
-          <Icon className="w-4 h-4 shrink-0" />
-          {label}
-          {current === id && <Check className="w-3.5 h-3.5 shrink-0 text-primary ml-auto" />}
-        </button>
+        <Fragment key={id}>
+          {/* hairline between the neutral core and the warm pair */}
+          {id === 'amber' && <div className="h-px bg-border my-1" />}
+          <button
+            onClick={() => { applyTheme(id); setCurrent(id) }}
+            className={itemClass}
+          >
+            <Icon className="w-4 h-4 shrink-0" />
+            {label}
+            {current === id && <Check className="w-3.5 h-3.5 shrink-0 text-primary ml-auto" />}
+          </button>
+        </Fragment>
       ))}
     </>
   )
@@ -806,7 +806,7 @@ function MobileThemeToggle({ itemClass }: { itemClass: string }) {
   return <ThemeMenuItems itemClass={itemClass} />
 }
 
-function CollapsedUserMenu({ user, logout }: { user: { username: string; is_admin?: boolean; role?: string } | null; logout: () => void }) {
+function CollapsedUserMenu({ user, logout, onExpand }: { user: { username: string; is_admin?: boolean; role?: string } | null; logout: () => void; onExpand: () => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -822,7 +822,15 @@ function CollapsedUserMenu({ user, logout }: { user: { username: string; is_admi
   const destructive = menuItem + ' text-destructive/80 hover:text-destructive hover:bg-destructive/10'
 
   return (
-    <div ref={ref} className="relative shrink-0 border-t border-border flex justify-center py-2">
+    <div ref={ref} className="relative shrink-0 border-t border-border flex flex-col items-center gap-0.5 py-2">
+      <button
+        onClick={onExpand}
+        title="Expand sidebar"
+        aria-label="Expand sidebar"
+        className="flex items-center justify-center w-9 h-7 rounded-lg text-muted-foreground/60 hover:text-foreground hover:bg-accent/60 transition-colors"
+      >
+        <ChevronRight className="w-4 h-4" />
+      </button>
       <button
         onClick={() => setOpen(o => !o)}
         title={user?.username ?? 'User menu'}
@@ -863,7 +871,7 @@ function CollapsedUserMenu({ user, logout }: { user: { username: string; is_admi
   )
 }
 
-function UserMenu({ user, logout }: { user: { username: string; is_admin?: boolean; role?: string } | null; logout: () => void }) {
+function UserMenu({ user, logout, onCollapse }: { user: { username: string; is_admin?: boolean; role?: string } | null; logout: () => void; onCollapse: () => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -879,16 +887,24 @@ function UserMenu({ user, logout }: { user: { username: string; is_admin?: boole
   const destructive = menuItem + ' text-destructive/80 hover:text-destructive hover:bg-destructive/10'
 
   return (
-    <div ref={ref} className="relative shrink-0 border-t border-border px-2 py-2.5">
+    <div ref={ref} className="relative shrink-0 border-t border-border px-2 py-2.5 flex items-center gap-0.5">
       <button
         onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-[13px] hover:bg-accent/60 transition-colors min-w-0"
+        className="flex items-center gap-2 flex-1 min-w-0 px-2 py-1.5 rounded-lg text-[13px] hover:bg-accent/60 transition-colors"
       >
         <div className="flex w-6 h-6 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary shrink-0 ring-2 ring-primary/20">
           {(user?.username ?? '?').slice(0, 2).toUpperCase()}
         </div>
         <span className="truncate font-medium text-foreground/80 flex-1 text-left">{user?.username}</span>
         <ChevronsUpDown className="w-3 h-3 text-muted-foreground/50 shrink-0" />
+      </button>
+      <button
+        onClick={onCollapse}
+        title="Collapse sidebar"
+        aria-label="Collapse sidebar"
+        className="flex items-center justify-center w-7 h-8 rounded-lg shrink-0 text-muted-foreground/60 hover:text-foreground hover:bg-accent/60 transition-colors"
+      >
+        <ChevronLeft className="w-4 h-4" />
       </button>
 
       {open && (
@@ -984,7 +1000,10 @@ function SidebarItem({ label, iconName, count, active, isPrivate, onClick, onEdi
         </span>
       )}
       {count != null && !isPrivate && (
-        <span className="text-[10px] text-muted-foreground shrink-0 group-hover:hidden group-focus-within:hidden">{count}</span>
+        <span className={cn(
+          'text-[10px] shrink-0 group-hover:hidden group-focus-within:hidden',
+          count === 0 ? 'text-muted-foreground/40' : 'text-muted-foreground'
+        )}>{count}</span>
       )}
       <div className="hidden group-hover:flex group-focus-within:flex items-center gap-0.5 shrink-0">
         {onEdit && (

@@ -165,7 +165,7 @@ export function NotificationBell() {
                   <div className={cn(
                     'mt-0.5 flex items-center justify-center w-6 h-6 rounded-full shrink-0',
                     n.kind === 'wish_fulfilled'
-                      ? 'bg-emerald-500/10 text-emerald-600'
+                      ? 'bg-success/10 text-success'
                       : 'bg-muted text-muted-foreground'
                   )}>
                     <BookOpen className="w-3 h-3" />

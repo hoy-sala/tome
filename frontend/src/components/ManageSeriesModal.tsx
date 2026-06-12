@@ -259,7 +259,7 @@ export function ManageSeriesModal({ seriesName, volumes, onClose, onSaved }: Pro
                           return (
                             <tr
                               key={originalIdx}
-                              className={cn('group', warn && 'bg-amber-50 dark:bg-amber-900/20')}
+                              className={cn('group', warn && 'bg-warning/10')}
                             >
                               <td className="py-1.5 pr-3">
                                 <input

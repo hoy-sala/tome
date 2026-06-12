@@ -202,7 +202,7 @@ export function PerBookTimeTable({ data }: { data: StatsResponse['per_book_time'
     <div className="overflow-x-auto">
       <table className="w-full text-xs">
         <thead>
-          <tr className="border-b border-border text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+          <tr className="border-b border-border text-[11px] font-medium text-muted-foreground">
             <th className="text-left py-2 px-2 w-10" />
             <th className="text-left py-2 px-2">Title</th>
             <th className="text-left py-2 px-2 hidden sm:table-cell">Author</th>

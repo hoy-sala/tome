@@ -152,7 +152,7 @@ export function SetupPage() {
                 </button>
               </div>
               {form.password.length > 0 && (
-                <p className={cn('text-xs flex items-center gap-1', passwordStrong ? 'text-green-500' : 'text-muted-foreground')}>
+                <p className={cn('text-xs flex items-center gap-1', passwordStrong ? 'text-success' : 'text-muted-foreground')}>
                   {passwordStrong ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
                   {passwordStrong ? 'Strong enough' : 'Minimum 8 characters'}
                 </p>
@@ -173,7 +173,7 @@ export function SetupPage() {
                 className={cn(
                   'w-full px-3 py-2.5 rounded-lg text-sm bg-background border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent focus:scale-[1.01] transition-all duration-200',
                   form.confirm.length > 0
-                    ? passwordsMatch ? 'border-green-500/50' : 'border-destructive'
+                    ? passwordsMatch ? 'border-success/50' : 'border-destructive'
                     : 'border-input'
                 )}
               />
