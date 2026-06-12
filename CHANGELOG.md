@@ -56,7 +56,10 @@ All notable changes to Tome are documented here. Format loosely follows
   in the light themes, a dusty rosewood in the dark ones) on warm paper
   neutrals, with headings set in Bricolage Grotesque. Smaller refinements ride
   along: the book-detail reading stats collapse from a wall of bordered
-  mini-tiles into one quiet panel, section headers drop the ALL-CAPS treatment,
+  mini-tiles into one quiet panel, section headers drop the ALL-CAPS treatment
+  (the stats dashboard's tile titles and table headers included, so long labels
+  like "Completion Rate" no longer clip — and dashboard tiles sit flat instead
+  of floating on a shadow outside of edit mode),
   cover hover-tilt is subtler, the grid no longer re-runs its entrance
   animation on every filter change, and grid cards lose the repetitive
   book-type pill (list view keeps it). The series page's reading stats get the

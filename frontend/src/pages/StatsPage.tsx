@@ -849,7 +849,7 @@ function TileShell({
       }}
       className={cn(
         'group/tile relative flex h-full w-full flex-col rounded-xl border bg-card p-4',
-        dragging ? 'border-border shadow-2xl ring-1 ring-primary/30' : 'shadow-sm',
+        dragging ? 'border-border shadow-2xl ring-1 ring-primary/30' : editMode ? 'shadow-sm' : '',
         editMode ? 'border-primary/30' : 'border-border',
         editMode && !dragging && 'hover:z-10 hover:shadow-lg hover:shadow-accent-soft',
         // marks the grid item so it stacks above siblings while the popover is open
@@ -874,7 +874,7 @@ function TileShell({
         {editMode && !stacked && <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />}
         {def.icon && <def.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />}
         {/* truncate, don't wrap — a wrapped title pushes the body out of 1-row tiles */}
-        <h3 className="min-w-0 truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">{def.titleFor?.(config) ?? def.title}</h3>
+        <h3 className="min-w-0 truncate font-display text-[13px] font-medium text-muted-foreground">{def.titleFor?.(config) ?? def.title}</h3>
         {def.fixedWindow && (
           <span title="This tile uses a fixed window and ignores the range picker" className="shrink-0 rounded bg-muted px-1 py-px text-[9px] font-medium text-muted-foreground">
             {def.fixedWindow}
