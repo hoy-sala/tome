@@ -119,3 +119,76 @@ def test_admin_endpoint_as_non_admin(db: Session, client: TestClient):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 403
+
+
+# ── /me/kosync — sync status ────────────────────────────────────────────────────
+
+
+def _add_reading_session(db: Session, user_id: int, *, device: str, started_at):
+    from backend.models.tome_sync import ReadingSession
+
+    db.add(ReadingSession(user_id=user_id, book_id=None, started_at=started_at, device=device))
+    db.flush()
+
+
+def _add_legacy_kosync(db: Session, user: User, *, device: str, timestamp: int):
+    from backend.models.kosync import KOSyncUser, KOSyncProgress
+
+    ku = KOSyncUser(username=user.username, userkey="a" * 32, user_id=user.id)
+    db.add(ku)
+    db.flush()
+    db.add(
+        KOSyncProgress(
+            user_id=ku.id,
+            document="d" * 32,
+            progress="0",
+            percentage=0.5,
+            device=device,
+            timestamp=timestamp,
+        )
+    )
+    db.flush()
+
+
+def test_me_kosync_mixed_sources_does_not_500(client: TestClient, admin_user, db: Session):
+    """Regression: a user with BOTH a TomeSync session (datetime) and legacy
+    KOSync progress (int epoch) must not 500 — the two were compared directly.
+    TomeSync is the primary source, so it wins."""
+    from datetime import datetime, timedelta
+
+    user, _ = admin_user
+    now = datetime.utcnow()
+    _add_reading_session(db, user.id, device="Kindle", started_at=now - timedelta(hours=1))
+    # Legacy progress is *newer* in wall-clock terms, yet TomeSync still wins.
+    _add_legacy_kosync(db, user, device="LegacyKOReader", timestamp=int(now.timestamp()))
+
+    resp = client.get("/api/auth/me/kosync")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["linked"] is True
+    assert body["last_device"] == "Kindle"  # TomeSync priority
+    assert body["last_sync"].endswith("Z")
+
+
+def test_me_kosync_legacy_only_fallback(client: TestClient, admin_user, db: Session):
+    """With no TomeSync session, the legacy int-epoch timestamp is normalised
+    to an ISO datetime and returned."""
+    from datetime import datetime, timedelta
+
+    user, _ = admin_user
+    ts = int((datetime.utcnow() - timedelta(days=1)).timestamp())
+    _add_legacy_kosync(db, user, device="LegacyKOReader", timestamp=ts)
+
+    resp = client.get("/api/auth/me/kosync")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["linked"] is True
+    assert body["last_device"] == "LegacyKOReader"
+    assert body["last_sync"].endswith("Z")
+
+
+def test_me_kosync_unlinked(client: TestClient):
+    """A user with no sync history at all reports linked: False."""
+    resp = client.get("/api/auth/me/kosync")
+    assert resp.status_code == 200
+    assert resp.json() == {"linked": False}

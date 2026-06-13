@@ -158,6 +158,7 @@ def my_kosync_status(
     """Latest KOReader sync info for the current user, considering both
     TomeSync (in-house plugin) and legacy KOSync clients.
     """
+    from datetime import datetime
     from backend.models.kosync import KOSyncUser, KOSyncProgress
     from backend.models.tome_sync import ReadingSession, TomeSyncPosition
 
@@ -188,18 +189,20 @@ def my_kosync_status(
         )
         kosync_count = db.query(KOSyncProgress).filter(KOSyncProgress.user_id == kosync_user.id).count()
 
-    # Pick whichever has the more recent timestamp
-    candidates: list[tuple] = []
+    # TomeSync is the primary source; legacy KOSync is supported but secondary,
+    # so TomeSync wins outright whenever it has any history and KOSync is used
+    # only as a fallback. (This also sidesteps a type clash: ReadingSession
+    # timestamps are datetimes while KOSyncProgress.timestamp is an int epoch —
+    # comparing the two raised TypeError and 500'd the endpoint.)
     if ts_latest:
-        candidates.append((ts_latest.started_at, ts_latest.device))
-    if kosync_latest:
-        candidates.append((kosync_latest.timestamp, kosync_latest.device))
-
-    if not candidates:
+        last_sync, last_device = ts_latest.started_at, ts_latest.device
+    elif kosync_latest:
+        # Normalise the int epoch to a naive UTC datetime so the ISO output below
+        # is uniform with the TomeSync path.
+        last_sync = datetime.utcfromtimestamp(kosync_latest.timestamp)
+        last_device = kosync_latest.device
+    else:
         return {"linked": False}
-
-    candidates.sort(reverse=True, key=lambda x: x[0])
-    last_sync, last_device = candidates[0]
     return {
         "linked": True,
         "synced_documents": max(ts_count, kosync_count),
