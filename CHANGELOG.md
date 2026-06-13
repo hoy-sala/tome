@@ -6,6 +6,8 @@ All notable changes to Tome are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-06-13 — "Rubric"
+
 ### Added
 - **Reading goals.** Set yourself a target — books per year or month, minutes
   or pages per day or week — and watch a progress ring fill as you read. Goals
@@ -149,6 +151,11 @@ All notable changes to Tome are documented here. Format loosely follows
 - The 365-day reading heatmap bucketed days in UTC, so for anyone east of
   Greenwich an evening session could light up the wrong day (and dent a streak's
   look). It now uses local dates, matching how every other chart counts days.
+- The KOReader sync status in Settings could fail to load for accounts that had
+  used both the TomeSync plugin and a legacy KOSync client — the two record the
+  last-sync time in different formats and the page errored trying to compare
+  them. TomeSync is now treated as the primary source and the status loads
+  reliably.
 
 ## [1.4.0] — 2026-06-10
 
