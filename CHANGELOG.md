@@ -19,6 +19,12 @@ All notable changes to Tome are documented here. Format loosely follows
   library grid, the series and filter (facet) lists, single-book and series
   pages, OPDS, and the TomeSync (KOReader) series browser, which previously
   applied no visibility filter at all and exposed the entire catalogue. (#53)
+- **Custom themes now apply to the stats charts.** The reading-stats widgets
+  (activity heatmaps, progress rings, bars) and the card hover-glow read
+  dedicated `--chart-accent` / `--accent-soft` CSS variables that a custom
+  theme never set, so they kept rendering in the built-in coral accent no
+  matter which palette you picked. Custom themes now derive both from the
+  palette's primary colour, like the built-in themes do. (#55)
 
 ## [1.5.0] — 2026-06-13 — "Rubric"
 

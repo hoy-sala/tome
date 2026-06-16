@@ -55,6 +55,12 @@ function getDerivedVars(values: string[]): Record<string, string> {
     '--input':                  values[8],  // = --border
     '--ring':                   values[6],  // = --muted-foreground
     '--destructive-foreground': values[4],  // = --primary-foreground
+    // Brand-derived vars built-in themes set but the palette doesn't expose.
+    // Charts read --chart-accent via getComputedStyle (raw value), so it must
+    // be a concrete colour, not var(--primary) — mirror the built-in themes
+    // where --chart-accent tracks the primary brand colour. (#55)
+    '--chart-accent':           values[3],  // = --primary
+    '--accent-soft':            `color-mix(in oklab, ${values[3]} 14%, transparent)`,
   }
 }
 
@@ -69,6 +75,8 @@ const CUSTOM_THEME_INLINE_VARS: string[] = [
   '--input',
   '--ring',
   '--destructive-foreground',
+  '--chart-accent',
+  '--accent-soft',
 ]
 
 const BUILT_IN_THEME_CLASSES = THEMES.map(t => `theme-${t.id}`)
