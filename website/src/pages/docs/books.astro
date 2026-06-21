@@ -99,6 +99,24 @@ import { withBase } from '../../lib/path'
     <a href={withBase("/docs/scribe")}>Scribe</a> which handles thousands.
   </Callout>
 
+  <h2>Filtering</h2>
+  <p>
+    The dashboard filter bar narrows the grid by <strong>series</strong>, <strong>author</strong>,
+    <strong>tag</strong>, <strong>format</strong>, and <strong>language</strong>, plus reading status
+    and rating. Filters combine, show as removable chips, and live in the URL, so any filtered view
+    can be saved as a <a href={withBase("/docs/libraries")}>Shelf</a> that re-populates itself.
+  </p>
+  <p>
+    The <strong>Language</strong> dropdown appears once your catalogue holds more than one language.
+    Tome doesn't detect language from a book's text — it reads the language each file <em>declares</em>
+    in its embedded metadata (an EPUB's <code>&lt;dc:language&gt;</code>, a CBZ's <code>LanguageISO</code>)
+    when it's scanned or uploaded. Those declared values are inconsistent across files, so
+    <code>en</code>, <code>eng</code>, <code>en-US</code>, and <code>English</code> are all folded to a
+    single "English" entry. Matching is a fixed lookup of ISO-639 codes and English names; an
+    unrecognized language still groups correctly but shows as a short code until it's added to the
+    table.
+  </p>
+
   <h2>Reading status</h2>
   <p>
     Every book has a per-user reading status: <strong>unread</strong>, <strong>reading</strong>, or

@@ -67,6 +67,7 @@ interface Facets {
   authors: string[]
   tags: string[]
   formats: string[]
+  languages: { code: string; label: string }[]
 }
 
 interface HomeStats {
@@ -454,6 +455,7 @@ export function DashboardPage() {
   const filterAuthor = searchParams.get('author') ?? ''
   const filterTag = searchParams.get('tag') ?? ''
   const filterFormat = searchParams.get('format') ?? ''
+  const filterLanguage = searchParams.get('language') ?? ''
   const filterLibrary = searchParams.get('library_id') ? Number(searchParams.get('library_id')) : null
   const filterReadingStatus = searchParams.get('reading_status') ?? ''
   const filterMinRating = searchParams.get('min_rating') ? Number(searchParams.get('min_rating')) : null
@@ -490,7 +492,7 @@ export function DashboardPage() {
     })
   }
 
-  const hasFilters = !!(search || filterSeries || filterNoSeries || filterAuthor || filterTag || filterFormat || filterReadingStatus || filterMinRating || filterMissing || filterOwnership || filterAddedBy)
+  const hasFilters = !!(search || filterSeries || filterNoSeries || filterAuthor || filterTag || filterFormat || filterLanguage || filterReadingStatus || filterMinRating || filterMissing || filterOwnership || filterAddedBy)
 
   // Grouping is bypassed while drilling into a specific series — the user
   // explicitly asked for that series' volumes, so a single stack is useless.
@@ -683,7 +685,7 @@ export function DashboardPage() {
   }, [gridSize, view, books])
   const [totalCount, setTotalCount] = useState<number | null>(null)
   const [readingStatuses, setReadingStatuses] = useState<Record<number, { status: ReadingStatus; progress_pct: number | null; rating: number | null }>>({})
-  const [facets, setFacets] = useState<Facets>({ series: [], authors: [], tags: [], formats: [] })
+  const [facets, setFacets] = useState<Facets>({ series: [], authors: [], tags: [], formats: [], languages: [] })
   const [loading, setLoading] = useState(true)
   const [uploadModalOpen, setUploadModalOpen] = useState(false)
   const [filterOpen, setFilterOpen] = useState(false)
@@ -740,6 +742,7 @@ export function DashboardPage() {
     if (filterAuthor) params.set('author', filterAuthor)
     if (filterTag) params.set('tag', filterTag)
     if (filterFormat) params.set('format', filterFormat)
+    if (filterLanguage) params.set('language', filterLanguage)
     if (filterLibrary) params.set('library_id', String(filterLibrary))
     if (filterReadingStatus) params.set('reading_status', filterReadingStatus)
     if (filterMinRating) params.set('min_rating', String(filterMinRating))
@@ -781,7 +784,7 @@ export function DashboardPage() {
         if (reset) { setLoading(false); setRefreshing(false) }
         else setLoadingMore(false)
       })
-  }, [sort, order, search, filterSeries, filterNoSeries, filterAuthor, filterTag, filterFormat, filterLibrary, filterReadingStatus, filterMinRating, filterMissing, contentType, filterOwnership, filterAddedBy, groupActive])
+  }, [sort, order, search, filterSeries, filterNoSeries, filterAuthor, filterTag, filterFormat, filterLanguage, filterLibrary, filterReadingStatus, filterMinRating, filterMissing, contentType, filterOwnership, filterAddedBy, groupActive])
 
   useEffect(() => { loadBooks() }, [loadBooks])
 
@@ -915,6 +918,7 @@ export function DashboardPage() {
     ...(filterAuthor ? [{ label: `Author: ${filterAuthor}`, key: 'author' }] : []),
     ...(filterTag ? [{ label: `Tag: ${filterTag}`, key: 'tag' }] : []),
     ...(filterFormat ? [{ label: `Format: ${filterFormat.toUpperCase()}`, key: 'format' }] : []),
+    ...(filterLanguage ? [{ label: `Language: ${facets.languages.find(l => l.code === filterLanguage)?.label ?? filterLanguage}`, key: 'language' }] : []),
     ...(filterReadingStatus ? [{ label: `Status: ${filterReadingStatus.charAt(0).toUpperCase() + filterReadingStatus.slice(1)}`, key: 'reading_status' }] : []),
     ...(filterMinRating ? [{ label: filterMinRating === 5 ? 'Rated: 5 stars' : `Rated: ${filterMinRating}+ stars`, key: 'min_rating' }] : []),
     ...(filterMissing ? [{ label: `Missing: ${filterMissing.charAt(0).toUpperCase() + filterMissing.slice(1)}`, key: 'missing' }] : []),
@@ -929,6 +933,7 @@ export function DashboardPage() {
   if (filterAuthor) saveableParams.author = filterAuthor
   if (filterTag) saveableParams.tag = filterTag
   if (filterFormat) saveableParams.format = filterFormat
+  if (filterLanguage) saveableParams.language = filterLanguage
 
   // Grid columns flow from the spring-smoothed cover size; card typography
   // follows the slider value. view-fade covers the grid/list switch.
@@ -1755,6 +1760,9 @@ export function DashboardPage() {
                 <FilterSelect label="Author" value={filterAuthor} options={facets.authors} onChange={v => setFilter('author', v)} />
                 <FilterSelect label="Tag" value={filterTag} options={facets.tags} onChange={v => setFilter('tag', v)} />
                 <FilterSelect label="Format" value={filterFormat} options={facets.formats.map(f => f.toUpperCase())} onChange={v => setFilter('format', v.toLowerCase())} />
+                {facets.languages.length > 1 && (
+                  <FilterSelect label="Language" value={filterLanguage} options={facets.languages.map(l => ({ value: l.code, label: l.label }))} onChange={v => setFilter('language', v)} />
+                )}
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs text-muted-foreground font-medium w-14">Status</span>
@@ -2180,15 +2188,16 @@ export function DashboardPage() {
 }
 
 function FilterSelect({ label, value, options, onChange }: {
-  label: string; value: string; options: string[]; onChange: (v: string) => void
+  label: string; value: string; options: (string | { value: string; label: string })[]; onChange: (v: string) => void
 }) {
+  const opts = options.map(o => typeof o === 'string' ? { value: o, label: o } : o)
   return (
     <div className="flex flex-col gap-1">
       <label className="text-xs font-medium text-muted-foreground">{label}</label>
       <select value={value} onChange={e => onChange(e.target.value)}
         className="h-8 rounded-md border border-border bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring text-foreground">
         <option value="">All</option>
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
+        {opts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     </div>
   )

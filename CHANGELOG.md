@@ -7,6 +7,14 @@ All notable changes to Tome are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **Filter your library by language.** The dashboard filter bar now has a
+  **Language** dropdown alongside Series / Author / Tag / Format. It appears
+  whenever your catalogue holds more than one language. Books carry messy
+  language values from their embedded metadata (`en`, `eng`, `en-US`,
+  `English` all mean the same thing) — Tome folds these to a single tidy entry
+  ("English") so the dropdown stays clean. Because a Shelf just saves the active
+  filters, you can save a per-language Shelf (e.g. one Shelf per language) and it
+  populates itself — no manually adding books.
 - **Your book ratings now sync with KOReader (both ways).** KOReader has its own
   native 1–5 star rating and review on the Book status screen — TomeSync now keeps
   it in step with Tome. Rate a book on the web and the next time you open it on the

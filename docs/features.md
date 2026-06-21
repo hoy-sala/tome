@@ -149,9 +149,27 @@ Admins have an additional uploader dropdown filter on the dashboard to view book
 
 ---
 
+## Filtering
+
+The dashboard filter bar narrows the grid by **Series**, **Author**, **Tag**, **Format**, and **Language**, plus reading status, rating, and (for admins) uploader. Filters combine, show as removable chips, and live in the URL — so a filtered view is shareable and can be saved as a Shelf.
+
+### Language
+
+The **Language** dropdown appears whenever your catalogue holds more than one language. There is no language *detection* — Tome never inspects the book's text. It reads the language each file *declares* in its embedded metadata (an EPUB's `<dc:language>`, a CBZ's `LanguageISO`, etc.), captured at scan/upload time. A book whose file declares nothing has no language and simply doesn't appear in the dropdown.
+
+Because that declared value is inconsistent across files — `en`, `eng`, `en-US`, and `English` all mean the same thing — Tome folds it to a single canonical entry before showing it. Matching is a static lookup (`backend/services/languages.py`), tried in order:
+
+1. **Whole-string match** against a table of ISO-639-2 three-letter codes and English names (`eng` / `english` → `en`, `ger` / `deu` / `german` → `de`, …).
+2. **Base token** of a region/script-tagged value against the known two-letter codes (`en-US` → `en`, `zh-Hant` → `zh`).
+3. **Base token** against the alias table, as a fallback (`eng-US` → `en`).
+
+If nothing matches, the lowercased base token is kept as-is, so an unrecognized language still groups consistently — it just shows as an upper-cased code (e.g. `TL`) rather than a friendly name until it's added to the table. Note this is deliberate, not lossy by accident: `pt-BR` and `pt-PT` both collapse to "Portuguese", which is what you want in a filter dropdown.
+
+---
+
 ## Shelves
 
-Shelves (formerly called Saved Filters) let you save any combination of active dashboard filters — search text, book type, library, series, tags, sort order — as a named entry in the sidebar. Click a shelf to instantly restore that view.
+Shelves (formerly called Saved Filters) let you save any combination of active dashboard filters — search text, book type, library, series, author, tags, format, language, sort order — as a named entry in the sidebar. Click a shelf to instantly restore that view. This is also the simplest way to get a "library per language": filter by a language and save it as a Shelf — it self-populates as matching books arrive, with nothing to add by hand.
 
 Shelves are per-user and private. Each shelf can have a custom icon chosen from the icon picker.
 
