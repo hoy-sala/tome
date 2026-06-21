@@ -120,6 +120,7 @@ def list_books(
     author: Optional[str] = Query(None, description="Exact author filter"),
     tag: Optional[str] = Query(None, description="Tag name filter"),
     format: Optional[str] = Query(None, description="File format filter (epub, pdf, …)"),
+    language: Optional[str] = Query(None, description="Language filter — canonical code (en, de, …); matches messy stored variants"),
     library_id: Optional[int] = Query(None, description="Filter to books in this library"),
     reading_status: Optional[str] = Query(None, description="Filter by reading status: unread, reading, read"),
     missing: Optional[str] = Query(None, description="Filter books missing a field: cover, description, author, series, any"),
@@ -166,6 +167,18 @@ def list_books(
         query = query.join(Book.tags).filter(BookTag.tag == tag)
     if format:
         query = query.join(Book.files).filter(BookFile.format == format.lower())
+    if language:
+        # The param is a canonical code; stored values are messy. Resolve which
+        # raw variants fold to it and match those (small distinct cardinality).
+        from backend.services.languages import normalize_language
+        target = normalize_language(language)
+        raw_matches = [
+            r[0] for r in db.query(Book.language).filter(
+                Book.language.isnot(None), Book.language != ""
+            ).distinct().all()
+            if normalize_language(r[0]) == target
+        ]
+        query = query.filter(Book.language.in_(raw_matches) if raw_matches else Book.id == -1)
     if library_id:
         query = query.join(Book.libraries).filter(Library.id == library_id)
     if reading_status in ("reading", "read", "shelved"):
@@ -404,7 +417,19 @@ def get_facets(
         Book.status == "active", visibility
     ).distinct().order_by(BookFile.format).all()]
 
-    return {"series": series, "authors": authors, "tags": tags, "formats": formats}
+    # Languages: fold messy stored values (en / eng / en-US / English) to a
+    # canonical code with a human label, deduped, so the dropdown is clean.
+    from backend.services.languages import normalize_language, language_label
+    raw_langs = [r[0] for r in db.query(Book.language).filter(
+        Book.status == "active", Book.language.isnot(None), Book.language != "", visibility
+    ).distinct().all()]
+    lang_codes = {c for c in (normalize_language(l) for l in raw_langs) if c}
+    languages = sorted(
+        ({"code": c, "label": language_label(c)} for c in lang_codes),
+        key=lambda x: x["label"],
+    )
+
+    return {"series": series, "authors": authors, "tags": tags, "formats": formats, "languages": languages}
 
 
 # ── Series list ───────────────────────────────────────────────────────────────
