@@ -221,18 +221,31 @@ def import_batch(
 
     ko_to_book: dict[int, Optional[int]] = {}
     counts = {"matched": 0, "review": 0, "unmatched": 0}
+    # Per-batch md5 cache. KOReader re-downloads create multiple `book` rows sharing
+    # one partial md5; the server session is autoflush=False, so a query won't see a
+    # pending add — without this we'd INSERT two rows for the same (user, md5) and the
+    # UNIQUE constraint would blow up the whole batch. Maps md5 -> resolved book_id.
+    seen_md5: dict[str, Optional[int]] = {}
 
     for b in books:
         ko_id = b["ko_id"]
         md5 = b.get("md5") or ""
+
+        if md5 and md5 in seen_md5:
+            ko_to_book[ko_id] = seen_md5[md5]   # same file already handled this batch
+            continue
+
         existing = (
             db.query(KoStatsBookMatch)
             .filter(KoStatsBookMatch.user_id == user.id, KoStatsBookMatch.ko_md5 == md5)
             .first()
-        )
+        ) if md5 else None
+
         if existing and existing.confirmed:
             ko_to_book[ko_id] = existing.book_id
             counts["matched" if existing.book_id else "unmatched"] += 1
+            if md5:
+                seen_md5[md5] = existing.book_id
             continue
 
         res = match_book(
@@ -240,23 +253,27 @@ def import_batch(
             filename=b.get("filename"), path_index=path_index,
         )
         # Only confident matches contribute time data; review/unmatched are parked.
-        ko_to_book[ko_id] = res.book_id if res.status == "matched" else None
+        resolved = res.book_id if res.status == "matched" else None
+        ko_to_book[ko_id] = resolved
         counts[res.status] += 1
 
-        if existing:
-            existing.book_id = res.book_id
-            existing.confidence = res.confidence
-            existing.method = res.method
-            existing.status = res.status
-            existing.ko_title = b.get("title")
-            existing.ko_authors = b.get("authors")
-        else:
-            db.add(KoStatsBookMatch(
-                user_id=user.id, ko_md5=md5,
-                ko_title=b.get("title"), ko_authors=b.get("authors"),
-                book_id=res.book_id, confidence=res.confidence,
-                method=res.method, status=res.status,
-            ))
+        # An empty md5 can't key the cache table; map the book but don't persist a row.
+        if md5:
+            if existing:
+                existing.book_id = res.book_id
+                existing.confidence = res.confidence
+                existing.method = res.method
+                existing.status = res.status
+                existing.ko_title = b.get("title")
+                existing.ko_authors = b.get("authors")
+            else:
+                db.add(KoStatsBookMatch(
+                    user_id=user.id, ko_md5=md5,
+                    ko_title=b.get("title"), ko_authors=b.get("authors"),
+                    book_id=res.book_id, confidence=res.confidence,
+                    method=res.method, status=res.status,
+                ))
+            seen_md5[md5] = resolved
 
     # Idempotent page-stat ingest: INSERT OR IGNORE on the identity unique constraint.
     rows = []

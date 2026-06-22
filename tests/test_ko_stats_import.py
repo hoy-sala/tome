@@ -128,6 +128,31 @@ def test_import_never_writes_read_status(db, admin_user, make_book):
     assert db.query(UserBookStatus).filter_by(user_id=user.id, book_id=book.id).first() is None
 
 
+def test_duplicate_md5_in_batch_no_crash(db, admin_user, make_book):
+    """KOReader re-downloads create multiple book rows sharing one md5. With the
+    server's autoflush=False session this must not violate UNIQUE(user, md5)."""
+    user, _ = admin_user
+    book = make_book(title="Black Summoner", author="x", series="Black Summoner", series_index=1.0)
+    db.autoflush = False  # mirror backend SessionLocal (the POC masked this with autoflush=True)
+    try:
+        res = import_batch(
+            db, user, device="Kindle",
+            books=[
+                {"ko_id": 1, "md5": "samehash", "title": "Black Summoner: Volume 1", "authors": "x"},
+                {"ko_id": 2, "md5": "samehash", "title": "Black Summoner: Volume 1", "authors": "x"},
+            ],
+            page_stats=[
+                {"ko_id": 1, "page": 1, "start_time": 1700000000, "duration": 10, "total_pages": 100},
+                {"ko_id": 2, "page": 2, "start_time": 1700000100, "duration": 10, "total_pages": 100},
+            ],
+        )
+    finally:
+        db.autoflush = True
+    assert db.query(KoStatsBookMatch).filter_by(user_id=user.id, ko_md5="samehash").count() == 1
+    assert res["page_rows_imported"] == 2
+    assert db.query(PageStat).filter_by(user_id=user.id, book_id=book.id).count() == 2
+
+
 def test_unmatched_book_parks_its_pages(db, admin_user, make_book):
     user, _ = admin_user
     make_book(title="Some Other Book", author="Nobody")

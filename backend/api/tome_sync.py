@@ -41,8 +41,8 @@ logger = logging.getLogger(__name__)
 # build than 13 — otherwise a device that updated to 1.2.1's build-13 impl and
 # later points at a main/1.3.0 server (also 13) would not re-download main's
 # richer impl. Hence 14.
-TOMESYNC_PLUGIN_BUILD = 21
-TOMESYNC_PLUGIN_SEMVER = "1.5.1"
+TOMESYNC_PLUGIN_BUILD = 22
+TOMESYNC_PLUGIN_SEMVER = "1.6.0"
 TOMESYNC_PLUGIN_VERSION = str(TOMESYNC_PLUGIN_BUILD)
 
 
@@ -1570,6 +1570,12 @@ function TomeSync:init()
     -- an "Inbox (N)" badge. Guarded (offline = no-op; 404 = feature off → no
     -- badge), so it is safe to run on every launch regardless of server support.
     UIManager:scheduleIn(8, function() pcall(function() self:_refreshInbox() end) end)
+
+    -- Reading-history backfill: opt-in, deferred, non-blocking. First run pushes
+    -- the entire KOReader history (chunked + resumable); later runs only new rows.
+    if G_reader_settings:isTrue("tomesync_auto_sync_stats") then
+        UIManager:scheduleIn(12, function() pcall(function() self:_syncReadingStats(false) end) end)
+    end
 end
 
 function TomeSync:onDispatcherRegisterActions()
@@ -1590,6 +1596,12 @@ function TomeSync:onDispatcherRegisterActions()
         event    = "TomeSyncAnnotations",
         title    = "TomeSync: Sync highlights",
         reader   = true,
+    }})
+    Dispatcher:registerAction("tome_sync_stats", {{
+        category = "none",
+        event    = "TomeSyncStats",
+        title    = "TomeSync: Sync reading history",
+        general  = true,
     }})
 end
 
@@ -1617,6 +1629,11 @@ function TomeSync:onTomeSyncAnnotations()
             UIManager:show(InfoMessage:new{{ text = "Highlights synced (" .. n .. " on this book).", timeout = 3 }})
         end
     end)
+    return true
+end
+
+function TomeSync:onTomeSyncStats()
+    whenConnected(function() self:_syncReadingStats(true) end)
     return true
 end
 
@@ -1731,6 +1748,97 @@ function TomeSync:onResume()
     -- Flush any pending sessions / ratings from offline periods
     self:_flushPendingSessions()
     self:_flushPendingRatings()
+end
+
+-- ── KOReader statistics.sqlite3 import (reading-history backfill) ────────────
+-- Pushes KOReader's own per-page reading log to Tome (time & pages ONLY — never
+-- read-status). Chunked + resumable: the server keeps a per-device watermark, so
+-- an interrupted run resumes next launch and never re-sends (idempotent server
+-- side). First run backfills the whole history; later runs send only new rows.
+function TomeSync:_statsDbPath()
+    return require("datastorage"):getSettingsDir() .. "/statistics.sqlite3"
+end
+
+function TomeSync:_syncReadingStats(manual)
+    local function tell(msg)
+        if manual then UIManager:show(InfoMessage:new{{ text = msg, timeout = 3 }}) end
+    end
+    if self._stats_syncing then tell("Reading-history sync already running."); return end
+    if not NetworkMgr:isConnected() then tell("Offline - reading history will sync later."); return end
+    local path = self:_statsDbPath()
+    if lfs.attributes(path, "mode") ~= "file" then tell("No KOReader statistics database found."); return end
+
+    -- Server is the source of truth for "how far did we get".
+    local wm = apiRequest("GET", "/tome-sync/stats/watermark?device=" .. urlEncode(deviceName()))
+    local since = 0
+    if type(wm) == "table" and tonumber(wm.last_start_time_synced) then
+        since = tonumber(wm.last_start_time_synced)
+    end
+
+    local SQ3 = require("lua-ljsqlite3/init")
+    local opened, conn = pcall(SQ3.open, path, "ro")
+    if not opened or not conn then tell("Could not open statistics database."); return end
+
+    local books, rows = {{}}, {{}}
+    local read_ok = pcall(function()
+        -- ljsqlite3 returns INTEGER columns as int64 cdata, which rapidjson can't
+        -- encode — tonumber() every numeric field. (TEXT comes back as Lua strings.)
+        local bstmt = conn:prepare("SELECT id, md5, title, authors, pages, total_read_pages FROM book")
+        for r in bstmt:rows() do
+            books[#books + 1] = {{ ko_id = tonumber(r[1]), md5 = r[2] or "", title = r[3] or "",
+                                   authors = r[4], pages = tonumber(r[5]), total_read_pages = tonumber(r[6]) }}
+        end
+        bstmt:close()
+        local pstmt = conn:prepare(
+            "SELECT id_book, page, start_time, duration, total_pages FROM page_stat_data "
+            .. "WHERE start_time >= " .. since .. " ORDER BY start_time")
+        for r in pstmt:rows() do
+            rows[#rows + 1] = {{ ko_id = tonumber(r[1]), page = tonumber(r[2]), start_time = tonumber(r[3]),
+                                duration = tonumber(r[4]), total_pages = tonumber(r[5]) }}
+        end
+        pstmt:close()
+    end)
+    pcall(function() conn:close() end)
+    if not read_ok then tell("Could not read statistics database."); return end
+    if #rows == 0 then tell("Reading history already up to date."); return end
+
+    self._stats_syncing = true
+    local dev   = deviceName()
+    local CHUNK = 2000
+    local total = #rows
+    local sent  = 0
+    local function finish(msg, force)
+        self._stats_syncing = false
+        if manual or force then UIManager:show(InfoMessage:new{{ text = msg, timeout = 3 }}) end
+    end
+    local sendNext
+    sendNext = function()
+        if sent >= total then
+            finish(string.format("Reading history synced (%d records).", total))
+            return
+        end
+        if not NetworkMgr:isConnected() then
+            finish("Reading-history sync paused (offline). Resumes later.")
+            return
+        end
+        local chunk = {{}}
+        local stop = math.min(sent + CHUNK, total)
+        for i = sent + 1, stop do chunk[#chunk + 1] = rows[i] end
+        local resp = apiRequest("POST", "/tome-sync/stats/import",
+            {{ device = dev, books = books, page_stats = chunk }})
+        if type(resp) ~= "table" then
+            finish("Reading-history sync interrupted. Resumes next launch.")
+            return
+        end
+        sent = stop
+        -- Yield to the UI between chunks (the device stays responsive).
+        UIManager:scheduleIn(0.05, sendNext)
+    end
+    if manual then
+        UIManager:show(InfoMessage:new{{
+            text = string.format("Syncing reading history (%d records)...", total), timeout = 2 }})
+    end
+    sendNext()
 end
 
 function TomeSync:_flushPendingSessions()
@@ -2810,6 +2918,12 @@ function TomeSync:_menuItems()
         text     = "Browse series",
         callback = function() self:_browseSeriesMenu() end,
     }})
+    table.insert(sub_items, {{
+        text     = "Sync reading history",
+        callback = function()
+            whenConnected(function() self:_syncReadingStats(true) end)
+        end,
+    }})
     -- Inbox: only shown when the server has Send-to-KOReader enabled (set by the
     -- launch poll). Badge shows the pending count.
     if self.inbox_enabled then
@@ -2881,6 +2995,19 @@ function TomeSync:_menuItems()
         callback     = function()
             G_reader_settings:saveSetting("tomesync_auto_check",
                 not G_reader_settings:isTrue("tomesync_auto_check"))
+        end,
+    }})
+    table.insert(settings_items, {{
+        text         = "Auto-sync reading history on launch",
+        help_text    = "Pushes KOReader's own page-level reading history to Tome so "
+                       .. "your stats include reading from before TomeSync. The first "
+                       .. "sync backfills everything (chunked and resumable); later "
+                       .. "syncs send only new reading. Reading time and pages only - "
+                       .. "never your read/unread status.",
+        checked_func = function() return G_reader_settings:isTrue("tomesync_auto_sync_stats") end,
+        callback     = function()
+            G_reader_settings:saveSetting("tomesync_auto_sync_stats",
+                not G_reader_settings:isTrue("tomesync_auto_sync_stats"))
         end,
     }})
 

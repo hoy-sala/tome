@@ -7,6 +7,19 @@ All notable changes to Tome are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **Your stats now include reading from before TomeSync.** KOReader keeps its own
+  per-page reading log (`statistics.sqlite3`) going back to whenever you started
+  reading — often long before Tome existed. TomeSync can now import that history,
+  backfilling your reading-time charts, streaks, heat-map, top books and pace with
+  everything you read on the device. The first sync pushes your whole history
+  (chunked and resumable, so it survives the device sleeping or dropping Wi-Fi);
+  later syncs send only new reading. Turn it on in **TomeSync → Auto-sync reading
+  history on launch**, or run it once from **TomeSync → Sync reading history**
+  (also assignable to a gesture). It imports **reading time and pages only** — it
+  never changes your read/unread status; that stays yours to set. Books are matched
+  to your library automatically; anything it can't confidently match is left out
+  rather than guessed. Requires TomeSync plugin build 22. (KOReader plugin semver
+  1.6.0.)
 - **Ratings set offline now sync.** A rating or review you set on KOReader while
   offline (or any time the server can't be reached) is now remembered and pushed
   to Tome the next time the device is online — on resume, on **Sync now**, or

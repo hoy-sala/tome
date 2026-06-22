@@ -148,5 +148,7 @@ def test_build_bumped_for_rebake():
     # star rating + review <-> Tome) on top of 19's download path templates.
     # 1.5.1 / build 21 queues ratings set offline so a finished book you never
     # reopen still syncs its rating (the per-book open/close push alone missed it).
-    assert TOMESYNC_PLUGIN_BUILD >= 21
-    assert TOMESYNC_PLUGIN_SEMVER == "1.5.1"
+    # 1.6.0 / build 22 imports KOReader's statistics.sqlite3 (per-page reading
+    # history) so stats backfill reading from before TomeSync (time & pages only).
+    assert TOMESYNC_PLUGIN_BUILD >= 22
+    assert TOMESYNC_PLUGIN_SEMVER == "1.6.0"
