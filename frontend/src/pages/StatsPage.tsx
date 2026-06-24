@@ -240,6 +240,7 @@ const WIDGETS: WidgetDef[] = [
     title: 'Currently Reading',
     size: { w: 6, h: 2, minW: 3, minH: 1 },
     autoH: true,
+    defaultConfig: { chartType: 'bar', days: 0, autoFit: true },
     render: ({ stats }) => <CurrentlyReading books={stats.books_in_progress} />,
   },
   {
@@ -346,6 +347,7 @@ const WIDGETS: WidgetDef[] = [
     title: 'Completion Estimates',
     size: { w: 6, h: 2, minW: 3, minH: 2 },
     autoH: true,
+    defaultConfig: { chartType: 'bar', days: 0, autoFit: true },
     render: ({ estimates }) => <CompletionEstimatesList estimates={estimates} />,
   },
   {
@@ -376,6 +378,7 @@ const WIDGETS: WidgetDef[] = [
     title: 'Series Completion',
     size: { w: 6, h: 3, minW: 3, minH: 2 },
     autoH: true,
+    defaultConfig: { chartType: 'bar', days: 0, autoFit: true },
     render: ({ stats }) => <SeriesCompletionGrid data={stats.series_completion} />,
   },
   {
