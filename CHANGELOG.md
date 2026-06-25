@@ -63,6 +63,14 @@ All notable changes to Tome are documented here. Format loosely follows
   1.5.1.)
 
 ### Fixed
+- **TomeSync no longer gets stuck "offline" after your Kindle wakes up.** When the
+  device slept and Wi-Fi dropped, three failed sync attempts in a row used to latch
+  TomeSync into a permanent back-off — it then skipped every request and never
+  recovered until KOReader was fully restarted, even once the network was back.
+  Back-off is now time-based: it goes quiet for a minute, then quietly retries, and
+  also clears the moment Wi-Fi reconnects, so reading sessions and positions resume
+  syncing on their own. (Requires updating the KOReader plugin to build 23 via
+  **TomeSync → Check for updates**.)
 - **The Day-streak on the Home tab now matches your stats page.** After importing
   your KOReader reading history, the Home summary kept showing a shorter streak
   than the Stats page because it only counted live TomeSync sessions and ignored

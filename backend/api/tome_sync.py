@@ -41,8 +41,8 @@ logger = logging.getLogger(__name__)
 # build than 13 — otherwise a device that updated to 1.2.1's build-13 impl and
 # later points at a main/1.3.0 server (also 13) would not re-download main's
 # richer impl. Hence 14.
-TOMESYNC_PLUGIN_BUILD = 22
-TOMESYNC_PLUGIN_SEMVER = "1.6.0"
+TOMESYNC_PLUGIN_BUILD = 23
+TOMESYNC_PLUGIN_SEMVER = "1.6.1"
 TOMESYNC_PLUGIN_VERSION = str(TOMESYNC_PLUGIN_BUILD)
 
 
@@ -1219,9 +1219,16 @@ local USERNAME   = "{username}"
 -- Short timeout so unreachable server doesn't freeze the UI
 http.TIMEOUT = 5
 
--- Track consecutive failures for backoff
+-- Track consecutive failures for backoff. Time-based so it self-heals:
+-- once we hit the threshold we go quiet for BACKOFF_COOLDOWN seconds, then
+-- let a single probe through. A success clears the latch; a failure re-arms
+-- it. Without the time window this was a one-way latch — three failures while
+-- the device slept (no WiFi) wedged it permanently until a KOReader restart,
+-- because the only reset path (a successful request) was gated behind the latch.
 local consecutive_failures = 0
 local MAX_BACKOFF_FAILURES = 3
+local BACKOFF_COOLDOWN     = 60   -- seconds to stay quiet before re-probing
+local backoff_until        = 0    -- os.time() before which requests are skipped
 
 -- Chunk-local (shared across plugin instances): dedupes _initSession when the
 -- ReaderReady event reaches more than one live TomeSync instance for the same
@@ -1259,8 +1266,10 @@ local function apiRequest(method, path, body)
         return nil, "offline"
     end
 
-    -- Skip requests if server has been unreachable repeatedly (backoff)
-    if consecutive_failures >= MAX_BACKOFF_FAILURES then
+    -- Skip requests while the backoff window is open. Once it expires we fall
+    -- through and let one probe attempt the request, so connectivity recovery
+    -- is detected automatically rather than only on a KOReader restart.
+    if consecutive_failures >= MAX_BACKOFF_FAILURES and os.time() < backoff_until then
         logger.warn("TomeSync: skipping request (server unreachable, backing off)")
         return nil, "backoff"
     end
@@ -1288,13 +1297,15 @@ local function apiRequest(method, path, body)
 
     if not ok then
         consecutive_failures = consecutive_failures + 1
+        backoff_until = os.time() + BACKOFF_COOLDOWN
         logger.warn("TomeSync: request failed:", tostring(code),
                      "(" .. consecutive_failures .. "/" .. MAX_BACKOFF_FAILURES .. ")")
         return nil, code
     end
 
-    -- Server reachable — reset backoff counter
+    -- Server reachable — clear the backoff latch
     consecutive_failures = 0
+    backoff_until = 0
 
     local resp_body = table.concat(resp_chunks)
     if code == 404 then return nil, 404 end
@@ -1746,6 +1757,17 @@ function TomeSync:onResume()
     self:_pushPosition()
 
     -- Flush any pending sessions / ratings from offline periods
+    self:_flushPendingSessions()
+    self:_flushPendingRatings()
+end
+
+-- WiFi just came back: drop the backoff latch immediately so we don't sit out
+-- the cooldown, then catch up anything queued while we were offline. The latch
+-- is chunk-local, so clearing it here unblocks every TomeSync instance at once.
+function TomeSync:onNetworkConnected()
+    consecutive_failures = 0
+    backoff_until = 0
+    if not self.enabled or not self.book_id then return end
     self:_flushPendingSessions()
     self:_flushPendingRatings()
 end
