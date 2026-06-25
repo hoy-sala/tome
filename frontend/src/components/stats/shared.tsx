@@ -57,6 +57,25 @@ export interface StatsResponse {
   records: { longest_session_seconds: number; longest_session_title: string | null; biggest_day_seconds: number; biggest_day_date: string | null; most_pages_day: number; most_pages_date: string | null }
   tbr: { owned: number; read: number; reading: number; shelved: number; unread: number; pct: number; by_type: { type: string; owned: number; read: number; pct: number }[] }
   language: { language: string; code: string; seconds: number; books: number }[]
+  words: {
+    total_words: number
+    books_counted: number
+    by_year: { year: number; words: number }[]
+  }
+  wpm: {
+    overall: number
+    books_counted: number
+    books: { book_id: number; title: string; author: string | null; has_cover: boolean; words: number; seconds: number; wpm: number }[]
+  }
+  book_lengths: {
+    count: number
+    avg_words: number
+    median_words: number
+    longest: { book_id: number; title: string; has_cover: boolean; words: number; finished: string | null } | null
+    buckets: { label: string; count: number }[]
+    by_year: { year: number; avg_words: number; count: number }[]
+    books: { book_id: number; title: string; has_cover: boolean; words: number; finished: string | null }[]
+  }
 }
 
 export interface CompletionEstimate {

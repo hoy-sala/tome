@@ -810,6 +810,96 @@ def get_stats(
         key=lambda x: x["seconds"], reverse=True,
     )
 
+    # ── Word-count powered insights (Phase 4, all-time) ────────────────────────
+    # Words read (lifetime + by finish-year), true WPM (words ÷ reconciled
+    # read-time), and book-length distribution/trend. All derive from one pass
+    # over the user's finished ("read") books that have a parsed word_count.
+    import statistics as _statistics
+
+    read_word_rows = (
+        db.query(
+            Book.id, Book.title, Book.author, Book.cover_path, Book.word_count,
+            UserBookStatus.updated_at,
+        )
+        .select_from(UserBookStatus)
+        .join(Book, Book.id == UserBookStatus.book_id)
+        .filter(
+            UserBookStatus.user_id == current_user.id,
+            UserBookStatus.status == "read",
+            Book.status == "active",
+            Book.word_count.isnot(None),
+            book_visibility_filter(db, current_user),
+        )
+        .all()
+    )
+
+    WPM_MIN_SECONDS = 300  # below ~5 min of read-time a pace number is just noise
+
+    total_words = 0
+    words_by_year: dict[int, int] = {}
+    length_books: list[dict] = []
+    wpm_books: list[dict] = []
+    for r in read_word_rows:
+        wc = int(r.word_count)
+        total_words += wc
+        finished = r.updated_at
+        if finished:
+            words_by_year[finished.year] = words_by_year.get(finished.year, 0) + wc
+        length_books.append({
+            "book_id": r.id, "title": r.title, "has_cover": bool(r.cover_path),
+            "words": wc,
+            "finished": finished.date().isoformat() if finished else None,
+        })
+        secs = int(book_seconds_all.get(r.id, (0, 0, 0))[0])
+        if secs >= WPM_MIN_SECONDS:
+            wpm_books.append({
+                "book_id": r.id, "title": r.title, "author": r.author,
+                "has_cover": bool(r.cover_path),
+                "words": wc, "seconds": secs,
+                "wpm": round(wc * 60 / secs, 1),
+            })
+
+    words = {
+        "total_words": total_words,
+        "books_counted": len(length_books),
+        "by_year": [{"year": y, "words": w} for y, w in sorted(words_by_year.items())],
+    }
+
+    wpm_secs = sum(b["seconds"] for b in wpm_books)
+    wpm_words = sum(b["words"] for b in wpm_books)
+    wpm = {
+        "overall": round(wpm_words * 60 / wpm_secs, 1) if wpm_secs else 0,
+        "books_counted": len(wpm_books),
+        "books": sorted(wpm_books, key=lambda b: b["wpm"], reverse=True),
+    }
+
+    length_vals = [b["words"] for b in length_books]
+    _bucket_defs = [
+        (0, 50_000, "<50k"), (50_000, 100_000, "50–100k"),
+        (100_000, 150_000, "100–150k"), (150_000, 250_000, "150–250k"),
+        (250_000, None, "250k+"),
+    ]
+    length_buckets = [
+        {"label": lbl, "count": sum(1 for v in length_vals if v >= lo and (hi is None or v < hi))}
+        for lo, hi, lbl in _bucket_defs
+    ]
+    _len_year: dict[int, list[int]] = {}
+    for b in length_books:
+        if b["finished"]:
+            _len_year.setdefault(int(b["finished"][:4]), []).append(b["words"])
+    book_lengths = {
+        "count": len(length_vals),
+        "avg_words": int(_statistics.mean(length_vals)) if length_vals else 0,
+        "median_words": int(_statistics.median(length_vals)) if length_vals else 0,
+        "longest": max(length_books, key=lambda b: b["words"]) if length_books else None,
+        "buckets": length_buckets,
+        "by_year": [
+            {"year": y, "avg_words": int(_statistics.mean(v)), "count": len(v)}
+            for y, v in sorted(_len_year.items())
+        ],
+        "books": length_books,
+    }
+
     return {
         "range_days": effective_days,
         "headline": {
@@ -846,6 +936,9 @@ def get_stats(
         "records": records,
         "tbr": tbr,
         "language": language,
+        "words": words,
+        "wpm": wpm,
+        "book_lengths": book_lengths,
     }
 
 

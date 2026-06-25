@@ -8,7 +8,7 @@ import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import { Link } from 'react-router-dom'
 import { toPng } from 'html-to-image'
-import { ArrowLeft, Plus, RotateCcw, X, BarChart3, HelpCircle, Sparkles, SlidersHorizontal, Pencil, Check, GripVertical, Calendar, ChevronLeft, ChevronRight, Clock, Activity, BookCheck, Flame, FileText, Target, Gauge, Search, Copy, Loader2, CloudOff, Download, Upload, ImageDown, Star, TrendingUp, ScatterChart as ScatterIcon, Trophy, Globe, Library as LibraryIcon, Clock3, Infinity as InfinityIcon, type LucideIcon } from 'lucide-react'
+import { ArrowLeft, Plus, RotateCcw, X, BarChart3, HelpCircle, Sparkles, SlidersHorizontal, Pencil, Check, GripVertical, Calendar, ChevronLeft, ChevronRight, Clock, Activity, BookCheck, Flame, FileText, Target, Gauge, Search, Copy, Loader2, CloudOff, Download, Upload, ImageDown, Star, TrendingUp, ScatterChart as ScatterIcon, Trophy, Globe, Library as LibraryIcon, Clock3, Infinity as InfinityIcon, Type, Ruler, type LucideIcon } from 'lucide-react'
 import { cn, formatDate, formatDuration } from '@/lib/utils'
 import { api } from '@/lib/api'
 import { SyncStatusBadge } from '@/components/SyncStatusBadge'
@@ -68,6 +68,11 @@ import {
   ReadingClock,
   ReadingByLanguage,
 } from '@/components/stats/widgets/insights'
+import {
+  WordsRead,
+  TrueWpm,
+  BookLength,
+} from '@/components/stats/widgets/wordstats'
 
 /**
  * Reading Stats — a fully customisable dashboard. Every chart is a tile on a
@@ -525,6 +530,35 @@ const WIDGETS: WidgetDef[] = [
     fixedWindow: 'all',
     render: ({ stats }) => <ReadingByLanguage data={stats.language} />,
   },
+  // Phase 4 — word-count powered (all-time)
+  {
+    id: 'words-read',
+    title: 'Words Read',
+    icon: Type,
+    size: { w: 6, h: 2, minW: 3, minH: 1 },
+    autoH: true,
+    fixedWindow: 'all',
+    defaultConfig: { chartType: 'bar', days: 0, autoFit: true },
+    render: ({ stats }) => <WordsRead data={stats.words} />,
+  },
+  {
+    id: 'true-wpm',
+    title: 'Reading Speed',
+    icon: Gauge,
+    size: { w: 6, h: 3, minW: 3, minH: 2 },
+    autoH: true,
+    fixedWindow: 'all',
+    defaultConfig: { chartType: 'bar', days: 0, autoFit: true },
+    render: ({ stats }) => <TrueWpm data={stats.wpm} />,
+  },
+  {
+    id: 'book-length',
+    title: 'Book Length',
+    icon: Ruler,
+    size: { w: 6, h: 3, minW: 3, minH: 2 },
+    fixedWindow: 'all',
+    render: ({ stats }) => <BookLength data={stats.book_lengths} />,
+  },
 ]
 
 const defById = (id: string) => WIDGETS.find((w) => w.id === id.replace(/--[a-z0-9]+$/, ''))!
@@ -577,6 +611,9 @@ const WIDGET_DESC: Record<string, string> = {
   'library-completion': 'How much of what you own you’ve read',
   'reading-clock': 'A 24-hour radial of when you read',
   'reading-by-language': 'Reading time split by language',
+  'words-read': 'Lifetime words read, by year',
+  'true-wpm': 'Your real reading speed — words ÷ time',
+  'book-length': 'How long the books you finish are',
 }
 
 // Widgets that are a number/short text — render their preview at natural size (no scale).
@@ -593,15 +630,15 @@ const SCROLL_IDS = new Set([
 const GALLERY_GROUPS: { label: string; ids: string[] }[] = [
   {
     label: 'Overview',
-    ids: ['stat-time', 'stat-sessions', 'stat-finished', 'stat-streak', 'stat-pages', 'stat-completion', 'stat-metric', 'goal', 'currently-reading', 'recently-finished', 'streak-calendar', 'daily', 'top-books', 'books-finished', 'activity-365', 'lifetime-totals', 'session-log'],
+    ids: ['stat-time', 'stat-sessions', 'stat-finished', 'stat-streak', 'stat-pages', 'stat-completion', 'stat-metric', 'goal', 'currently-reading', 'recently-finished', 'streak-calendar', 'daily', 'top-books', 'books-finished', 'activity-365', 'lifetime-totals', 'words-read', 'session-log'],
   },
   {
     label: 'Habits',
-    ids: ['hour-dow', 'reading-clock', 'session-timeline', 'reading-pace', 'pace-by-format', 'dow-bar', 'time-of-day', 'time-by-format', 'speed-trend', 'estimates', 'period-comparison', 'monthly-comparison'],
+    ids: ['hour-dow', 'reading-clock', 'session-timeline', 'reading-pace', 'pace-by-format', 'true-wpm', 'dow-bar', 'time-of-day', 'time-by-format', 'speed-trend', 'estimates', 'period-comparison', 'monthly-comparison'],
   },
   {
     label: 'Library',
-    ids: ['year-in-review', 'library-completion', 'series-completion', 'series-spotlight', 'author-affinity', 'completion-by-type', 'category-breakdown', 'genre-over-time', 'reading-by-language', 'library-growth', 'personal-records', 'per-book-table'],
+    ids: ['year-in-review', 'library-completion', 'series-completion', 'series-spotlight', 'author-affinity', 'completion-by-type', 'category-breakdown', 'genre-over-time', 'reading-by-language', 'library-growth', 'personal-records', 'book-length', 'per-book-table'],
   },
   {
     label: 'Taste',
@@ -658,6 +695,8 @@ const INITIAL_POS: Record<string, { x: number; y: number; w: number; h: number }
   'library-completion': { x: 0, y: 25, w: 4, h: 3 },   // Library
   'personal-records': { x: 4, y: 25, w: 4, h: 3 },     // Library
   'reading-by-language': { x: 8, y: 25, w: 4, h: 2 },  // Library
+  // (Phase 4 word-count tiles are gallery-only — no default placement; the gallery
+  // add-flow positions them from def.size, so they need no INITIAL_POS entry.)
 }
 
 // Each tab is its own board (own tiles + layout), independently customizable.
@@ -668,6 +707,8 @@ const TAB_DEFS: { id: string; label: string; ids: string[] }[] = [
   { id: 'habits', label: 'Habits', ids: ['hour-dow', 'session-timeline', 'reading-pace', 'pace-by-format', 'speed-trend', 'estimates', 'period-comparison', 'monthly-comparison'] },
   { id: 'library', label: 'Library', ids: ['year-in-review', 'series-completion', 'author-affinity', 'completion-by-type', 'category-breakdown', 'genre-over-time', 'library-growth', 'per-book-table'] },
   { id: 'taste', label: 'Taste', ids: ['rating-distribution', 'taste-by-genre', 'rating-vs-time', 'rating-trend', 'top-rated', 'best-rated-series'] },
+  // Phase 4 word-count tiles (words-read / true-wpm / book-length) are gallery-only
+  // — addable from "Add tile" but on no default board, matching the batch-2 convention.
 ]
 
 function buildTab(def: { id: string; label: string; ids: string[] }): TabState {
@@ -1606,6 +1647,14 @@ export function StatsPage() {
   })
   const [activeTabId, setActiveTabId] = useState(() => loadPersisted()?.activeTabId ?? 'overview')
   const [renamingId, setRenamingId] = useState<string | null>(null)
+  // Keep the active board's tab scrolled into view — with many boards the tab
+  // strip scrolls, and the one you're on can sit off-screen otherwise. Re-run on
+  // edit toggle too, since the per-tab edit icons widen the strip enough to push
+  // the active tab out of view.
+  const activeTabRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    activeTabRef.current?.scrollIntoView({ inline: 'nearest', block: 'nearest' })
+  }, [activeTabId, editMode])
   const [tabMenuOpen, setTabMenuOpen] = useState(false)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [undo, setUndo] = useState<{ label: string; restore: () => void } | null>(null)
@@ -1953,11 +2002,15 @@ export function StatsPage() {
         </div>
 
         {/* board tabs (pills, like the Stats page) + board tools */}
-        <div className="overflow-x-auto border-t border-border/50">
+        <div className="border-t border-border/50">
           <div className={cn('flex items-center gap-1 py-1.5 transition-[padding] duration-200', PAD_X[pad])}>
+            {/* Only the tabs scroll horizontally; the + and board tools stay pinned
+                and reachable however many boards you add. */}
+            <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
             {tabs.map((t) => (
               <div
                 key={t.id}
+                ref={activeTabId === t.id ? activeTabRef : undefined}
                 className={cn(
                   'group/tab flex shrink-0 items-center rounded-md transition-all',
                   activeTabId === t.id ? 'bg-muted text-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
@@ -2018,6 +2071,7 @@ export function StatsPage() {
                 )}
               </div>
             ))}
+            </div>
             {editMode && (
               <div className="relative shrink-0">
                 <button

@@ -15,6 +15,15 @@ All notable changes to Tome are documented here. Format loosely follows
   stats. To fill in books added before this release, admins get a **Word Counts**
   tab under Admin with a one-click background backfill (it only reads your files —
   nothing on disk is changed — and shows live progress you can stop and resume).
+- **Three reading-speed & length tiles on Reading Stats.** Now that Tome counts
+  the words in your books, three new tiles turn that into insight: **Words Read**
+  (your lifetime word count, broken out by year once you've finished books across
+  more than one), **Reading Speed** (your true words-per-minute — words divided by
+  the time KOReader actually recorded — with your fastest and slowest books, side
+  by side on a wide tile), and **Book Length** (how long the books you finish tend
+  to be, as a distribution with your average, median and longest). They're not on
+  any board by default — add the ones you want from **Add tile** under Overview /
+  Habits / Library.
 - **A "Taste" tab on Reading Stats.** A fourth board next to Overview / Habits /
   Library, built from your book ratings: a **rating distribution** (how you spread
   your stars), **taste by genre** (your average rating per book type), your
