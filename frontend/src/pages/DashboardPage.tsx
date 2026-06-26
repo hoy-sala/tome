@@ -5,7 +5,7 @@ import {
   LayoutGrid, List,
   ChevronUp, ChevronDown, SlidersHorizontal, Loader2,
   Library as LibraryIcon, CheckSquare, XSquare, Download, Pencil, Menu,
-  Flame, BookCheck, Clock, BookOpenCheck, Play, CheckCheck, Trash2, Settings2, Layers, Star,
+  Flame, BookCheck, Clock, BookOpenCheck, Play, CheckCheck, Trash2, Settings2, Layers, Star, Quote,
 } from 'lucide-react'
 import { TomeMark } from '@/components/TomeMark'
 import { useAuth, isMember, isAdmin } from '@/contexts/AuthContext'
@@ -93,6 +93,16 @@ interface ForgottenBook {
   has_cover: boolean
   last_read: string | null
   days_ago: number | null
+}
+
+interface HighlightSpotlight {
+  on_this_day: boolean
+  highlight: {
+    book_id: number
+    book_title: string
+    book_author: string | null
+    highlighted_text: string | null
+  } | null
 }
 
 const SORT_LABELS: Record<SortField, string> = {
@@ -707,6 +717,7 @@ export function DashboardPage() {
   const [recentlyAdded, setRecentlyAdded] = useState<Book[]>([])
   const [activityLog, setActivityLog] = useState<ActivityEntry[]>([])
   const [forgottenBooks, setForgottenBooks] = useState<ForgottenBook[]>([])
+  const [spotlight, setSpotlight] = useState<HighlightSpotlight | null>(null)
   // Persisted dismissal: store the signature of the dismissed book set so the
   // panel stays hidden across refreshes, but resurfaces if a new set appears.
   const [forgottenDismissedSig, setForgottenDismissedSig] = useState<string>(
@@ -907,6 +918,7 @@ export function DashboardPage() {
     api.get<Book[]>('/books?sort=added_at&order=desc&limit=6').then(setRecentlyAdded).catch(() => {})
     api.get<ActivityEntry[]>('/home/activity').then(setActivityLog).catch(() => {})
     api.get<ForgottenBook[]>('/home/forgotten-books').then(setForgottenBooks).catch(() => {})
+    api.get<HighlightSpotlight>('/annotations/spotlight').then(setSpotlight).catch(() => {})
     api.get<SeriesItem[]>('/books/series').then(setSeriesList).catch(() => {})
   }, [])
 
@@ -1141,6 +1153,30 @@ export function DashboardPage() {
                   </section>
                 )
               })()}
+
+              {/* ── Highlight spotlight (on this day) ──────────────────────── */}
+              {spotlight?.highlight?.highlighted_text && (
+                <section className="rounded-lg border border-border bg-muted/30 px-4 py-3.5">
+                  <header className="flex items-center justify-between mb-2.5">
+                    <h2 className="flex items-center gap-1.5 text-base text-foreground">
+                      <Quote className="w-4 h-4 text-primary/60" />
+                      {spotlight.on_this_day ? 'On this day you highlighted' : 'From your highlights'}
+                    </h2>
+                    <a href="/highlights" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+                      All highlights
+                    </a>
+                  </header>
+                  <a href={`/books/${spotlight.highlight.book_id}`} className="block group">
+                    <p className="text-sm text-foreground leading-relaxed border-l-2 border-primary/40 pl-3 italic line-clamp-4">
+                      {spotlight.highlight.highlighted_text}
+                    </p>
+                    <p className="mt-2 pl-3 text-xs text-muted-foreground group-hover:text-primary transition-colors">
+                      — {spotlight.highlight.book_title}
+                      {spotlight.highlight.book_author ? `, ${spotlight.highlight.book_author}` : ''}
+                    </p>
+                  </a>
+                </section>
+              )}
 
               {/* ── Continue Reading ──────────────────────────────────────── */}
               <div className="flex flex-col gap-3">

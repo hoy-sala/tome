@@ -7,6 +7,19 @@ All notable changes to Tome are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **A Highlights page — your commonplace book.** Every highlight and note you make
+  in KOReader already syncs into Tome; now there's one place to read them all. The
+  new **Highlights** page (in the sidebar) gathers your highlights across the whole
+  library, grouped by book, each as a quote card with its chapter and note. Search
+  filters across everything at once — text, notes, chapter, and book title — with
+  the matches marked; collapse books to scan a big collection, or fold them all at
+  once. **On this day** resurfaces the highlights you made on today's date in past
+  years, and the Home tab shows a single "on this day" highlight as a quote card
+  (falling back to a random one). Each card shows when it was highlighted, with the
+  full detail (time, chapter, colour, when it synced) on hover. **Export** copies
+  your highlights as Markdown — per book or the whole set. Highlights stay read-only
+  on the web (KOReader owns them); this is the library-wide view of the same data
+  you already see per book on each book's page.
 - **Word counts for your books.** Tome now parses each EPUB's text to record its
   word count, shown in the **Details** panel on the book page. New uploads are
   counted automatically as they're added; CJK titles (Chinese / Japanese / Korean)

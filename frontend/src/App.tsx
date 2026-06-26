@@ -17,6 +17,7 @@ import { SettingsPage } from '@/pages/SettingsPage'
 import { StatsPage } from '@/pages/StatsPage'
 import { BinderyPage } from '@/pages/BinderyPage'
 import { WishlistPage } from '@/pages/WishlistPage'
+import { HighlightsPage } from '@/pages/HighlightsPage'
 import { api } from '@/lib/api'
 import { applyTheme, getStoredTheme } from '@/lib/theme'
 
@@ -120,6 +121,14 @@ function AppRoutes() {
           }
         />
         <Route path="/stats-lab" element={<Navigate to="/stats" replace />} />
+        <Route
+          path="/highlights"
+          element={
+            <ProtectedRoute>
+              <HighlightsPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/reader/:bookId"
           element={
