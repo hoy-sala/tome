@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  ArrowLeft, Search, Quote, StickyNote, Loader2, BookOpen,
+  Search, Quote, StickyNote, Loader2, BookOpen,
   CalendarHeart, Copy, X, ChevronDown, Info, ChevronsDownUp, ChevronsUpDown, Trash2,
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useToast } from '@/contexts/ToastContext'
 import { cn } from '@/lib/utils'
+import { AppShell } from '@/components/AppShell'
 
 interface Highlight {
   id: number
@@ -284,38 +285,27 @@ export function HighlightsPage() {
   const neverSynced = isEmpty && !debounced && !onThisDay
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-20 border-b border-border bg-background/80 backdrop-blur-sm safe-top">
-        <div className="flex items-center gap-3 px-4 h-14 max-w-3xl mx-auto">
-          <Link
-            to="/"
-            className="p-2 rounded-lg hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </Link>
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <Quote className="w-4 h-4 text-muted-foreground shrink-0" />
-            <span className="text-sm font-semibold">Highlights</span>
-            {total > 0 && (
-              <span className="text-xs text-muted-foreground/60 truncate">
-                {total} from {books} book{books === 1 ? '' : 's'}
-              </span>
-            )}
-          </div>
-          {groups.length > 0 && (
-            <button
-              onClick={copyAll}
-              title="Copy all as Markdown"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border hover:bg-muted transition-all"
-            >
-              <Copy className="w-3.5 h-3.5" />
-              Export
-            </button>
+    <AppShell
+      actions={groups.length > 0 ? (
+        <button
+          onClick={copyAll}
+          title="Copy all as Markdown"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border hover:bg-muted transition-all"
+        >
+          <Copy className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Export</span>
+        </button>
+      ) : undefined}
+    >
+      <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
+        <div className="flex items-baseline justify-between gap-3">
+          <h1 className="font-display text-xl text-foreground">Highlights</h1>
+          {total > 0 && (
+            <span className="text-xs text-muted-foreground/60">
+              {total} from {books} book{books === 1 ? '' : 's'}
+            </span>
           )}
         </div>
-      </header>
-
-      <main className="max-w-3xl mx-auto px-4 py-6 space-y-5">
         {/* Controls */}
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
@@ -458,7 +448,7 @@ export function HighlightsPage() {
             )}
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </AppShell>
   )
 }

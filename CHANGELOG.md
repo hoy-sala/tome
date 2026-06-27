@@ -7,6 +7,13 @@ All notable changes to Tome are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **The sidebar now follows you onto every page.** Stats, Highlights, Wishlist and
+  the Bindery used to drop you onto a bare screen with only a back-arrow — to get
+  from your stats to your highlights you had to bounce back through Home first.
+  They now carry the same sidebar as the rest of Tome (your libraries and shelves,
+  the full nav, your profile), so you can jump straight between any section and the
+  whole app feels like one place instead of a handful of detached screens. The
+  active section highlights itself, and on phones it's the same slide-in drawer.
 - **A Highlights page — your commonplace book.** Every highlight and note you make
   in KOReader already syncs into Tome; now there's one place to read them all. The
   new **Highlights** page (in the sidebar) gathers your highlights across the whole

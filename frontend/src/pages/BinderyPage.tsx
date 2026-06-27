@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import {
   RefreshCw, Loader2, BookOpen, Check, X, Trash2, Search,
   ChevronRight, ChevronDown, ArrowLeft, FolderOpen,
-  Inbox, Zap, Eye, BookPlus, HelpCircle,
+  Inbox, Zap, Eye, HelpCircle,
 } from 'lucide-react'
+import { AppShell } from '@/components/AppShell'
 import { DOCS, docsLink } from '@/lib/docs'
 import { api } from '@/lib/api'
 import { useBookTypes } from '@/lib/bookTypes'
@@ -1105,7 +1106,19 @@ export function BinderyPage() {
     let rowCounter = 0
 
     return (
-      <div className={cn('flex flex-col h-full min-h-screen bg-background transition-opacity duration-150', viewTransition ? 'opacity-0' : 'opacity-100')}>
+      <AppShell
+        actions={
+          <button
+            onClick={fetchAll}
+            disabled={loading || unreviewedLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={cn('h-3.5 w-3.5', (loading || unreviewedLoading) && 'animate-spin')} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+        }
+      >
+      <div className={cn('flex flex-col h-full transition-opacity duration-150', viewTransition ? 'opacity-0' : 'opacity-100')}>
         <style>{`
           @keyframes fade-in-up {
             from { opacity: 0; transform: translateY(8px); }
@@ -1118,41 +1131,25 @@ export function BinderyPage() {
           }
         `}</style>
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border px-6 pt-6 pb-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Link to="/" className="p-2 rounded-lg hover:bg-accent transition-colors text-muted-foreground hover:text-foreground">
-                <ArrowLeft className="w-4 h-4" />
-              </Link>
-              <BookPlus className="w-4 h-4 text-muted-foreground" />
-              <div>
-                <h1 className="text-sm font-semibold">Bindery</h1>
-                <p className="text-xs text-muted-foreground">
-                  {loading || unreviewedLoading
-                    ? 'Loading...'
-                    : unreviewed.length > 0
-                      ? `${unreviewed.length} imported + ${items.length} incoming`
-                      : `${items.length} file${items.length !== 1 ? 's' : ''} waiting for review`}
-                </p>
-              </div>
-              <a
-                href={docsLink(DOCS.bindery)}
-                target="_blank"
-                rel="noopener noreferrer"
-                title="Bindery flow explained — open docs"
-                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              >
-                <HelpCircle className="w-3.5 h-3.5" />
-              </a>
-            </div>
-            <button
-              onClick={fetchAll}
-              disabled={loading || unreviewedLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+        <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-sm border-b border-border px-4 pt-4 pb-4">
+          <div className="flex items-center gap-3">
+            <h1 className="font-display text-xl text-foreground">Bindery</h1>
+            <p className="text-xs text-muted-foreground hidden md:block">
+              {loading || unreviewedLoading
+                ? 'Loading...'
+                : unreviewed.length > 0
+                  ? `${unreviewed.length} imported + ${items.length} incoming`
+                  : `${items.length} file${items.length !== 1 ? 's' : ''} waiting for review`}
+            </p>
+            <a
+              href={docsLink(DOCS.bindery)}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Bindery flow explained — open docs"
+              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             >
-              <RefreshCw className={cn('h-3.5 w-3.5', (loading || unreviewedLoading) && 'animate-spin')} />
-              Refresh
-            </button>
+              <HelpCircle className="w-3.5 h-3.5" />
+            </a>
           </div>
 
           {/* Toolbar — always visible when there are items */}
@@ -1489,6 +1486,7 @@ export function BinderyPage() {
           onCancel={() => setConfirmRejectUnreviewed(null)}
         />
       </div>
+      </AppShell>
     )
   }
 
@@ -1501,7 +1499,8 @@ export function BinderyPage() {
   const currentForm = currentItem ? formData[currentItem.path] : null
 
   return (
-    <div className={cn('flex flex-col h-full min-h-screen bg-background transition-opacity duration-150', viewTransition ? 'opacity-0' : 'opacity-100')}>
+    <AppShell>
+    <div className={cn('flex flex-col h-full transition-opacity duration-150', viewTransition ? 'opacity-0' : 'opacity-100')}>
       {/* Header */}
       <div className="sticky top-0 z-10 bg-background border-b border-border px-6 pt-5 pb-3">
         <div className="flex items-center gap-3">
@@ -1776,5 +1775,6 @@ export function BinderyPage() {
         onCancel={() => setConfirmReject(null)}
       />
     </div>
+    </AppShell>
   )
 }

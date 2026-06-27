@@ -1,5 +1,5 @@
 import { Fragment, useState, useRef, useEffect, useMemo } from 'react'
-import { useSearchParams, useLocation, Link } from 'react-router-dom'
+import { useSearchParams, useLocation, useNavigate, Link } from 'react-router-dom'
 import * as LucideIcons from 'lucide-react'
 import {
   BookOpen, Plus, Pencil, Trash2,
@@ -107,7 +107,9 @@ export function IconPicker({ value, onChange }: { value: string; onChange: (v: s
 interface Props {
   libraries: Library[]
   savedFilters: SavedFilter[]
-  activeTab: 'home' | 'books' | 'series'
+  // 'none' = a non-dashboard page (Stats/Highlights/…) is open, so none of the
+  // Home/All Books/Series items highlight — the active route item does instead.
+  activeTab: 'home' | 'books' | 'series' | 'none'
   onLibrariesChange: () => void
   onSavedFiltersChange: () => void
   onOpenSeriesView: () => void
@@ -118,7 +120,8 @@ interface Props {
 
 export function Sidebar({ libraries, savedFilters, activeTab, onLibrariesChange, onSavedFiltersChange, onOpenSeriesView, onOpenHomeView, mobileOpen, onMobileClose }: Props) {
   const [open, setOpen] = useState(() => localStorage.getItem(SIDEBAR_KEY) !== 'closed')
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const { user, logout } = useAuth()
 
   // Generic filter modal (for saved filters only)
@@ -189,12 +192,19 @@ export function Sidebar({ libraries, savedFilters, activeTab, onLibrariesChange,
     localStorage.setItem(SIDEBAR_KEY, next ? 'open' : 'closed')
   }
 
-  function selectAllBooks() { setSearchParams({ tab: 'books' }) }
-  function selectLibrary(id: number) { setSearchParams({ tab: 'books', library_id: String(id) }) }
+  // Navigate to the dashboard (pathname '/') with these params. Using navigate
+  // (not setSearchParams) means these work from a non-dashboard page too — the
+  // sidebar is now shared by Stats/Highlights/… via AppShell. On the dashboard
+  // itself the resulting URL is identical, so behaviour there is unchanged.
+  function goToBooks(params: Record<string, string>) {
+    navigate({ pathname: '/', search: '?' + new URLSearchParams(params).toString() })
+  }
+  function selectAllBooks() { goToBooks({ tab: 'books' }) }
+  function selectLibrary(id: number) { goToBooks({ tab: 'books', library_id: String(id) }) }
   function selectSavedFilter(sf: SavedFilter) {
     const params: Record<string, string> = { tab: 'books', saved_filter: String(sf.id) }
     Object.entries(sf.params).forEach(([k, v]) => { if (v) params[k] = v })
-    setSearchParams(params)
+    goToBooks(params)
   }
 
   function openCreateLibModal() {

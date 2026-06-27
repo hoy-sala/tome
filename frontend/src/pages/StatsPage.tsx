@@ -7,11 +7,11 @@ import ReactGridLayout, {
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import { Link } from 'react-router-dom'
+import { AppShell } from '@/components/AppShell'
 import { toPng } from 'html-to-image'
-import { ArrowLeft, Plus, RotateCcw, X, BarChart3, HelpCircle, Sparkles, SlidersHorizontal, Pencil, Check, GripVertical, Calendar, ChevronLeft, ChevronRight, Clock, Activity, BookCheck, Flame, FileText, Target, Gauge, Search, Copy, Loader2, CloudOff, Download, Upload, ImageDown, Star, TrendingUp, ScatterChart as ScatterIcon, Trophy, Globe, Library as LibraryIcon, Clock3, Infinity as InfinityIcon, Type, Ruler, type LucideIcon } from 'lucide-react'
+import { Plus, RotateCcw, X, BarChart3, HelpCircle, Sparkles, SlidersHorizontal, Pencil, Check, GripVertical, Calendar, ChevronLeft, ChevronRight, Clock, Activity, BookCheck, Flame, FileText, Target, Gauge, Search, Copy, Loader2, CloudOff, Download, Upload, ImageDown, Star, TrendingUp, ScatterChart as ScatterIcon, Trophy, Globe, Library as LibraryIcon, Clock3, Infinity as InfinityIcon, Type, Ruler, type LucideIcon } from 'lucide-react'
 import { cn, formatDate, formatDuration } from '@/lib/utils'
 import { api } from '@/lib/api'
-import { SyncStatusBadge } from '@/components/SyncStatusBadge'
 import { BookAnimation } from '@/components/BookAnimation'
 import { DOCS, docsLink } from '@/lib/docs'
 import { type StatsResponse, type CompletionEstimate } from '@/components/stats/shared'
@@ -1944,7 +1944,7 @@ export function StatsPage() {
   }, [editMode, addOpen, tabMenuOpen])
 
   return (
-    <div className="min-h-screen bg-background">
+    <AppShell>
       <style>{`
         .react-grid-item.react-grid-placeholder {
           background: var(--primary, #6366f1) !important;
@@ -1971,12 +1971,8 @@ export function StatsPage() {
       <header className="sticky top-0 z-20 border-b border-border bg-background/80 backdrop-blur-sm safe-top">
         {/* min-h + wrap: on phones the range pills don't fit beside the title row,
             so they wrap to a second line instead of overflowing the viewport */}
-        <div className={cn('flex min-h-14 flex-wrap items-center gap-x-3 py-1.5 transition-[padding] duration-200', PAD_X[pad])}>
-          <Link to="/" className="-ml-2 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-          <BarChart3 className="h-4 w-4 text-muted-foreground" />
-          <span className="hidden text-base font-bold sm:inline">Reading Stats</span>
+        <div className={cn('flex min-h-14 flex-wrap items-center gap-x-3 py-1.5 px-4')}>
+          <h1 className="font-display text-xl text-foreground">Reading Stats</h1>
           <a
             href={docsLink(DOCS.stats)}
             target="_blank"
@@ -1987,7 +1983,6 @@ export function StatsPage() {
             <HelpCircle className="h-3.5 w-3.5" />
           </a>
           <div className="ml-auto flex items-center gap-2">
-            <SyncStatusBadge />
             {/* range selector — presets + custom date range; refetches /stats */}
             <RangeControl
               days={days}
@@ -2003,7 +1998,7 @@ export function StatsPage() {
 
         {/* board tabs (pills, like the Stats page) + board tools */}
         <div className="border-t border-border/50">
-          <div className={cn('flex items-center gap-1 py-1.5 transition-[padding] duration-200', PAD_X[pad])}>
+          <div className={cn('flex items-center gap-1 py-1.5 px-4')}>
             {/* Only the tabs scroll horizontally; the + and board tools stay pinned
                 and reachable however many boards you add. */}
             <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
@@ -2216,7 +2211,7 @@ export function StatsPage() {
 
       {/* edit mode gets extra bottom room so the last tile's resize handles have
           somewhere to scroll to */}
-      <main className={cn('py-6 transition-[padding] duration-200', PAD_X[pad], editMode && 'pb-[35vh]')}>
+      <div className={cn('py-6 transition-[padding] duration-200', PAD_X[pad], editMode && 'pb-[35vh]')}>
       {/* one-time hint that the page is editable */}
       {stats && !neverRead && !hintDismissed && !editMode && (
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs">
@@ -2280,7 +2275,7 @@ export function StatsPage() {
       ) : (
         <p className="py-32 text-center text-sm text-muted-foreground">Couldn’t load stats.</p>
       )}
-      </main>
+      </div>
 
       {addOpen && stats && (
         <AddWidgetModal ctx={{ stats, estimates, goals, reloadGoals }} present={new Set(active.tiles.map((t) => t.defId))} onAdd={addWidget} onClose={() => setAddOpen(false)} />
@@ -2305,7 +2300,7 @@ export function StatsPage() {
           </button>
         </div>
       )}
-    </div>
+    </AppShell>
   )
 }
 

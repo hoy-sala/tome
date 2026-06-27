@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  ArrowLeft, Plus, Trash2, ChevronDown, ChevronUp,
+  Plus, Trash2, ChevronDown, ChevronUp,
   BookOpen, Loader2, Sparkles, Layers, ExternalLink,
 } from 'lucide-react'
+import { AppShell } from '@/components/AppShell'
 import { useAuth, isMember } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { listWishes, deleteWish, type WishOut } from '@/lib/wishlist'
@@ -92,41 +93,30 @@ export function WishlistPage() {
 
   if (!canWish) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-3">
-        <Sparkles className="w-10 h-10 text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">Members can add books to their wishlist.</p>
-        <Link to="/" className="text-sm text-primary hover:underline">Go back</Link>
-      </div>
+      <AppShell>
+        <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
+          <Sparkles className="w-10 h-10 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">Members can add books to their wishlist.</p>
+          <Link to="/" className="text-sm text-primary hover:underline">Go back</Link>
+        </div>
+      </AppShell>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-20 border-b border-border bg-background/80 backdrop-blur-sm safe-top">
-        <div className="flex items-center gap-3 px-4 h-14 max-w-3xl mx-auto">
-          <Link
-            to="/"
-            className="p-2 rounded-lg hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </Link>
-          <div className="flex items-center gap-2 flex-1">
-            <Sparkles className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-semibold">Wishlist</span>
-          </div>
-          {canWish && (
-            <button
-              onClick={() => setAddOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-all"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Wish
-            </button>
-          )}
-        </div>
-      </header>
-
-      <main className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+    <AppShell
+      actions={
+        <button
+          onClick={() => setAddOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-all"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Wish</span>
+        </button>
+      }
+    >
+      <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+        <h1 className="font-display text-xl text-foreground">Wishlist</h1>
         {loading ? (
           <div className="flex justify-center py-16">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -272,7 +262,7 @@ export function WishlistPage() {
             )}
           </>
         )}
-      </main>
+      </div>
 
       {addOpen && (
         <WishlistModal
@@ -283,6 +273,6 @@ export function WishlistPage() {
           }}
         />
       )}
-    </div>
+    </AppShell>
   )
 }
