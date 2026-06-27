@@ -24,9 +24,13 @@ All notable changes to Tome are documented here. Format loosely follows
   years, and the Home tab shows a single "on this day" highlight as a quote card
   (falling back to a random one). Each card shows when it was highlighted, with the
   full detail (time, chapter, colour, when it synced) on hover. **Export** copies
-  your highlights as Markdown — per book or the whole set. Highlights stay read-only
-  on the web (KOReader owns them); this is the library-wide view of the same data
-  you already see per book on each book's page.
+  your highlights as Markdown — per book or the whole set. This is the library-wide
+  view of the same data you already see per book on each book's page. KOReader still
+  owns your highlights, but you can now **delete** one from the web — handy for an
+  accidental highlight you'd otherwise have to reopen the book to clear. Deleting
+  here removes it everywhere: Tome records the deletion and your KOReader devices
+  drop it on their next sync (a hover trash button with a quick confirm, on both the
+  Highlights page and each book's Highlights & Notes panel).
 - **Word counts for your books.** Tome now parses each EPUB's text to record its
   word count, shown in the **Details** panel on the book page. New uploads are
   counted automatically as they're added; CJK titles (Chinese / Japanese / Korean)

@@ -166,6 +166,61 @@ def test_empty_object_payload_coerced(client, db, admin_user, make_book):
     assert r.json()["annotations"] == []
 
 
+def test_web_delete_removes_and_tombstones(client, db, admin_user, make_book):
+    """Deleting a highlight from the web drops the row and leaves a tombstone,
+    so the deletion can propagate back to KOReader like a device-side delete."""
+    user, _ = admin_user
+    book = make_book()
+    hdr = {"Authorization": f"Bearer {_api_key_for(db, user.id)}"}
+    _sync(client, hdr, book.id, upserts=[_hl(A1, "oops", dtu="2026-06-03 10:00:00")])
+
+    aid = client.get(f"/api/books/{book.id}/annotations").json()[0]["id"]
+    r = client.delete(f"/api/annotations/{aid}")
+    assert r.status_code == 204, r.text
+
+    assert db.query(Annotation).filter(Annotation.book_id == book.id).count() == 0
+    tombs = db.query(AnnotationTombstone).filter(AnnotationTombstone.book_id == book.id).all()
+    assert [t.anchor for t in tombs] == [A1]
+    assert tombs[0].client_deleted_at  # stamped with the deletion wall-clock
+
+
+def test_web_delete_propagates_and_holds_against_stale_device(client, db, admin_user, make_book):
+    """After a web delete the plugin pull returns the tombstone and no live row;
+    a stale device re-add (older mtime) cannot resurrect it."""
+    user, _ = admin_user
+    book = make_book()
+    hdr = {"Authorization": f"Bearer {_api_key_for(db, user.id)}"}
+    _sync(client, hdr, book.id, upserts=[_hl(A1, dtu="2026-06-03 10:00:00")])
+    aid = client.get(f"/api/books/{book.id}/annotations").json()[0]["id"]
+    client.delete(f"/api/annotations/{aid}")
+
+    g = client.get(f"/api/tome-sync/annotations/{book.id}", headers=hdr).json()
+    assert g["annotations"] == []
+    assert [t["anchor"] for t in g["tombstones"]] == [A1]
+
+    r = _sync(client, hdr, book.id, upserts=[_hl(A1, dtu="2026-06-03 10:00:00")])
+    assert r.json()["applied"]["skipped"] == 1
+    assert r.json()["annotations"] == []
+
+
+def test_web_delete_scoped_to_owner(client, db, admin_user, make_book):
+    """You can only delete your own highlights; another user's id (or a missing one) 404s."""
+    user, _ = admin_user
+    book = make_book()
+    other = User(username="other2", email="o2@x.com", hashed_password=hash_password("pw"),
+                 is_active=True, is_admin=False, role="member")
+    db.add(other); db.flush()
+    hdr_other = {"Authorization": f"Bearer {_api_key_for(db, other.id)}"}
+    _sync(client, hdr_other, book.id, upserts=[_hl(A1, dtu="2026-06-03 10:00:00")])
+    other_aid = db.query(Annotation).filter(Annotation.user_id == other.id).first().id
+
+    # default client JWT is the admin user — must not reach another user's highlight
+    assert client.delete(f"/api/annotations/{other_aid}").status_code == 404
+    assert client.delete("/api/annotations/999999").status_code == 404
+    # the other user's highlight is untouched
+    assert db.query(Annotation).filter(Annotation.id == other_aid).count() == 1
+
+
 def test_auth_and_404(client, db, admin_user, make_book):
     user, _ = admin_user
     book = make_book()

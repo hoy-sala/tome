@@ -116,6 +116,7 @@ export function BookDetailPage() {
   const [editingReview, setEditingReview] = useState(false)
   const [kosyncDevice, setKosyncDevice] = useState<string | null>(null)
   const [annotations, setAnnotations] = useState<Annotation[]>([])
+  const [confirmingHighlight, setConfirmingHighlight] = useState<number | null>(null)
   const [highlightsOpen, setHighlightsOpen] = useState(true)
   const [readingStats, setReadingStats] = useState<ReadingStatsResponse | null>(null)
   const [statsOpen, setStatsOpen] = useState(true)
@@ -861,6 +862,17 @@ export function BookDetailPage() {
     </div>
   )
 
+  async function deleteHighlight(annotationId: number) {
+    try {
+      await api.delete(`/annotations/${annotationId}`)
+      setAnnotations(prev => prev.filter(a => a.id !== annotationId))
+      setConfirmingHighlight(null)
+      toast.success('Highlight deleted')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to delete highlight')
+    }
+  }
+
   const highlightsBlock = annotations.length > 0 ? (
     <div className="mt-6">
       <button
@@ -876,10 +888,31 @@ export function BookDetailPage() {
       {highlightsOpen && (
         <ul className="space-y-3 max-h-[28rem] overflow-y-auto pr-1">
           {annotations.map(a => (
-            <li key={a.id} className="rounded-lg border border-border bg-muted/40 px-3 py-2.5">
-              {a.chapter && (
-                <p className="text-xs text-muted-foreground/70 mb-1.5 truncate">{a.chapter}</p>
-              )}
+            <li key={a.id} className="group rounded-lg border border-border bg-muted/40 px-3 py-2.5">
+              <div className="flex items-start justify-between gap-2">
+                {a.chapter ? (
+                  <p className="text-xs text-muted-foreground/70 mb-1.5 truncate">{a.chapter}</p>
+                ) : <span />}
+                {confirmingHighlight === a.id ? (
+                  <span className="flex items-center gap-1.5 text-[11px] shrink-0">
+                    <button onClick={() => deleteHighlight(a.id)} className="font-medium text-destructive hover:underline">
+                      Delete
+                    </button>
+                    <button onClick={() => setConfirmingHighlight(null)} className="text-muted-foreground hover:text-foreground">
+                      Cancel
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => setConfirmingHighlight(a.id)}
+                    title="Delete this highlight"
+                    aria-label="Delete this highlight"
+                    className="p-1 -mt-1 -mr-1 rounded text-muted-foreground/50 hover:text-destructive transition-all opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 shrink-0"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
               {a.highlighted_text && (
                 <p className="text-sm text-foreground leading-relaxed border-l-2 border-primary/40 pl-2.5">
                   {a.highlighted_text}

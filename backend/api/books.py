@@ -1040,9 +1040,9 @@ def get_book_annotations(
 ):
     """Highlights/notes the current user has synced from KOReader for this book.
 
-    Read-only: KOReader owns annotations; the plugin pushes them via
-    PUT /api/tome-sync/annotations/{book_id}. Web reader (foliate) inline
-    rendering is a separate, later phase.
+    KOReader owns annotations and pushes them via the TomeSync plugin; the web's
+    only write is DELETE /api/annotations/{id} (drops the row + tombstones it so the
+    deletion syncs back). Web reader (foliate) inline rendering is a later phase.
     """
     from backend.models.tome_sync import Annotation
 

@@ -2,8 +2,10 @@
 
 `GET /api/annotations` returns the current user's KOReader-synced highlights
 across *all* visible books (the per-book view lives at
-`GET /api/books/{id}/annotations`). Read-only: KOReader owns annotations; the
-plugin pushes them via `PUT /api/tome-sync/annotations/{id}`.
+`GET /api/books/{id}/annotations`). KOReader owns annotations and pushes them via
+the TomeSync plugin; the one write the web offers is `DELETE /api/annotations/{id}`,
+which drops the row and leaves a tombstone so the deletion propagates back to the
+device (and stale devices can't resurrect it) — mirroring the plugin's own deletes.
 
 Registered before `/api/books/{id}` is irrelevant here (distinct prefix), but the
 router is mounted at /api like the rest.
@@ -12,7 +14,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_, func
 from sqlalchemy.orm import Session
 
@@ -20,7 +22,7 @@ from backend.core.database import get_db
 from backend.core.security import get_current_user
 from backend.core.permissions import book_visibility_filter
 from backend.models.book import Book
-from backend.models.tome_sync import Annotation
+from backend.models.tome_sync import Annotation, AnnotationTombstone
 from backend.models.user import User
 
 router = APIRouter(tags=["annotations"])
@@ -103,6 +105,57 @@ def list_annotations(
     items = [_to_item(a, b) for (a, b) in page]
 
     return {"total": total, "books": len(book_ids), "items": items}
+
+
+@router.delete("/annotations/{annotation_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_annotation(
+    annotation_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete one of the current user's highlights (e.g. an accidental one).
+
+    Mirrors the TomeSync delete path: we remove the `Annotation` row *and* write an
+    `AnnotationTombstone` stamped with the current wall-clock time. On its next sync
+    the device sees the tombstone, finds its local copy older, and drops it too — so
+    the deletion sticks instead of being re-uploaded. A later, genuinely-newer re-add
+    of the same passage (strictly newer mtime) still wins and clears the tombstone,
+    exactly as it would for a device-originated delete.
+    """
+    annotation = (
+        db.query(Annotation)
+        .filter(Annotation.id == annotation_id, Annotation.user_id == current_user.id)
+        .first()
+    )
+    if annotation is None:
+        raise HTTPException(status_code=404, detail="Highlight not found")
+
+    book_id = annotation.book_id
+    anchor = annotation.anchor
+    now = func_now_str()
+
+    db.delete(annotation)
+
+    tomb = (
+        db.query(AnnotationTombstone)
+        .filter(
+            AnnotationTombstone.user_id == current_user.id,
+            AnnotationTombstone.book_id == book_id,
+            AnnotationTombstone.anchor == anchor,
+        )
+        .first()
+    )
+    if tomb:
+        # Keep the latest deletion time so a stale re-add can't slip under it.
+        if now > (tomb.client_deleted_at or ""):
+            tomb.client_deleted_at = now
+    else:
+        db.add(AnnotationTombstone(
+            user_id=current_user.id, book_id=book_id, anchor=anchor,
+            client_deleted_at=now,
+        ))
+
+    db.commit()
 
 
 @router.get("/annotations/spotlight")

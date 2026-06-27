@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { Link } from 'react-router-dom'
 import {
   Search, Quote, StickyNote, Loader2, BookOpen,
-  CalendarHeart, Copy, X, ChevronDown, Info, ChevronsDownUp, ChevronsUpDown,
+  CalendarHeart, Copy, X, ChevronDown, Info, ChevronsDownUp, ChevronsUpDown, Trash2,
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useToast } from '@/contexts/ToastContext'
@@ -110,11 +110,12 @@ function fullInfo(h: Highlight): string {
   return parts.join('  ·  ')
 }
 
-function HighlightCard({ h, q, showDot }: { h: Highlight; q: string; showDot: boolean }) {
+function HighlightCard({ h, q, showDot, onDelete }: { h: Highlight; q: string; showDot: boolean; onDelete: (h: Highlight) => void }) {
   const tint = h.color ? (COLOR_TINT[h.color.toLowerCase()] ?? 'bg-primary/50') : 'bg-primary/40'
   const date = shortDate(h.datetime)
+  const [confirming, setConfirming] = useState(false)
   return (
-    <li className="rounded-lg border border-border bg-muted/40 px-3.5 py-3">
+    <li className="group rounded-lg border border-border bg-muted/40 px-3.5 py-3">
       <div className="flex items-start justify-between gap-3 mb-1.5">
         <div className="flex items-center gap-1.5 min-w-0">
           {showDot && <span className={cn('w-2 h-2 rounded-full shrink-0', tint)} />}
@@ -122,15 +123,42 @@ function HighlightCard({ h, q, showDot }: { h: Highlight; q: string; showDot: bo
             <p className="text-xs text-muted-foreground/70 truncate">{q ? mark(h.chapter, q) : h.chapter}</p>
           )}
         </div>
-        {date && (
-          <span
-            className="flex items-center gap-1 text-[11px] text-muted-foreground/50 shrink-0 cursor-help"
-            title={fullInfo(h)}
-          >
-            {date}
-            <Info className="w-3 h-3" />
-          </span>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {date && (
+            <span
+              className="flex items-center gap-1 text-[11px] text-muted-foreground/50 cursor-help"
+              title={fullInfo(h)}
+            >
+              {date}
+              <Info className="w-3 h-3" />
+            </span>
+          )}
+          {confirming ? (
+            <span className="flex items-center gap-1.5 text-[11px]">
+              <button
+                onClick={() => onDelete(h)}
+                className="font-medium text-destructive hover:underline"
+              >
+                Delete
+              </button>
+              <button
+                onClick={() => setConfirming(false)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                Cancel
+              </button>
+            </span>
+          ) : (
+            <button
+              onClick={() => setConfirming(true)}
+              title="Delete this highlight"
+              aria-label="Delete this highlight"
+              className="p-1 -m-1 rounded text-muted-foreground/50 hover:text-destructive transition-all opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
       {h.highlighted_text && (
         <p className="text-sm text-foreground leading-relaxed border-l-2 border-primary/40 pl-2.5">
@@ -237,6 +265,20 @@ export function HighlightsPage() {
   async function copyGroup(g: BookGroup) {
     await navigator.clipboard.writeText(groupToMarkdown(g))
     toast.success(`Copied ${g.items.length} from “${g.title}”`)
+  }
+
+  async function deleteHighlight(h: Highlight) {
+    // Was this the last loaded highlight for its book? If so the book drops off too.
+    const lastOfBook = !items.some(x => x.book_id === h.book_id && x.id !== h.id)
+    try {
+      await api.delete(`/annotations/${h.id}`)
+      setItems(prev => prev.filter(x => x.id !== h.id))
+      setTotal(t => Math.max(0, t - 1))
+      if (lastOfBook) setBooks(b => Math.max(0, b - 1))
+      toast.success('Highlight deleted')
+    } catch (e) {
+      toast.error((e as Error).message ?? 'Failed to delete highlight')
+    }
   }
 
   const isEmpty = !loading && !error && groups.length === 0
@@ -384,7 +426,7 @@ export function HighlightsPage() {
                   <div className={cn('grid transition-[grid-template-rows] duration-300 ease-out', isCollapsed ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]')}>
                     <div className="overflow-hidden">
                       <ul className="space-y-2.5">
-                        {g.items.map(h => <HighlightCard key={h.id} h={h} q={debounced} showDot={showDots} />)}
+                        {g.items.map(h => <HighlightCard key={h.id} h={h} q={debounced} showDot={showDots} onDelete={deleteHighlight} />)}
                       </ul>
                     </div>
                   </div>
