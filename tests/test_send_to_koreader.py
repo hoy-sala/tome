@@ -51,10 +51,20 @@ def koreader_on(monkeypatch):
     yield
 
 
+@pytest.fixture()
+def koreader_off(monkeypatch):
+    # On by default since v1.7.0 — explicitly disable to exercise the gate.
+    monkeypatch.setattr(settings, "send_to_koreader", False)
+    yield
+
+
 # ── Feature gate ──────────────────────────────────────────────────────────────
 
-def test_enqueue_404_when_disabled(client, db, make_book):
-    assert settings.send_to_koreader is False  # default off (beta)
+def test_default_is_on():
+    assert settings.send_to_koreader is True  # default on since v1.7.0
+
+
+def test_enqueue_404_when_disabled(client, db, make_book, koreader_off):
     user = _user(db)
     book = make_book(title="Gated")
     r = client.post("/api/send-to-device/koreader",
@@ -62,7 +72,7 @@ def test_enqueue_404_when_disabled(client, db, make_book):
     assert r.status_code == 404
 
 
-def test_inbox_404_when_disabled(client, db):
+def test_inbox_404_when_disabled(client, db, koreader_off):
     user = _user(db)
     r = client.get("/api/tome-sync/inbox", headers=_api_key(db, user.id))
     assert r.status_code == 404

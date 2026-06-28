@@ -485,7 +485,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Tome",
         description="Self-hosted ebook library",
-        version="0.1.0",
+        version="1.7.0",
         lifespan=lifespan,
         docs_url="/api/docs",
         redoc_url="/api/redoc",

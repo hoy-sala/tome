@@ -57,12 +57,11 @@ class Settings(BaseSettings):
     wishlist_enabled: bool = True   # env TOME_WISHLIST_ENABLED — kill switch, defaults on
     wishlist_max_open_per_user: int = 100  # env TOME_WISHLIST_MAX — soft cap per user
 
-    # Send-to-KOReader inbox (env TOME_SEND_TO_KOREADER) — BETA, default off.
-    # When on, the web UI can queue a book to be pulled onto KOReader by the
-    # TomeSync plugin's inbox (no email/Amazon). Default flips to True in the
-    # first release that ships it, once validated; the flag remains the kill
-    # switch thereafter.
-    send_to_koreader: bool = False
+    # Send-to-KOReader inbox (env TOME_SEND_TO_KOREADER). On by default since
+    # v1.7.0 ("Signature") after real-hardware validation; the web UI queues a
+    # book to be pulled onto KOReader by the TomeSync plugin's inbox (no
+    # email/Amazon). Set to false to disable — the flag remains the kill switch.
+    send_to_koreader: bool = True
 
     # JWT settings
     jwt_algorithm: str = "HS256"

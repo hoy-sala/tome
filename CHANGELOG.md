@@ -6,6 +6,8 @@ All notable changes to Tome are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-06-28 — "Signature"
+
 ### Added
 - **Per-page reading stats from your KOReader history.** Once you've imported your
   device's reading history, each book page gains a **Reading intensity** strip —
@@ -96,6 +98,12 @@ All notable changes to Tome are documented here. Format loosely follows
   survives reboots. Requires TomeSync plugin build 21. (KOReader plugin semver
   1.5.1.)
 
+### Changed
+- **Send to KOReader is now on by default.** Queue a book from the web straight to
+  your e-reader's TomeSync inbox — no email, no Amazon. It shipped as an off-by-
+  default beta; now that it's had real-hardware time it's on out of the box
+  (`TOME_SEND_TO_KOREADER`, still settable to `false` to disable).
+
 ### Fixed
 - **KOReader no longer syncs one book's reading progress onto another.** When the
   plugin had to match a book by filename (e.g. after a file was moved or "Re-resolve
@@ -118,6 +126,10 @@ All notable changes to Tome are documented here. Format loosely follows
   than the Stats page because it only counted live TomeSync sessions and ignored
   the imported page-stat days. Both now count reconciled reading, so a single,
   consistent streak shows everywhere.
+- **A Home link in the book-page breadcrumb.** The breadcrumb root let you jump to
+  the library but not back to the Home tab — and on a phone the lone house icon
+  confusingly went to the library. It's now a proper root: **Home** then
+  **Library**, both reachable (icon-only on mobile so neither is lost).
 
 ## [1.6.0] — 2026-06-21 — "Marginalia"
 
