@@ -41,8 +41,8 @@ logger = logging.getLogger(__name__)
 # build than 13 — otherwise a device that updated to 1.2.1's build-13 impl and
 # later points at a main/1.3.0 server (also 13) would not re-download main's
 # richer impl. Hence 14.
-TOMESYNC_PLUGIN_BUILD = 23
-TOMESYNC_PLUGIN_SEMVER = "1.6.1"
+TOMESYNC_PLUGIN_BUILD = 24
+TOMESYNC_PLUGIN_SEMVER = "1.6.2"
 TOMESYNC_PLUGIN_VERSION = str(TOMESYNC_PLUGIN_BUILD)
 
 
@@ -757,7 +757,11 @@ def get_series_books(
         .all()
     )
 
-    # Use the first book's type as the series type
+    # Series-level type, kept for backwards compatibility with older plugin
+    # builds. It's representative for a real series (all volumes share a type)
+    # but NOT for the "__unserialized__" bucket, which aggregates standalone
+    # books of mixed types — so each book also carries its own `book_type`
+    # below, which newer plugins prefer when filing downloads.
     book_type_slug = books[0].book_type.slug if books and books[0].book_type else "book"
 
     return {
@@ -769,6 +773,7 @@ def get_series_books(
                 "title": b.title,
                 "series_index": b.series_index,
                 "author": b.author,
+                "book_type": b.book_type.slug if b.book_type else None,
                 "files": [
                     {"id": f.id, "format": f.format, "file_size": f.file_size}
                     for f in b.files
@@ -2355,16 +2360,19 @@ function TomeSync:_downloadSeriesBooks(series_name, books, min_index, book_type,
     -- Built-in layout: organize by book-type subfolder. A real series shares
     -- one folder; the No Series bucket files each book under its author
     -- (resolved per book below). Dirs are created lazily so a template run
-    -- doesn't leave empty default folders behind.
-    local type_dir, series_dir
-    local function ensureDefaultDirs()
-        if type_dir then return end
-        type_dir = base_dir .. "/" .. (book_type or "book")
+    -- doesn't leave empty default folders behind. The type is resolved PER BOOK
+    -- (book.book_type), not from the batch: the No Series bucket mixes types, so
+    -- a single batch type would misfile standalone books (issue #88). The batch
+    -- `book_type` is only a fallback for older servers that omit the per-book field.
+    local function ensureDefaultDirs(effective_type)
+        local type_dir = base_dir .. "/" .. effective_type
         lfs.mkdir(type_dir)
+        local series_dir
         if not is_no_series then
             series_dir = type_dir .. "/" .. util.getSafeFilename(series_name)
             lfs.mkdir(series_dir)
         end
+        return type_dir, series_dir
     end
 
     -- Build reverse lookup: book_id → local path (to skip already-downloaded books)
@@ -2376,6 +2384,10 @@ function TomeSync:_downloadSeriesBooks(series_name, books, min_index, book_type,
     -- Pre-compute the download queue so progress counts only real work.
     local queue = {{}}
     local skipped = 0
+    -- Representative "saved to" folder for the summary popup. With per-book
+    -- types the No Series bucket can span several folders, so this is just the
+    -- first real destination — a sensible "look here" pointer, not the only one.
+    local save_location
     for _, book in ipairs(books) do
         if min_index and type(book.series_index) == "number" and book.series_index <= min_index then
             skipped = skipped + 1
@@ -2387,10 +2399,16 @@ function TomeSync:_downloadSeriesBooks(series_name, books, min_index, book_type,
                 table.insert(queue, {{book = book, file = nil, dest = nil}})
             else
                 local ext = file.format or "epub"
+                -- Per-book type (server >= build 24); fall back to the batch
+                -- type for older servers. This is what fixes mixed-type No
+                -- Series downloads landing in the wrong folder (issue #88).
+                local effective_type = (type(book.book_type) == "string"
+                                        and book.book_type ~= "" and book.book_type)
+                                        or book_type or "book"
                 local dest
                 if template ~= "" then
                     local rel = renderDownloadPath(template, {{
-                        book_type = book_type or "book",
+                        book_type = effective_type,
                         series    = (not is_no_series) and series_name or "",
                         volume    = type(book.series_index) == "number"
                                     and book.series_index or nil,
@@ -2405,7 +2423,7 @@ function TomeSync:_downloadSeriesBooks(series_name, books, min_index, book_type,
                 if not dest then
                     -- Built-in layout (also the fallback when a template
                     -- renders to nothing usable for this book).
-                    ensureDefaultDirs()
+                    local type_dir, series_dir = ensureDefaultDirs(effective_type)
                     local display_title
                     if type(book.series_index) == "number" then
                         local vol = book.series_index
@@ -2431,6 +2449,7 @@ function TomeSync:_downloadSeriesBooks(series_name, books, min_index, book_type,
                 if lfs.attributes(dest) then
                     skipped = skipped + 1
                 else
+                    save_location = save_location or dest:match("^(.*)/[^/]+$")
                     table.insert(queue, {{book = book, file = file, dest = dest}})
                 end
             end
@@ -2489,7 +2508,7 @@ function TomeSync:_downloadSeriesBooks(series_name, books, min_index, book_type,
         UIManager:show(InfoMessage:new{{
             text = string.format(
                 "%s\\n\\nDownloaded: %d\\nSkipped: %d\\nFailed: %d\\n\\nSaved to: %s",
-                batch_label, downloaded, skipped, failed, series_dir or type_dir
+                batch_label, downloaded, skipped, failed, save_location or base_dir
             ),
             timeout = 8,
         }})

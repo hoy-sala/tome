@@ -152,5 +152,8 @@ def test_build_bumped_for_rebake():
     # history) so stats backfill reading from before TomeSync (time & pages only).
     # 1.6.1 / build 23 makes the sync back-off time-based (+ clears on
     # NetworkConnected) so it self-heals instead of latching offline after sleep.
-    assert TOMESYNC_PLUGIN_BUILD >= 23
-    assert TOMESYNC_PLUGIN_SEMVER == "1.6.1"
+    # 1.6.2 / build 24 files each download under its own book type (issue #88):
+    # the No Series bucket mixes types, so a single batch type misfiled standalone
+    # books (e.g. RoyalRoad titles landing in light_novel).
+    assert TOMESYNC_PLUGIN_BUILD >= 24
+    assert TOMESYNC_PLUGIN_SEMVER == "1.6.2"

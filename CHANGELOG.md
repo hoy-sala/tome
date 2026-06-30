@@ -29,6 +29,14 @@ All notable changes to Tome are documented here. Format loosely follows
   Small "i" hints explain the progress and reading-intensity charts in plain language.
 
 ### Fixed
+- **Standalone books download to the correct book-type folder in KOReader.** A book
+  with no series — say a RoyalRoad title — could be filed under the wrong type's
+  folder (e.g. `light_novel`) when downloaded through the plugin, while books in a
+  series went to the right place. The plugin filed an entire batch under a single
+  type, which is fine for a real series but wrong for the "No Series" bucket, where
+  standalone books of different types are mixed together. Each book now carries its
+  own type and is filed accordingly, in both the built-in layout and custom download
+  templates. Requires plugin build 24 (1.6.2), delivered via the usual in-app update.
 - **Reading progress for device-read books is no longer understated.** A book you
   were, say, 35% through could show as 11% — both in its **progress** figure and in
   the **Completion Estimates** tile (which then wildly overestimated the time left).
