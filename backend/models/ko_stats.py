@@ -19,6 +19,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -43,6 +44,9 @@ class PageStat(Base):
             "user_id", "book_id", "page", "start_time", "device",
             name="uq_ko_page_stat_identity",
         ),
+        # The re-reads block group-bys (user, book, page) over the full history;
+        # existing DBs get this via the startup CREATE INDEX IF NOT EXISTS.
+        Index("ix_ko_page_stats_user_book_page", "user_id", "book_id", "page"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

@@ -19,6 +19,34 @@ from backend.models.user_book_status import UserBookStatus
 from backend.services.reading_day import date_modifier, effective_today, epoch_day, epoch_day_int
 
 
+def _covered_fraction(page_rows) -> float:
+    """Fraction of the book covered by dwelled pages, pagination-robust.
+
+    Each (page, total_pages) row covers the fraction interval
+    [(page-1)/total, page/total); the union's length is the coverage. Mixing
+    absolute page numbers across paginations either under- or over-counts —
+    250 pages of a fully-read 250-page pagination cover the whole book even if
+    the latest pagination says 1571 pages.
+    """
+    ivs = sorted(
+        ((p - 1) / tp, p / tp)
+        for p, tp in page_rows
+        if tp and tp > 0 and p and p > 0
+    )
+    covered = 0.0
+    cur_s = cur_e = None
+    for s, e in ivs:
+        if cur_e is None or s > cur_e + 1e-9:
+            if cur_e is not None:
+                covered += cur_e - cur_s
+            cur_s, cur_e = s, e
+        else:
+            cur_e = max(cur_e, e)
+    if cur_e is not None:
+        covered += cur_e - cur_s
+    return min(covered, 1.0)
+
+
 # ── Per-book, per-user ────────────────────────────────────────────────────────
 
 def compute_book_reading_stats(
@@ -115,23 +143,45 @@ def compute_book_reading_stats(
     ps = (
         db.query(
             func.coalesce(func.sum(PageStat.duration_seconds), 0),
-            func.count(func.distinct(PageStat.page)),
             func.min(PageStat.start_time),
             func.max(PageStat.start_time),
-            func.max(PageStat.total_pages),
-            func.max(PageStat.page),
+            # Furthest *position* as a per-row fraction: a page number only means
+            # anything against its own row's pagination (font changes re-paginate),
+            # so max(page)/max(total_pages) across paginations understates badly.
+            func.max(PageStat.page * 1.0 / PageStat.total_pages),
         )
         .filter(PageStat.user_id == user_id, PageStat.book_id == book_id)
         .one()
     )
     ps_seconds = int(ps[0] or 0)
     ps_total_pages = 0
-    ps_max_page = 0
+    ps_position = 0.0
     if ps_seconds > 0:
         total_seconds = ps_seconds
-        pages_turned = int(ps[1] or 0)          # distinct pages genuinely read
-        ps_total_pages = int(ps[4] or 0)
-        ps_max_page = int(ps[5] or 0)           # furthest page reached (position fallback)
+        ps_position = min(float(ps[3] or 0.0), 1.0)   # furthest fraction reached
+        # Latest pagination — total_pages from the max(start_time) row (SQLite's
+        # bare-column rule applies: exactly one aggregate). max(total_pages)
+        # would let a long-gone pagination inflate the denominator forever.
+        latest = (
+            db.query(PageStat.total_pages, func.max(PageStat.start_time))
+            .filter(PageStat.user_id == user_id, PageStat.book_id == book_id,
+                    PageStat.total_pages > 0)
+            .one()
+        )
+        ps_total_pages = int(latest[0] or 0)
+        # Pages read = covered fraction × latest pagination, so coverage from
+        # different paginations doesn't mix absolute page numbers ("250 of 1571").
+        page_rows = (
+            db.query(PageStat.page, PageStat.total_pages)
+            .filter(PageStat.user_id == user_id, PageStat.book_id == book_id,
+                    PageStat.total_pages > 0)
+            .distinct()
+            .all()
+        )
+        if ps_total_pages > 0:
+            pages_turned = round(_covered_fraction(page_rows) * ps_total_pages)
+        else:
+            pages_turned = len({p for p, _tp in page_rows})
         # Daily buckets from page-stats, by reading day (local + 4h rollover).
         day_rows = (
             db.query(
@@ -150,10 +200,10 @@ def compute_book_reading_stats(
         ]
         sessions = len(session_timeline)        # one "session" per reading day
         avg_session_seconds = round(total_seconds / sessions) if sessions else 0
+        if ps[1]:
+            first_read = datetime.fromtimestamp(int(ps[1]), timezone.utc).isoformat()
         if ps[2]:
-            first_read = datetime.fromtimestamp(int(ps[2]), timezone.utc).isoformat()
-        if ps[3]:
-            last_read = datetime.fromtimestamp(int(ps[3]), timezone.utc).isoformat()
+            last_read = datetime.fromtimestamp(int(ps[2]), timezone.utc).isoformat()
         total_minutes = total_seconds / 60.0
         if total_minutes > 0 and pages_turned > 0:
             pace_pages_per_min = round(pages_turned / total_minutes, 2)
@@ -258,12 +308,13 @@ def compute_book_reading_stats(
 
     # ── Progress = how far through the book ──────────────────────────────────
     # Best available evidence of position: the synced reading position OR the
-    # furthest page reached. Page-stats are *coverage*, so use the furthest page,
-    # never the distinct-page count (which trails position when pages are
-    # skimmed). max() handles both directions: a synced position ahead of the
-    # dwell history (you skimmed/jumped), and a stale-low position behind pages
-    # you've since read. A finished book is always 100%.
-    page_progress = (ps_max_page / ps_total_pages) if (ps_total_pages and ps_max_page) else 0.0
+    # furthest position reached (per-row page/total_pages fraction — robust to
+    # pagination changes). Page-stats are *coverage*, so use the furthest
+    # position, never the distinct-page count (which trails position when pages
+    # are skimmed). max() handles both directions: a synced position ahead of
+    # the dwell history (you skimmed/jumped), and a stale-low position behind
+    # pages you've since read. A finished book is always 100%.
+    page_progress = ps_position
     if book_status == "read":
         progress = 1.0
     else:
@@ -342,9 +393,13 @@ def compute_book_page_intensity(
 
     curve = [0] * bins
     bin_days: dict[int, set] = defaultdict(set)
-    distinct_pages: set[int] = set()
     total_seconds = 0
+    # "Latest" pagination = the most recent row's total_pages. NOT max():
+    # reopening a finished 250-page book once at a 1571-page pagination must
+    # not turn it into "250 of 1571 pages".
     latest_total_pages = 0
+    latest_start = -1
+    page_pairs: set[tuple[int, int]] = set()
 
     for page, total_pages, dur, start_time in rows:
         if not total_pages or total_pages <= 0:
@@ -355,16 +410,18 @@ def compute_book_page_intensity(
         dur = int(dur or 0)
         curve[b] += dur
         total_seconds += dur
-        distinct_pages.add(int(page))
-        latest_total_pages = max(latest_total_pages, int(total_pages))
+        page_pairs.add((int(page), int(total_pages)))
+        if int(start_time or 0) >= latest_start:
+            latest_start = int(start_time or 0)
+            latest_total_pages = int(total_pages)
         # reading-day bucket (page revisited on a different day ⇒ a re-read)
         bin_days[b].add(epoch_day_int(int(start_time), tz_offset) if start_time else 0)
 
-    pages_read = len(distinct_pages)
-    pct_read = (
-        min(round(pages_read / latest_total_pages * 100, 1), 100.0)
-        if latest_total_pages else 0.0
-    )
+    # Coverage as a fraction-space interval union — pagination-robust — then
+    # expressed against the latest pagination for the "X of Y pages" line.
+    covered = _covered_fraction(page_pairs)
+    pages_read = round(covered * latest_total_pages) if latest_total_pages else 0
+    pct_read = min(round(covered * 100, 1), 100.0) if latest_total_pages else 0.0
     reread_bins = sum(1 for days in bin_days.values() if len(days) > 1)
 
     return {
