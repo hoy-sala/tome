@@ -66,12 +66,26 @@ import { withBase } from '../../lib/path'
   <h2>Fetching metadata</h2>
   <p>
     Click <strong>Fetch metadata</strong> on a book's detail page. Tome queries Hardcover, Google
-    Books, and Open Library, then shows you a side-by-side diff of each candidate against your
-    current data. You pick which fields to apply — nothing changes until you confirm.
+    Books, and Open Library in parallel — and for manga, comics and other sequential-art types,
+    <strong>AniList</strong> too (no API key needed), which knows series, staff, genres and covers
+    far better than the prose-first sources. Then it shows a side-by-side diff of each candidate
+    against your current data. You pick which fields to apply — nothing changes until you confirm.
+  </p>
+  <div class="docs-shot">
+    <ThemedShot client:load name="metadata-fetch" alt="The fetch dialog: merged candidates ranked by relevance, the Best match chip, and per-source labels" />
+  </div>
+  <p>
+    The same book seen by several sources is <strong>merged into one candidate</strong> whose
+    missing fields are filled from the others (Hardcover knows series but not language; Google the
+    reverse), and results are ranked by relevance — the right <em>volume</em> of a series beats the
+    wrong volume from a "better" source, and a light novel won't match its manga adaptation.
+    The top result carries a <strong>Best match</strong> chip, and each candidate is labeled with
+    its source. If a source is rate-limited or down, the dialog says so instead of pretending the
+    book doesn't exist.
   </p>
   <p>
-    Each source is labeled (HC, Google, OpenLib) so you can see where the data comes from.
     Description, cover, tags, year, and publisher are the fields most often worth fetching.
+    Applying a candidate never wipes tags you added by hand.
   </p>
 
   <h2>Cover picker</h2>

@@ -68,8 +68,14 @@ const deviceSnippet  = '# Mount the device, then copy:\nunzip tomesync.koplugin.
     position is its identity, so the same passage marked on two devices is one highlight;
     edits resolve last-write-wins and deletes propagate (a highlight removed on one device
     won't reappear from another). Device-to-device sync needs both devices to have the
-    Tome-served copy of the book. Rendering highlights inside the web reader is a separate,
-    later step.
+    Tome-served copy of the book.
+  </p>
+  <p>
+    The sync is <strong>bidirectional with the web reader</strong> too: device highlights are
+    painted in Tome's <a href={withBase("/docs/reader")}>built-in reader</a>, and a highlight
+    created <em>on the web</em> is adopted by KOReader at the book's next sync — the plugin
+    locates the passage natively and turns it into a first-class KOReader highlight. Note edits
+    and deletes made on the web win on every device at its next sync.
   </p>
   <ThemedShot client:load name="koreader-highlights" alt="KOReader highlights and notes shown on a book's detail page in Tome" className="w-full block" />
   <figure style="margin: 1.5rem auto; max-width: 320px; text-align: center;">

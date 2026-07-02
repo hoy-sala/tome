@@ -68,6 +68,40 @@ services:
     <li>Click <strong>Accept</strong> to publish, or <strong>Reject</strong> to delete the file from <code>/bindery</code>.</li>
   </Steps>
 
+  <h3>Reviewing a batch</h3>
+  <p>
+    Select several files and hit <strong>Review</strong> for a batch view: shared fields
+    (series, author, book type, <strong>libraries</strong>) with per-field
+    <strong>Apply to all</strong>, plus a compact row per file.
+  </p>
+  <div class="docs-shot">
+    <ThemedShot client:load name="bindery-review" alt="Batch review: shared fields with apply-to-all, per-file rows, and the metadata suggestions panel targeting the selected file" />
+  </div>
+  <ul>
+    <li>
+      <strong>Libraries in one step</strong> — pick the libraries a book should land in right in
+      the review form (or for the whole batch), instead of filing each book afterwards from its
+      detail page. The book type's own library is always added automatically. There's also an
+      <strong>Add to libraries</strong> picker in the Bindery toolbar itself: set it once and the
+      next <strong>Quick Accept</strong> or <strong>Review</strong> run files everything into
+      those libraries, then it resets.
+    </li>
+    <li>
+      <strong>Per-file suggestions</strong> — the metadata suggestions panel targets whichever
+      file row you click (the active row is highlighted); its search re-seeds for that file and
+      clicking a candidate fills that file's form.
+    </li>
+    <li>
+      <strong>Match all</strong> — fetches and applies the best candidate to <em>every</em> file
+      in the batch. Trust the matcher, eyeball the rows, <strong>Accept All</strong>.
+    </li>
+  </ul>
+  <p>
+    If you fully trust the matches, skip review entirely: select files and use
+    <strong>Quick Accept</strong> — it fetches, applies the best candidate, and accepts each file
+    in one pass.
+  </p>
+
   <h3>Auto-import</h3>
   <p>
     Set <code>TOME_AUTO_IMPORT=true</code> and Tome scans <code>/bindery</code> on a schedule

@@ -1,0 +1,73 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro'
+import SectionHero from '../../components/SectionHero.astro'
+import DocsMeta from '../../components/DocsMeta.astro'
+import Callout from '../../components/Callout.astro'
+import { ThemedShot } from '../../components/ThemedShot'
+import { withBase } from '../../lib/path'
+---
+<DocsLayout title="Home & focus mode" description="The landing page: a dashboard of your reading life, or a minimalist focus view that surfaces the one book you should pick up next.">
+  <SectionHero section="features" />
+  <h1>Home &amp; focus mode</h1>
+  <p>
+    Home is Tome's landing tab. It has two personalities — a <strong>dashboard</strong> that
+    summarises your reading life, and a minimalist <strong>focus</strong> view for when you just
+    want to keep reading. Toggle between them from the Home header; your choice is remembered.
+  </p>
+  <DocsMeta />
+
+  <h2>Focus mode</h2>
+  <p>
+    Focus surfaces the one book you're most likely to pick up next — your most-recently-synced
+    in-progress title — as a large cover with the upcoming volumes of its series fanned behind it.
+    Alongside: the series and your place in it, reading progress, where you last synced from, and a
+    one-click <strong>Resume reading</strong>. The quiet <strong>Currently reading</strong> strip
+    underneath switches the spotlight to any other in-progress book; clicking the cover or the
+    series name jumps to the series page.
+  </p>
+  <div class="docs-shot">
+    <ThemedShot client:load name="home-focus" alt="Focus mode: the spotlighted volume with the rest of the series fanned behind it, progress, and Resume reading" />
+  </div>
+
+  <h2>The dashboard</h2>
+  <p>
+    The dashboard is the fuller Home: reading streak, recent activity, currently-reading shelf,
+    goals, and a right-hand rail of at-a-glance cards. It's the same data that powers
+    <a href={withBase("/docs/stats")}>Reading stats</a>, distilled to a landing page.
+  </p>
+
+  <h3>Reading DNA</h3>
+  <p>
+    The rail's <strong>Reading DNA</strong> card distils your habits into a reading personality —
+    an archetype like <em>Night-Owl Epic Specialist</em>, derived from a few traits: when you
+    read, how long your sessions run, how consistently you show up, and how widely you range
+    across the library. Each trait renders as a spectrum, so you can see <em>why</em> you got the
+    archetype. The same card is available as a tile on the Stats page (add it from
+    <strong>Add tile</strong> under Habits); the card's <strong>Full breakdown</strong> link takes
+    you there.
+  </p>
+  <figure style="margin: 1.5rem auto; max-width: 420px;">
+    <ThemedShot client:load name="home-dna" alt="The Reading DNA card: an archetype with the trait spectrums that produced it" />
+  </figure>
+
+  <h3>Upcoming releases</h3>
+  <p>
+    If you follow series (see <a href={withBase("/docs/wishlist")}>Wishlist</a>), the rail also
+    shows the next volumes with known release dates — soonest first.
+  </p>
+  <figure style="margin: 1.5rem auto; max-width: 420px;">
+    <ThemedShot client:load name="home-upcoming" alt="Upcoming releases: followed series with their next volume number and date" />
+  </figure>
+
+  <h3>On this day</h3>
+  <p>
+    A rail card resurfaces a highlight you made on this day in a previous month or year — a small
+    daily nudge from your own <a href={withBase("/docs/highlights")}>commonplace book</a>.
+  </p>
+
+  <Callout variant="note" title="Which books count as 'in progress'?">
+    Focus mode and the currently-reading strip draw from per-user reading status — books marked
+    <strong>reading</strong>, whether that status came from the web reader, KOReader sync, or a
+    manual change on the book page.
+  </Callout>
+</DocsLayout>

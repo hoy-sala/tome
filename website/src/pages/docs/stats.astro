@@ -149,6 +149,14 @@ import { withBase } from '../../lib/path'
   <h2>Habits board</h2>
   <p>The "when and how do I read?" board.</p>
 
+  <h3>Reading DNA</h3>
+  <p>
+    A tile version of the Home page's <a href={withBase("/docs/home")}>Reading DNA</a> card: your
+    reading personality as an archetype plus the trait spectrums that produced it (short reads vs.
+    long epics, focused vs. eclectic, early bird vs. night owl, …). Add it from
+    <strong>Add tile</strong> under Habits.
+  </p>
+
   <h3>Hour × day-of-week heatmap</h3>
   <div class="docs-shot-bare">
     <ThemedShot client:load name="stats-heatmap" alt="Hour-by-day-of-week reading intensity heatmap" />
@@ -288,6 +296,12 @@ import { withBase } from '../../lib/path'
   <div class="docs-shot-bare">
     <ThemedShot client:load name="book-intensity" alt="Reading intensity strip on a book page: per-page dwell across the book, pages read, and re-read stretches" />
   </div>
+  <p>
+    The same per-book view carries a full <strong>reading log</strong>: every session with device,
+    duration and pages, your day-by-day progress, and a per-book time total. You can
+    <strong>log a session by hand</strong> (paper reading, or a device that wasn't synced) and
+    <strong>export</strong> a book's log to CSV or JSON.
+  </p>
 
   <h2>Charts that aren't here yet</h2>
   <p>

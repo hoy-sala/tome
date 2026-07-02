@@ -71,6 +71,32 @@ import { withBase } from '../../lib/path'
     <ThemedShot client:load name="wishlist" alt="Member wishlist showing a whole-series wish with 16-of-16 coverage and a single-book wish" />
   </div>
 
+  <h2>Following a series — release detection</h2>
+  <p>
+    Beyond wanting books you don't have, you can <strong>follow</strong> a series you're
+    collecting: Tome polls Hardcover on a schedule and tells you when a <em>new volume</em> is
+    out. Follow from the <strong>Following</strong> strip at the top of the Wishlist page (search
+    Hardcover by series name) or straight from a series page's <strong>Follow</strong> button.
+  </p>
+  <div class="docs-shot">
+    <ThemedShot client:load name="wishlist-following" alt="The Following strip: search Hardcover for a series, with follow cards showing the latest known volume vs. what you own" />
+  </div>
+  <p>
+    Following starts <em>silent</em>: it primes at the series' current latest volume, so following
+    a 27-volume series doesn't fire 27 alerts. When the tracker's latest volume number grows past
+    that, you get a bell notification — and an email, when SMTP is configured. Releases with a
+    known date also appear in the <strong>Upcoming releases</strong> card on the Home dashboard.
+  </p>
+  <figure style="margin: 1.5rem auto; max-width: 420px;">
+    <ThemedShot client:load name="home-upcoming" alt="The Home rail's Upcoming releases card: followed series with their next volume and release date" />
+  </figure>
+  <Callout variant="note" title="Opt-in">
+    Release detection is off by default. Set <code>TOME_RELEASE_DETECTION=true</code> (it also
+    needs your <code>TOME_HARDCOVER_TOKEN</code>); tune the poll cadence with
+    <code>TOME_RELEASE_CHECK_INTERVAL</code> (seconds, default daily). When it's off, the Follow
+    button and Following strip simply don't render.
+  </Callout>
+
   <h2>Admin: the Wishlist tab</h2>
   <p>
     The <strong>Wishlist</strong> tab in <a href={withBase("/docs/admin")}>/admin</a> lists every
@@ -123,6 +149,8 @@ import { withBase } from '../../lib/path'
     <tbody>
       <tr><td><code>TOME_WISHLIST_ENABLED</code></td><td><code>true</code></td><td>Master switch for the whole feature</td></tr>
       <tr><td><code>TOME_WISHLIST_MAX</code></td><td><code>100</code></td><td>Soft cap on open wishes per user (409 when exceeded)</td></tr>
+      <tr><td><code>TOME_RELEASE_DETECTION</code></td><td><code>false</code></td><td>Enable series following + new-volume alerts (needs a Hardcover token)</td></tr>
+      <tr><td><code>TOME_RELEASE_CHECK_INTERVAL</code></td><td><code>86400</code></td><td>Seconds between release checks (daily)</td></tr>
     </tbody>
   </table>
   <p>

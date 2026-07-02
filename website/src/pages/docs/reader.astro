@@ -54,6 +54,41 @@ import { withBase } from '../../lib/path'
     </tbody>
   </table>
 
+  <h2>Highlights &amp; notes</h2>
+  <p>
+    Your KOReader highlights are painted right in the text, in their KOReader colours. Each
+    highlight is located by its own <em>text</em> (device position formats don't translate to the
+    web reader's engine), so a passage that can't be found simply doesn't paint rather than
+    landing on the wrong words. Highlights load lazily per chapter — big collections don't slow
+    the reader down.
+  </p>
+  <div class="docs-shot">
+    <ThemedShot client:load name="reader-annotations" alt="A synced highlight painted over the opening of Frankenstein in the web reader" />
+  </div>
+
+  <h3>Creating a highlight on the web</h3>
+  <p>
+    Select any passage and a small popover offers the five KOReader colours and an optional note.
+    The highlight paints immediately and syncs <em>to your devices</em>: the next time KOReader
+    opens the book it locates the passage natively and adopts it as a first-class KOReader
+    highlight — from then on it behaves exactly like one made on the device.
+  </p>
+  <div class="docs-shot">
+    <ThemedShot client:load name="reader-annotation-create" alt="Selecting text pops a colour picker to create a highlight" />
+  </div>
+
+  <h3>The highlight card</h3>
+  <p>
+    Tap any painted highlight to see the full passage, its chapter and date, and the note. From
+    here you can <strong>edit the note</strong> or <strong>delete</strong> the highlight — including
+    ones made on the device — and the change wins everywhere at the next sync. Highlights also
+    appear on the book page and in the cross-library
+    <a href={withBase("/docs/highlights")}>Highlights</a> view.
+  </p>
+  <div class="docs-shot">
+    <ThemedShot client:load name="reader-annotation-card" alt="The tap card: passage, note, chapter and date, with edit-note and delete actions" />
+  </div>
+
   <h2>Manga / CBZ reader</h2>
   <p>
     Custom streaming reader — pages are fetched on demand from the server, so you can open a 2 GB

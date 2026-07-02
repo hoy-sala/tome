@@ -193,7 +193,12 @@ const SHOTS = [
   { name: 'users-list',  path: '/users',    viewport: { width: 1600, height: 2000, deviceScaleFactor: 2 }, settle: 1000, autoCrop: true },
   { name: 'admin-page',  path: '/admin',    viewport: { width: 1600, height: 2000, deviceScaleFactor: 2 }, settle: 1000, autoCrop: true },
   { name: 'settings',    path: '/settings', viewport: { width: 1600, height: 2400, deviceScaleFactor: 2 }, settle: 1000, autoCrop: true },
-  { name: 'bindery',     path: '/bindery',  viewport: { width: 1600, height: 2000, deviceScaleFactor: 2 }, settle: 1000, autoCrop: true },
+  { name: 'bindery',     path: '/bindery',  viewport: { width: 1600, height: 880, deviceScaleFactor: 2 }, settle: 1200, autoCrop: true,
+    after: async (page) => {
+      // select everything so the toolbar (Review / Quick Accept / Add to libraries) shows
+      for (const cb of await page.locator('input[type="checkbox"]').all()) await cb.check().catch(() => {})
+      await page.waitForTimeout(400)
+    } },
 
   // Section/modal tight crops — capture exactly one block of UI via element selector.
   {
@@ -546,6 +551,143 @@ const SHOTS = [
     element: 'div.rounded-xl:has(p:has-text("Hitch"))',
   },
 
+  // ── Home: focus mode, Reading DNA, upcoming releases (docs roundtrip) ──────
+  {
+    name: 'home-focus',
+    path: '/',
+    viewport: DESKTOP,
+    settle: 2800,
+    prefs: { tome_home_mode: 'focus' },
+    after: async (page) => {
+      // spotlight a series book so the coverflow fan shows (standalones have none)
+      const strip = page.locator('button[title*="Skull"], button[title*="Berserk"]').first()
+      if (await strip.count()) {
+        await strip.click().catch(() => {})
+        await page.waitForTimeout(2500)
+      }
+    },
+  },
+  {
+    name: 'home-dna',
+    path: '/',
+    viewport: { width: 1600, height: 1600, deviceScaleFactor: 2 },
+    settle: 2200,
+    prefs: { tome_home_mode: 'dashboard', tome_dna_collapsed: '0' },
+    element: 'section:has(span:text-is("Reading DNA"))',
+  },
+  {
+    name: 'home-upcoming',
+    path: '/',
+    viewport: { width: 1600, height: 1600, deviceScaleFactor: 2 },
+    settle: 2200,
+    prefs: { tome_home_mode: 'dashboard' },
+    element: 'section:has(h2:has-text("Upcoming releases"))',
+  },
+
+  // ── Release detection: follow a series ─────────────────────────────────────
+  {
+    name: 'wishlist-following',
+    path: '/wishlist',
+    viewport: { width: 1500, height: 1300, deviceScaleFactor: 2 },
+    settle: 1800,
+    element: 'div:has(> div > h2:text-is("Following"))',
+    pad: 32,
+  },
+
+  // ── Metadata fetch dialog (merged candidates, best match, sources) ─────────
+  {
+    name: 'metadata-fetch',
+    path: () => `/books/${bookIds.berserk1 ?? 1}`,
+    viewport: { width: 1600, height: 1200, deviceScaleFactor: 2 },
+    settle: 1200,
+    after: async (page) => {
+      await page.locator('button:has(span:text-is("Fetch Metadata"))').first().click()
+        .catch(() => page.locator('button:has-text("Fetch Metadata")').first().click().catch(() => {}))
+      // live external searches — give it time, then let results settle
+      await page.locator('text=Best match').first().waitFor({ timeout: 45000 }).catch(() => {})
+      await page.waitForTimeout(1200)
+      await maskModalBackdrop(page)
+    },
+    element: 'div.fixed.inset-0 > div',
+  },
+
+  // ── Bindery review (libraries picker, match all, targeted suggestions) ─────
+  {
+    name: 'bindery-review',
+    path: '/bindery',
+    viewport: { width: 1600, height: 1300, deviceScaleFactor: 2 },
+    settle: 1800,
+    after: async (page) => {
+      for (const cb of await page.locator('input[type="checkbox"]').all()) {
+        await cb.check().catch(() => {})
+      }
+      await page.waitForTimeout(300)
+      await page.getByRole('button', { name: /review/i }).first().click().catch(() => {})
+      // wait for the suggestions panel's initial fetch to finish
+      await page.waitForTimeout(6000)
+    },
+  },
+
+  // ── Web reader annotations (create popover, painted highlight, tap card) ───
+  {
+    name: 'reader-annotation-create',
+    path: () => `/reader/${bookIds.frankenstein ?? 1}`,
+    viewport: { width: 1400, height: 1000, deviceScaleFactor: 2 },
+    settle: 2500,
+    syncReaderTheme: true,
+    after: async (page) => {
+      await seekToAnnotation(page)   // navigate to Letter 1
+      // select a DIFFERENT sentence so the popover isn't over the highlight
+      for (const f of page.frames()) {
+        try {
+          const ok = await f.evaluate(() => {
+            const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+            let node
+            while ((node = walker.nextNode())) {
+              const i = node.textContent.indexOf('I am already far north of London')
+              if (i >= 0) {
+                const end = node.textContent.indexOf('fills me')
+                const range = document.createRange()
+                range.setStart(node, i)
+                range.setEnd(node, end > i ? end + 'fills me'.length : node.textContent.length)
+                const sel = document.getSelection()
+                sel.removeAllRanges(); sel.addRange(range)
+                return true
+              }
+            }
+            return false
+          })
+          if (ok) break
+        } catch { /* cross-frame */ }
+      }
+      await page.waitForTimeout(1200)
+    },
+  },
+  // ── Web reader annotations (painted highlight + tap card) ──────────────────
+  {
+    name: 'reader-annotations',
+    path: () => `/reader/${bookIds.frankenstein ?? 1}`,
+    viewport: { width: 1400, height: 1000, deviceScaleFactor: 2 },
+    settle: 2500,
+    syncReaderTheme: true,
+    after: async (page) => {
+      await seekToAnnotation(page)
+    },
+  },
+  {
+    name: 'reader-annotation-card',
+    path: () => `/reader/${bookIds.frankenstein ?? 1}`,
+    viewport: { width: 1400, height: 1000, deviceScaleFactor: 2 },
+    settle: 2500,
+    syncReaderTheme: true,
+    after: async (page) => {
+      const r = await seekToAnnotation(page)
+      if (!r) return
+      await page.mouse.click(r.x, r.y)
+      await page.waitForTimeout(1200)
+    },
+  },
+
   // Mobile (PWA)
   { name: 'mobile-home', path: '/', mobile: true, waitFor: 'h2, h3, [class*="streak"]' },
   // The dashboard remembers the active board server-side, so a previous shot's
@@ -608,9 +750,50 @@ async function login() {
   return j.access_token
 }
 
+
+// Bring the seeded showcase highlight (opening sentence of Letter 1 in
+// Frankenstein) on screen and return its centre in iframe coordinates.
+// The overlay itself is not reachable from the outside, but the TEXT is —
+// find the sentence's Range in the section frame and use its box.
+async function seekToAnnotation(page) {
+  await page.waitForSelector('foliate-view', { timeout: 8000 }).catch(() => {})
+  await page.waitForTimeout(2500)
+  await page.evaluate(() => {
+    const v = document.querySelector('foliate-view')
+    const t = v?.book?.toc?.find(t => /letter\s*1\b/i.test(t.label))
+    if (t) v.goTo(t.href)
+  }).catch(() => {})
+  await page.waitForTimeout(3000)
+  for (const f of page.frames()) {
+    try {
+      const r = await f.evaluate(() => {
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+        let node
+        while ((node = walker.nextNode())) {
+          const i = node.textContent.indexOf('You will rejoice to hear')
+          if (i >= 0) {
+            const range = document.createRange()
+            range.setStart(node, i)
+            range.setEnd(node, Math.min(node.textContent.length, i + 60))
+            const b = range.getBoundingClientRect()
+            return { x: b.x + b.width / 2, y: b.y + b.height / 2 }
+          }
+        }
+        return null
+      })
+      if (r) {
+        const frameEl = await f.frameElement().catch(() => null)
+        const box = frameEl ? await frameEl.boundingBox() : null
+        return box ? { x: box.x + r.x, y: box.y + r.y } : null
+      }
+    } catch { /* cross-frame */ }
+  }
+  return null
+}
+
 async function resolveBookIds(token) {
   // Look up book IDs by title. Keeps the script working across re-seeds.
-  const wanted = { frankenstein: 'Frankenstein', goodGuys2: 'Heir Today, Pawn Tomorrow', hitchhiker: "The Hitchhiker's Guide to the Galaxy", dune: 'Dune' }
+  const wanted = { frankenstein: 'Frankenstein', goodGuys2: 'Heir Today, Pawn Tomorrow', hitchhiker: "The Hitchhiker's Guide to the Galaxy", dune: 'Dune', berserk1: 'Berserk, Vol. 1' }
   for (const [key, title] of Object.entries(wanted)) {
     try {
       const r = await fetch(`${API}/api/books?q=${encodeURIComponent(title)}&per_page=5`, {
@@ -720,7 +903,21 @@ async function captureShot(browser, token, shot) {
   if (shot.element) {
     const locator = page.locator(shot.element).first()
     await locator.waitFor({ timeout: 6000 }).catch(() => {})
-    await locator.screenshot({ path: file })
+    if (shot.pad) {
+      // generous breathing room around tight sections (borderless crops)
+      const b = await locator.boundingBox()
+      if (!b) throw new Error(`${shot.name}: element has no box`)
+      const vp = page.viewportSize()
+      const clip = {
+        x: Math.max(0, b.x - shot.pad),
+        y: Math.max(0, b.y - shot.pad),
+        width: Math.min(vp.width, b.x + b.width + shot.pad) - Math.max(0, b.x - shot.pad),
+        height: Math.min(vp.height, b.y + b.height + shot.pad) - Math.max(0, b.y - shot.pad),
+      }
+      await page.screenshot({ path: file, clip })
+    } else {
+      await locator.screenshot({ path: file })
+    }
     await context.close()
     return file
   }

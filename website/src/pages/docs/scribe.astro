@@ -131,6 +131,13 @@ const seriesSnippet = `# Fill series-level metadata (status + arcs) from LLM kno
     publisher's site when the metadata APIs come up empty. Fixes are batched into a single
     approve-or-reject pass.
   </p>
+  <p>
+    Two specialised passes: <code>/scribe audit years</code> compares stored years against Open
+    Library's first-publication year (catching reprint years on classics), and
+    <code>/scribe audit editions</code> finds books whose stored ISBN belongs to the <em>wrong
+    edition</em> of their series — a light novel carrying its manga adaptation's ISBN — and
+    proposes the correct edition's ISBN, publisher, year and description.
+  </p>
   <div class="docs-shot-bare">
     <ThemedShot client:load name="scribe-audit" alt="Sample /scribe audit terminal output" />
   </div>

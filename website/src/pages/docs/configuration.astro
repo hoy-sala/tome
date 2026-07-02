@@ -28,6 +28,9 @@ import { withBase } from '../../lib/path'
       <tr><td><code>TOME_PORT</code></td><td><code>8080</code></td><td>HTTP listen port</td></tr>
       <tr><td><code>TOME_PUBLIC_URL</code></td><td>—</td><td>Canonical public origin (e.g. <code>https://tome.example.org</code>) — pin it behind a reverse proxy so the KOReader plugin bakes the correct <code>https://</code> URL</td></tr>
       <tr><td><code>TOME_HARDCOVER_TOKEN</code></td><td>—</td><td>Hardcover API token (optional)</td></tr>
+      <tr><td><code>TOME_GOOGLE_BOOKS_KEY</code></td><td>—</td><td>Google Books API key — your own quota instead of the shared anonymous pool (fixes 403/429 on busy fetch days; recommended for non-English catalogues)</td></tr>
+      <tr><td><code>TOME_RELEASE_DETECTION</code></td><td><code>false</code></td><td>Follow series + new-volume alerts (needs the Hardcover token) — see <a href={withBase("/docs/wishlist")}>Wishlist</a></td></tr>
+      <tr><td><code>TOME_RELEASE_CHECK_INTERVAL</code></td><td><code>86400</code></td><td>Seconds between release checks</td></tr>
       <tr><td><code>TOME_AUTO_IMPORT</code></td><td><code>false</code></td><td>Auto-ingest from Bindery</td></tr>
       <tr><td><code>TOME_AUTO_IMPORT_INTERVAL</code></td><td><code>300</code></td><td>Seconds between scans</td></tr>
       <tr><td><code>TOME_SCAN_WORKERS</code></td><td><code>1</code></td><td>Parallel scan worker processes (1 = serial)</td></tr>
