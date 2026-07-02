@@ -7,6 +7,16 @@ All notable changes to Tome are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **Create highlights in the web reader — they appear on your KOReader.** Select
+  text while reading on the web, pick a colour, and optionally attach a note;
+  the highlight paints immediately and syncs to your devices. Since the web
+  reader and KOReader address text differently, a new highlight carries a
+  provisional identity until your device next syncs the book: the plugin locates
+  the passage natively and "adopts" it as a first-class KOReader highlight
+  (build 25 / 1.7.0). You can also **edit notes and delete** any highlight from
+  the tap-card — including ones made on the device — and the change wins on
+  every device at its next sync. A passage the device can't locate stays
+  web-only rather than landing on the wrong words.
 - **Your KOReader highlights now show up inside the web reader.** Open a book on
   the web and the passages you highlighted on your device are painted right in
   the text, in their KOReader colours; tap one to see the full passage, its note

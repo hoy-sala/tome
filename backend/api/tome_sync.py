@@ -42,8 +42,8 @@ logger = logging.getLogger(__name__)
 # build than 13 — otherwise a device that updated to 1.2.1's build-13 impl and
 # later points at a main/1.3.0 server (also 13) would not re-download main's
 # richer impl. Hence 14.
-TOMESYNC_PLUGIN_BUILD = 24
-TOMESYNC_PLUGIN_SEMVER = "1.6.2"
+TOMESYNC_PLUGIN_BUILD = 25
+TOMESYNC_PLUGIN_SEMVER = "1.7.0"
 TOMESYNC_PLUGIN_VERSION = str(TOMESYNC_PLUGIN_BUILD)
 
 
@@ -455,6 +455,12 @@ class AnnotationItem(PydanticBaseModel):
     color: Optional[str] = None
     datetime: Optional[str] = None           # KOReader creation time
     datetime_updated: Optional[str] = None   # KOReader modification time (LWW key)
+    # Set when this upsert is a device ADOPTING a web-created annotation: the
+    # provisional "web:<uuid>" anchor this item replaces. The server drops the
+    # provisional row (no tombstone — it's an identity move, not a delete).
+    # Anchors are deterministic per book copy, so two devices adopting the same
+    # web annotation produce the same real anchor and dedupe on upsert.
+    adopted_from: Optional[str] = None
 
     @property
     def mtime(self) -> str:
@@ -576,6 +582,15 @@ def sync_annotations(
             )
             db.add(row); alive[item.anchor] = row
             created += 1
+        # Adoption: the device located a web-created annotation in the book and
+        # re-anchored it natively — retire the provisional row. Runs regardless
+        # of the upsert outcome (another device may have adopted first; the
+        # canonical row then already exists and only the cleanup matters).
+        if item.adopted_from and item.adopted_from.startswith("web:"):
+            provisional = alive.get(item.adopted_from)
+            if provisional is not None:
+                db.delete(provisional)
+                alive.pop(item.adopted_from, None)
 
     for d in body.deletes:
         if not d.anchor:
@@ -1516,6 +1531,9 @@ function TomeSync:init()
     self.inbox_enabled  = false
     self.inbox_count    = 0
     self.inbox_items    = {{}}
+    -- Web-adoption ledger: real_anchor -> provisional "web:" anchor, persisted so a
+    -- failed push retries next sync (baseline alone would swallow the adoption).
+    self.adopt_pending = G_reader_settings:readSetting("tomesync_adopt_pending") or {{}}
     -- Per-book annotation sync baseline: book_id -> {{ anchor -> mtime }} as of last
     -- sync. Lets a diff tell "I deleted this" from "this is new from another device".
     self.annot_baseline = G_reader_settings:readSetting("tomesync_annot_baseline") or {{}}
@@ -2155,6 +2173,12 @@ local function annotAnchor(a)
     return (type(a.pos0) == "string" and a.pos0) or a.datetime
 end
 
+local function isWebAnchor(anchor)
+    -- Provisional anchor of a highlight created in Tome's web reader; carries no
+    -- usable position. This device "adopts" it by locating the text natively.
+    return type(anchor) == "string" and anchor:sub(1, 4) == "web:"
+end
+
 function TomeSync:_annotItem(a)
     local anchor = annotAnchor(a)
     if not anchor then return nil end
@@ -2192,13 +2216,21 @@ function TomeSync:_applyServerState(alive, tombstones)
     local changed = false
     local localmap = self:_localAnnotationMap() or {{}}
 
+    local pending_web = {{}}
     for _, s in ipairs(alive or {{}}) do
-        if s.anchor then
+        if isWebAnchor(s.anchor) then
+            -- Not a real position — never addItem it; adopt it below instead.
+            table.insert(pending_web, s)
+        elseif s.anchor then
             local L = localmap[s.anchor]
             local smtime = s.datetime_updated or s.datetime or ""
             if not L then
                 -- New highlight from another device: reconstruct so it renders.
-                local ok = pcall(function()
+                -- Rolling (crengine) docs can only draw real xPointers ("/body…");
+                -- anything else (PDF datetime fallbacks, corrupt data) would
+                -- hard-crash drawSavedHighlight → getPosFromXPointer on repaint.
+                local drawable = (not self.ui.rolling) or s.anchor:sub(1, 5) == "/body"
+                local ok = drawable and pcall(function()
                     ann:addItem({{
                         page = s.anchor, pos0 = s.anchor, pos1 = s.anchor_end or s.anchor,
                         text = s.highlighted_text, note = s.note, chapter = s.chapter,
@@ -2206,7 +2238,7 @@ function TomeSync:_applyServerState(alive, tombstones)
                         datetime = s.datetime, datetime_updated = s.datetime_updated,
                     }})
                 end)
-                changed = changed or ok
+                changed = changed or (ok == true)
             elseif smtime > L.mtime then
                 -- Newer edit from elsewhere wins (note/color/text).
                 L.item.text  = s.highlighted_text
@@ -2230,10 +2262,74 @@ function TomeSync:_applyServerState(alive, tombstones)
         end
     end
 
+    if #pending_web > 0 then
+        local adopted = self:_adoptWebAnnotations(pending_web)
+        changed = changed or (adopted > 0)
+    end
+
     if changed then
         pcall(function() self.ui:handleEvent(Event:new("AnnotationsModified", {{ nb_highlights_added = 0 }})) end)
         pcall(function() UIManager:setDirty(self.ui.dialog, "full") end)
     end
+end
+
+function TomeSync:_adoptWebAnnotations(pending)
+    -- Highlights created in Tome's web reader arrive with a provisional "web:"
+    -- anchor and no position. Locate each one's text with crengine and create a
+    -- NATIVE annotation (real xPointers); the next push carries adopted_from so
+    -- the server retires the provisional row. Anchors are deterministic per book
+    -- copy, so two devices adopting the same highlight converge on one anchor.
+    -- EPUB (rolling) only — PDF positions aren't xPointer strings.
+    local ann = self.ui and self.ui.annotation
+    if not ann or not self.ui.rolling or not self.ui.document then return 0 end
+    local adopted = 0
+    -- Text-level dedupe: a passage already highlighted locally (e.g. adopted on a
+    -- previous pull whose push failed) must not be adopted twice.
+    local seen_text = {{}}
+    for _, a in ipairs(ann.annotations or {{}}) do
+        if a.text then seen_text[a.text] = true end
+    end
+    for _, s in ipairs(pending) do
+        local text = s.highlighted_text
+        if type(text) == "string" and text ~= "" and not seen_text[text] then
+            local ok, results = pcall(function()
+                -- (pattern, case_insensitive, nb_context_words, max_hits, regex)
+                return self.ui.document:findAllText(text, false, 2, 5, false)
+            end)
+            local hit = (ok and type(results) == "table") and results[1] or nil
+            if ok and type(results) == "table" and #results > 1 and s.chapter then
+                -- Same text in several places: prefer the chapter the web named.
+                for _, r in ipairs(results) do
+                    local okc, title = pcall(function()
+                        local page = self.ui.document:getPageFromXPointer(r.start)
+                        return self.ui.toc:getTocTitleByPage(page)
+                    end)
+                    if okc and title == s.chapter then hit = r; break end
+                end
+            end
+            if hit and type(hit.start) == "string" and type(hit["end"]) == "string" then
+                local okAdd = pcall(function()
+                    ann:addItem({{
+                        page = hit.start, pos0 = hit.start, pos1 = hit["end"],
+                        text = text, note = s.note, chapter = s.chapter,
+                        color = s.color, drawer = "lighten",
+                        datetime = s.datetime, datetime_updated = s.datetime_updated,
+                    }})
+                end)
+                if okAdd then
+                    seen_text[text] = true
+                    self.adopt_pending[hit.start] = s.anchor
+                    adopted = adopted + 1
+                end
+            end
+            -- Unlocatable text (e.g. selection spanning a page-break element):
+            -- leave the provisional alone — it stays web-only, never wrong.
+        end
+    end
+    if adopted > 0 then
+        G_reader_settings:saveSetting("tomesync_adopt_pending", self.adopt_pending)
+    end
+    return adopted
 end
 
 function TomeSync:_syncAnnotations()
@@ -2263,6 +2359,29 @@ function TomeSync:_syncAnnotations()
     if not resp then return nil end   -- offline/failed: keep baseline so we retry
 
     self:_applyServerState(resp.annotations, resp.tombstones)
+
+    -- Push freshly-adopted web annotations right away (adopted_from tells the
+    -- server to retire the provisional). On failure adopt_pending persists, so
+    -- the next sync retries — the baseline alone would swallow the adoption.
+    local adopts = {{}}
+    local after1 = self:_localAnnotationMap() or {{}}
+    for anchor, prov in pairs(self.adopt_pending) do
+        local L = after1[anchor]
+        if L then
+            local it = self:_annotItem(L.item)
+            if it then it.adopted_from = prov; table.insert(adopts, it) end
+        else
+            self.adopt_pending[anchor] = nil   -- adopted copy gone locally; drop
+        end
+    end
+    if #adopts > 0 then
+        local resp2 = apiRequest("POST", "/tome-sync/annotations/" .. self.book_id .. "/sync",
+                                 {{ upserts = adopts, deletes = {{}} }})
+        if resp2 then
+            for _, it in ipairs(adopts) do self.adopt_pending[it.anchor] = nil end
+        end
+    end
+    G_reader_settings:saveSetting("tomesync_adopt_pending", self.adopt_pending)
 
     -- Rebuild the baseline from the post-merge local state.
     local newbase = {{}}

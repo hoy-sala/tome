@@ -21,12 +21,16 @@
 export interface ReaderAnnotation {
   id: number
   anchor: string
+  // Set for web-created highlights (anchor "web:…") — paints directly, no search.
+  cfi?: string | null
   highlighted_text: string | null
   note: string | null
   chapter: string | null
   color: string | null
   datetime: string | null
 }
+
+export const isWebAnnotation = (a: ReaderAnnotation) => a.anchor.startsWith('web:')
 
 /** KOReader highlight colours → translucent fills that work on all reader themes. */
 const KO_FILL: Record<string, string> = {
@@ -113,11 +117,47 @@ export class AnnotationPainter {
   /** Feed the annotation set and map the TOC; unblocks section scanning. */
   async start(annotations: ReaderAnnotation[]) {
     this.annotations = annotations.filter(a => a.highlighted_text)
+    // Web-created highlights carry their own CFI — register + paint directly.
+    for (const a of this.annotations) {
+      if (a.cfi) this.register(a, a.cfi)
+    }
     try {
       await this.buildSectionLabels()
     } finally {
       this.markReady()
     }
+  }
+
+  /** Paint a highlight just created in this session (already has its CFI). */
+  addLocal(a: ReaderAnnotation) {
+    if (!a.cfi) return
+    this.annotations.push(a)
+    this.register(a, a.cfi)
+  }
+
+  /** Remove a highlight's overlay + tracking (after a server-side delete). */
+  removeById(id: number) {
+    const cfi = this.cfiById.get(id)
+    this.annotations = this.annotations.filter(a => a.id !== id)
+    if (!cfi) return
+    this.cfiById.delete(id)
+    this.byCfi.delete(cfi)
+    void this.view.addAnnotation({ value: cfi }, true)
+  }
+
+  /** Reflect an edited note/colour on the tracked annotation object. */
+  updateLocal(a: ReaderAnnotation) {
+    const cfi = this.cfiById.get(a.id)
+    if (cfi) this.byCfi.set(cfi, a)
+    this.annotations = this.annotations.map(x => (x.id === a.id ? a : x))
+    // Repaint so a colour change shows immediately.
+    if (cfi) void this.view.addAnnotation({ value: cfi, color: a.color })
+  }
+
+  private register(a: ReaderAnnotation, cfi: string) {
+    this.cfiById.set(a.id, cfi)
+    this.byCfi.set(cfi, a)
+    void this.view.addAnnotation({ value: cfi, color: a.color })
   }
 
   /** Map TOC entries to section indexes so chapter names can gate the search. */
@@ -154,7 +194,7 @@ export class AnnotationPainter {
     const sectionLabel = this.sectionLabels.get(index)
 
     for (const a of this.annotations) {
-      if (this.cfiById.has(a.id)) continue
+      if (this.cfiById.has(a.id) || a.cfi) continue
       const chapter = a.chapter ? normalize(a.chapter) : null
       // If the annotation names a chapter we know from the TOC, only search
       // sections under that label; unknown/absent chapters search everywhere.

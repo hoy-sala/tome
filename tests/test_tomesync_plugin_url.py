@@ -155,5 +155,9 @@ def test_build_bumped_for_rebake():
     # 1.6.2 / build 24 files each download under its own book type (issue #88):
     # the No Series bucket mixes types, so a single batch type misfiled standalone
     # books (e.g. RoyalRoad titles landing in light_novel).
-    assert TOMESYNC_PLUGIN_BUILD >= 24
-    assert TOMESYNC_PLUGIN_SEMVER == "1.6.2"
+    # 1.7.0 / build 25 adopts web-created highlights: annotations made in Tome's
+    # web reader arrive under a provisional "web:" anchor; the plugin locates the
+    # text natively, creates a first-class KOReader highlight, and the sync push
+    # (adopted_from) retires the provisional server-side.
+    assert TOMESYNC_PLUGIN_BUILD >= 25
+    assert TOMESYNC_PLUGIN_SEMVER == "1.7.0"

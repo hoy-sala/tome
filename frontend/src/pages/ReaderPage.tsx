@@ -4,14 +4,14 @@ import {
   ArrowLeft, BookOpen, Settings, Rows4,
   ChevronLeft, ChevronRight, Minus, Plus, X,
   Loader2, AlignJustify, RotateCcw, GalleryHorizontalEnd, Columns2, Square,
-  StretchHorizontal, StretchVertical, StickyNote,
+  StretchHorizontal, StretchVertical, StickyNote, Trash2,
 } from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { api } from '@/lib/api'
 import type { Book, BookFile } from '@/lib/books'
 import { cn } from '@/lib/utils'
-import { AnnotationPainter, fillForColor, type ReaderAnnotation } from '@/lib/readerAnnotations'
+import { AnnotationPainter, fillForColor, isWebAnnotation, type ReaderAnnotation } from '@/lib/readerAnnotations'
 
 // pdf.js renders pages off the main thread; point it at the bundled worker.
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
@@ -35,9 +35,20 @@ interface FoliateViewElement extends HTMLElement {
   open(file: File): Promise<void>
   goTo(target: string | number): Promise<void>
   goToFraction(fraction: number): Promise<void>
+  getCFI(index: number, range: Range): string
   prev(): void
   next(): void
 }
+
+// KOReader wall-clock format — annotations compare timestamps as strings.
+function koNow(): string {
+  const d = new Date()
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
+// Colour choices for web-created highlights (KOReader's common palette).
+const HIGHLIGHT_COLORS = ['yellow', 'green', 'blue', 'purple', 'red'] as const
 
 // ── Theme / font definitions ──────────────────────────────────────────────────
 
@@ -708,6 +719,14 @@ export default function ReaderPage() {
   // KOReader highlights painted into the EPUB view; tapping one opens the card.
   const painterRef = useRef<AnnotationPainter | null>(null)
   const [activeHighlight, setActiveHighlight] = useState<ReaderAnnotation | null>(null)
+  // Text selection inside the EPUB → colour toolbar → POST → painted highlight.
+  // The range is snapshotted eagerly: clicking the toolbar (outside the iframe)
+  // can collapse the live selection before we read it.
+  const selectionRef = useRef<{ doc: Document; index: number; range: Range; text: string } | null>(null)
+  const selDocsRef = useRef<WeakSet<Document>>(new WeakSet())
+  const [selText, setSelText] = useState<string | null>(null)
+  const [noteDraft, setNoteDraft] = useState<string | null>(null)  // null = not editing
+  const [savingAnnotation, setSavingAnnotation] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const initialCfi = useRef<string | null>(null)
   const readyToSave = useRef(false)
@@ -977,6 +996,22 @@ export default function ReaderPage() {
         const detail = (e as CustomEvent).detail as { doc?: Document; index?: number } | undefined
         if (detail?.doc && detail.index != null) {
           painter.onSectionLoad(detail.doc, detail.index).catch(() => {})
+          // Track text selection per section document (attach once per doc).
+          const doc = detail.doc
+          const index = detail.index
+          if (!selDocsRef.current.has(doc)) {
+            selDocsRef.current.add(doc)
+            doc.addEventListener('selectionchange', () => {
+              const sel = doc.getSelection()
+              const text = sel && !sel.isCollapsed ? sel.toString() : ''
+              if (sel && text.trim().length > 1) {
+                selectionRef.current = { doc, index, range: sel.getRangeAt(0).cloneRange(), text }
+                setSelText(text)
+              } else {
+                setSelText(prev => (prev != null ? null : prev))
+              }
+            })
+          }
         }
       })
 
@@ -1072,6 +1107,55 @@ export default function ReaderPage() {
 
   function epubPrev() { viewRef.current?.prev() }
   function epubNext() { viewRef.current?.next() }
+
+  // ── Web-created highlights (create / note / delete) ────────────────────────
+
+  const createHighlight = useCallback(async (color: string) => {
+    const s = selectionRef.current
+    const view = viewRef.current
+    if (!s || !view || savingAnnotation) return
+    setSavingAnnotation(true)
+    try {
+      const cfi = view.getCFI(s.index, s.range)
+      const created = await api.post<ReaderAnnotation>('/annotations', {
+        book_id: Number(bookId),
+        highlighted_text: s.text,
+        cfi,
+        color,
+        chapter: chapterLabel || null,
+        datetime: koNow(),
+      })
+      painterRef.current?.addLocal(created)
+      s.doc.getSelection()?.removeAllRanges()
+      selectionRef.current = null
+      setSelText(null)
+      setNoteDraft(null)
+      setActiveHighlight(created)
+    } catch { /* keep the selection so the user can retry */ }
+    finally { setSavingAnnotation(false) }
+  }, [bookId, chapterLabel, savingAnnotation])
+
+  const saveNote = useCallback(async () => {
+    if (!activeHighlight || noteDraft == null) return
+    try {
+      const updated = await api.put<ReaderAnnotation>(
+        `/annotations/${activeHighlight.id}`, { note: noteDraft.trim() || null })
+      const merged = { ...activeHighlight, ...updated }
+      painterRef.current?.updateLocal(merged)
+      setActiveHighlight(merged)
+      setNoteDraft(null)
+    } catch { /* stay in edit mode */ }
+  }, [activeHighlight, noteDraft])
+
+  const deleteHighlight = useCallback(async () => {
+    if (!activeHighlight) return
+    try {
+      await api.delete(`/annotations/${activeHighlight.id}`)
+      painterRef.current?.removeById(activeHighlight.id)
+      setActiveHighlight(null)
+      setNoteDraft(null)
+    } catch { /* leave the card open */ }
+  }, [activeHighlight])
 
   useEffect(() => {
     if (isComic || isPdf) return
@@ -1715,10 +1799,37 @@ export default function ReaderPage() {
           <div className="absolute inset-y-0 left-0 w-1/5 cursor-pointer z-10" onClick={epubPrev} />
           <div className="absolute inset-y-0 right-0 w-1/5 cursor-pointer z-10" onClick={epubNext} />
 
-          {/* Tapped-highlight card — KOReader highlights painted in the text */}
+          {/* Selection toolbar — pick a colour to create a highlight */}
+          {selText && !activeHighlight && (
+            <div
+              className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2.5 rounded-xl border shadow-2xl px-4 py-2.5"
+              style={{
+                background: themeColors.bg,
+                color: themeColors.text,
+                borderColor: isDarkTheme ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)',
+              }}
+            >
+              <span className="text-xs font-medium mr-1" style={{ opacity: 0.55 }}>Highlight</span>
+              {HIGHLIGHT_COLORS.map(c => (
+                <button
+                  key={c}
+                  onClick={() => createHighlight(c)}
+                  disabled={savingAnnotation}
+                  aria-label={`Highlight in ${c}`}
+                  className="w-6 h-6 rounded-full transition-transform hover:scale-110 disabled:opacity-50"
+                  style={{
+                    background: fillForColor(c).replace(/[\d.]+\)$/, '0.9)'),
+                    border: '1px solid rgba(128,128,128,0.35)',
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Tapped-highlight card — synced + web-created highlights */}
           {activeHighlight && (
             <>
-              <div className="absolute inset-0 z-20" onClick={() => setActiveHighlight(null)} />
+              <div className="absolute inset-0 z-20" onClick={() => { setActiveHighlight(null); setNoteDraft(null) }} />
               <div
                 className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 w-[min(34rem,calc(100%-2rem))] rounded-xl border shadow-2xl p-4"
                 style={{
@@ -1738,7 +1849,7 @@ export default function ReaderPage() {
                       <span className="shrink-0">· {activeHighlight.datetime.slice(0, 10)}</span>
                     )}
                   </div>
-                  <button onClick={() => setActiveHighlight(null)} style={{ opacity: 0.5 }} aria-label="Close">
+                  <button onClick={() => { setActiveHighlight(null); setNoteDraft(null) }} style={{ opacity: 0.5 }} aria-label="Close">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
@@ -1750,13 +1861,55 @@ export default function ReaderPage() {
                     {activeHighlight.highlighted_text}
                   </p>
                 )}
-                {activeHighlight.note && (
+                {noteDraft != null ? (
+                  <div className="mt-2.5">
+                    <textarea
+                      value={noteDraft}
+                      onChange={e => setNoteDraft(e.target.value)}
+                      rows={3}
+                      autoFocus
+                      placeholder="Add a note…"
+                      className="w-full rounded-lg border bg-transparent p-2 text-sm focus:outline-none"
+                      style={{ borderColor: isDarkTheme ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)', color: themeColors.text }}
+                    />
+                    <div className="mt-1.5 flex gap-3 text-xs font-medium">
+                      <button onClick={saveNote} className="hover:underline">Save</button>
+                      <button onClick={() => setNoteDraft(null)} style={{ opacity: 0.6 }} className="hover:underline">Cancel</button>
+                    </div>
+                  </div>
+                ) : activeHighlight.note ? (
                   <p className="mt-2.5 flex items-start gap-1.5 text-sm" style={{ opacity: 0.75 }}>
                     <StickyNote className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                     <span className="leading-relaxed">{activeHighlight.note}</span>
                   </p>
-                )}
-                <p className="mt-2.5 text-[11px]" style={{ opacity: 0.4 }}>Synced from KOReader</p>
+                ) : null}
+                <div className="mt-2.5 flex items-center justify-between">
+                  <p className="text-[11px]" style={{ opacity: 0.4 }}>
+                    {isWebAnnotation(activeHighlight)
+                      ? 'Made on the web — syncs to KOReader'
+                      : 'Synced from KOReader'}
+                  </p>
+                  {noteDraft == null && (
+                    <div className="flex items-center gap-3 text-xs">
+                      <button
+                        onClick={() => setNoteDraft(activeHighlight.note ?? '')}
+                        className="flex items-center gap-1 hover:underline"
+                        style={{ opacity: 0.7 }}
+                      >
+                        <StickyNote className="w-3.5 h-3.5" />
+                        {activeHighlight.note ? 'Edit note' : 'Add note'}
+                      </button>
+                      <button
+                        onClick={deleteHighlight}
+                        className="flex items-center gap-1 hover:underline"
+                        style={{ opacity: 0.7 }}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </>
           )}

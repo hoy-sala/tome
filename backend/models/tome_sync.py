@@ -113,6 +113,10 @@ class Annotation(Base):
     highlighted_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     color: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    # EPUB CFI of the selection — set only for annotations created in the web
+    # reader (anchor "web:<uuid>"), so the web can re-paint them without a text
+    # search. Devices never see this; they adopt by locating the text.
+    cfi: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # KOReader's own creation timestamp for the highlight (display ordering);
     # distinct from created_at, which is when Tome first stored it.
     koreader_datetime: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)

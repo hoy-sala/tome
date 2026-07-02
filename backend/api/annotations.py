@@ -2,25 +2,33 @@
 
 `GET /api/annotations` returns the current user's KOReader-synced highlights
 across *all* visible books (the per-book view lives at
-`GET /api/books/{id}/annotations`). KOReader owns annotations and pushes them via
-the TomeSync plugin; the one write the web offers is `DELETE /api/annotations/{id}`,
-which drops the row and leaves a tombstone so the deletion propagates back to the
-device (and stale devices can't resurrect it) — mirroring the plugin's own deletes.
+`GET /api/books/{id}/annotations`). The web's writes:
+
+- `POST /api/annotations` — create a highlight from the web reader. It gets a
+  provisional `web:<uuid>` anchor plus the selection's CFI; a KOReader device
+  later "adopts" it (locates the text, re-anchors it natively) via the sync
+  endpoint, which retires the provisional row.
+- `PUT /api/annotations/{id}` — edit note/colour; bumps the LWW mtime so the
+  change propagates to devices like any device-side edit.
+- `DELETE /api/annotations/{id}` — drops the row and leaves a tombstone so the
+  deletion propagates back to devices (and stale devices can't resurrect it).
 
 Registered before `/api/books/{id}` is irrelevant here (distinct prefix), but the
 router is mounted at /api like the rest.
 """
 from __future__ import annotations
 
+import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy import or_, func
 from sqlalchemy.orm import Session
 
 from backend.core.database import get_db
 from backend.core.security import get_current_user
-from backend.core.permissions import book_visibility_filter
+from backend.core.permissions import book_visibility_filter, user_can_see_book
 from backend.models.book import Book
 from backend.models.tome_sync import Annotation, AnnotationTombstone
 from backend.models.user import User
@@ -105,6 +113,123 @@ def list_annotations(
     items = [_to_item(a, b) for (a, b) in page]
 
     return {"total": total, "books": len(book_ids), "items": items}
+
+
+class AnnotationCreate(BaseModel):
+    book_id: int
+    highlighted_text: str
+    cfi: Optional[str] = None
+    note: Optional[str] = None
+    chapter: Optional[str] = None
+    color: Optional[str] = None
+    datetime: Optional[str] = None   # client wall-clock "YYYY-MM-DD HH:MM:SS"
+
+
+class AnnotationEdit(BaseModel):
+    note: Optional[str] = None
+    color: Optional[str] = None
+
+
+def _annotation_out(a: Annotation) -> dict:
+    return {
+        "id": a.id,
+        "book_id": a.book_id,
+        "anchor": a.anchor,
+        "cfi": a.cfi,
+        "highlighted_text": a.highlighted_text,
+        "note": a.note,
+        "chapter": a.chapter,
+        "color": a.color,
+        "datetime": a.koreader_datetime,
+        "datetime_updated": a.koreader_datetime_updated,
+    }
+
+
+@router.post("/annotations", status_code=status.HTTP_201_CREATED)
+def create_annotation(
+    payload: AnnotationCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Create a highlight from the web reader.
+
+    Stored under a provisional ``web:<uuid>`` anchor with the selection's CFI
+    (so the web can re-paint it directly). A KOReader device adopts it on its
+    next sync: it locates the text, creates a native annotation with a real
+    xPointer, and the sync endpoint retires this provisional row. Until then it
+    lives on the web (and in the Highlights views) like any other highlight.
+    """
+    book = db.get(Book, payload.book_id)
+    if not book or book.status != "active":
+        raise HTTPException(status_code=404, detail="Book not found")
+    if not user_can_see_book(db, current_user, book):
+        raise HTTPException(status_code=404, detail="Book not found")
+    text_ = (payload.highlighted_text or "").strip()
+    if not text_:
+        raise HTTPException(status_code=422, detail="highlighted_text must not be empty")
+    if len(text_) > 20_000:
+        raise HTTPException(status_code=422, detail="highlighted_text too long")
+
+    now = (payload.datetime or "").strip()[:19] or func_now_str()
+    row = Annotation(
+        user_id=current_user.id,
+        book_id=payload.book_id,
+        anchor=f"web:{uuid.uuid4()}",
+        cfi=payload.cfi,
+        highlighted_text=text_,
+        note=(payload.note or None),
+        chapter=(payload.chapter or None),
+        color=(payload.color or None),
+        koreader_datetime=now,
+        koreader_datetime_updated=now,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _annotation_out(row)
+
+
+@router.put("/annotations/{annotation_id}")
+def edit_annotation(
+    annotation_id: int,
+    payload: AnnotationEdit,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Edit a highlight's note/colour from the web.
+
+    Applies to web-created AND device-synced highlights: the LWW mtime is
+    bumped past the row's current one, so the edit wins on every device at its
+    next sync — exactly like an edit made on another device.
+    """
+    row = (
+        db.query(Annotation)
+        .filter(Annotation.id == annotation_id, Annotation.user_id == current_user.id)
+        .first()
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Highlight not found")
+
+    raw = payload.model_dump(exclude_unset=True)
+    if "note" in raw:
+        row.note = payload.note or None
+    if "color" in raw:
+        row.color = payload.color or None
+
+    # The edit must be STRICTLY newer than the current mtime to win LWW on
+    # devices; guard against a server clock at/behind the device's wall-clock.
+    new_mtime = func_now_str()
+    if new_mtime <= (row.effective_mtime or ""):
+        from datetime import datetime as _dt, timedelta as _td
+        try:
+            base = _dt.strptime(row.effective_mtime, "%Y-%m-%d %H:%M:%S")
+            new_mtime = (base + _td(seconds=1)).strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            pass
+    row.koreader_datetime_updated = new_mtime
+    db.commit()
+    db.refresh(row)
+    return _annotation_out(row)
 
 
 @router.delete("/annotations/{annotation_id}", status_code=status.HTTP_204_NO_CONTENT)

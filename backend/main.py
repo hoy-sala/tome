@@ -168,6 +168,12 @@ async def lifespan(app: FastAPI):
             "ON ko_page_stats (user_id, book_id, page)"
         ))
         conn.commit()
+        # Web-created annotations carry an EPUB CFI so the web reader can
+        # re-paint them without a text search (annotations table pre-exists).
+        an_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(annotations)")).fetchall()}
+        if an_cols and "cfi" not in an_cols:
+            conn.execute(text("ALTER TABLE annotations ADD COLUMN cfi TEXT"))
+            conn.commit()
     ReadingGoal.__table__.create(bind=engine, checkfirst=True)
     init_fts(engine)
     backfill_fts(engine)

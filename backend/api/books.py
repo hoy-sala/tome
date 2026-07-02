@@ -1062,6 +1062,7 @@ def get_book_annotations(
         {
             "id": a.id,
             "anchor": a.anchor,
+            "cfi": a.cfi,   # set for web-created highlights — paints without a text search
             "highlighted_text": a.highlighted_text,
             "note": a.note,
             "chapter": a.chapter,
