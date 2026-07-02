@@ -68,7 +68,10 @@ export function HeaderSearch({ value, onChange, onClear, onSubmit, inputRef, pla
       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
       <input
         ref={inputRef}
-        className="w-full h-8 pl-9 pr-8 rounded-lg bg-muted border border-border text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+        aria-label="Search books"
+        // On phones the box can shrink to a sliver (page actions squeeze it) and
+        // the placeholder clips mid-letter — hide it there; the icon says enough.
+        className="w-full h-8 pl-9 pr-8 rounded-lg bg-muted border border-border text-sm placeholder:text-muted-foreground max-sm:placeholder:text-transparent focus:outline-none focus:ring-1 focus:ring-ring"
         placeholder={placeholder}
         value={value}
         onChange={e => onChange(e.target.value)}
