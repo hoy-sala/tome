@@ -29,6 +29,15 @@ All notable changes to Tome are documented here. Format loosely follows
   Small "i" hints explain the progress and reading-intensity charts in plain language.
 
 ### Fixed
+- **Deleting a highlight from the web now sticks, even for a highlight you just
+  made.** The deletion marker was stamped with the server's clock, but compared
+  against the device's local wall-clock — so with a UTC server and a device in a
+  later timezone, deleting a recent highlight produced a marker that looked *older*
+  than the highlight itself, and the device quietly kept (and could re-upload) it.
+  The marker is now stamped no earlier than the highlight's own timestamp, so the
+  deleted copy always loses the tie while a deliberate re-highlight still wins.
+  Also, the "N from M books" counter on the Highlights page no longer under-counts
+  books after deleting when more highlights are still unloaded.
 - **Standalone books download to the correct book-type folder in KOReader.** A book
   with no series — say a RoyalRoad title — could be filed under the wrong type's
   folder (e.g. `light_novel`) when downloaded through the plugin, while books in a

@@ -203,6 +203,33 @@ def test_web_delete_propagates_and_holds_against_stale_device(client, db, admin_
     assert r.json()["annotations"] == []
 
 
+def test_web_delete_holds_when_device_clock_ahead_of_server(client, db, admin_user, make_book):
+    """A device wall-clock ahead of the server (UTC container + local-time device)
+    must not resurrect a web-deleted highlight: the tombstone is stamped no earlier
+    than the highlight's own mtime, so the exact deleted copy always loses the LWW
+    race — while a strictly newer re-add still wins."""
+    user, _ = admin_user
+    book = make_book()
+    hdr = {"Authorization": f"Bearer {_api_key_for(db, user.id)}"}
+    future = "2099-01-01 00:00:00"  # device-local mtime far ahead of server now
+    _sync(client, hdr, book.id, upserts=[_hl(A1, "fresh", dtu=future)])
+    aid = client.get(f"/api/books/{book.id}/annotations").json()[0]["id"]
+    assert client.delete(f"/api/annotations/{aid}").status_code == 204
+
+    tomb = db.query(AnnotationTombstone).filter(AnnotationTombstone.book_id == book.id).one()
+    assert tomb.client_deleted_at >= future
+
+    # The exact deleted copy re-uploaded by the device -> still dropped.
+    r = _sync(client, hdr, book.id, upserts=[_hl(A1, "fresh", dtu=future)])
+    assert r.json()["applied"]["skipped"] == 1
+    assert r.json()["annotations"] == []
+
+    # A genuinely newer re-add (deliberate re-highlight) wins and clears the tombstone.
+    r = _sync(client, hdr, book.id, upserts=[_hl(A1, "on purpose", dtu="2099-01-01 00:00:01")])
+    assert r.json()["applied"]["created"] == 1
+    assert r.json()["tombstones"] == []
+
+
 def test_web_delete_scoped_to_owner(client, db, admin_user, make_book):
     """You can only delete your own highlights; another user's id (or a missing one) 404s."""
     user, _ = admin_user

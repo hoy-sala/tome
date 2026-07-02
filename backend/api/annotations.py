@@ -116,7 +116,7 @@ def delete_annotation(
     """Delete one of the current user's highlights (e.g. an accidental one).
 
     Mirrors the TomeSync delete path: we remove the `Annotation` row *and* write an
-    `AnnotationTombstone` stamped with the current wall-clock time. On its next sync
+    `AnnotationTombstone` stamped no earlier than the highlight's own mtime. On its next sync
     the device sees the tombstone, finds its local copy older, and drops it too — so
     the deletion sticks instead of being re-uploaded. A later, genuinely-newer re-add
     of the same passage (strictly newer mtime) still wins and clears the tombstone,
@@ -132,7 +132,13 @@ def delete_annotation(
 
     book_id = annotation.book_id
     anchor = annotation.anchor
-    now = func_now_str()
+    # LWW key: at least the highlight's own device-local mtime, not just the server
+    # clock. The server may sit hours behind the device's wall-clock (UTC container vs
+    # local-time device), and both tombstone checks (server upsert and plugin apply)
+    # drop copies with mtime <= tombstone — so maxing with effective_mtime guarantees
+    # the delete holds against the exact copy that was deleted, while a genuinely
+    # newer re-add (strictly greater mtime) still wins and clears the tombstone.
+    now = max(func_now_str(), annotation.effective_mtime)
 
     db.delete(annotation)
 
