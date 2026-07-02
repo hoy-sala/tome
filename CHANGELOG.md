@@ -72,6 +72,10 @@ All notable changes to Tome are documented here. Format loosely follows
   Small "i" hints explain the progress and reading-intensity charts in plain language.
 
 ### Fixed
+- **The series-page action buttons line up again when you follow a series.** The
+  "Next: Vol N" caption under the Following button used to push the button out of
+  line with Resume / Mark all read / Manage; it now hangs below without shifting
+  anything.
 - **Metadata fetching got a deep overhaul.** The same book returned by two
   sources used to eat two of the five result slots — each copy *partial*
   (Hardcover knows series but not language; Google the reverse). Duplicates are

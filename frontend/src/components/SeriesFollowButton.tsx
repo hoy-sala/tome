@@ -49,7 +49,7 @@ export function SeriesFollowButton({ seriesName }: { seriesName: string }) {
   const upcoming = date != null && date >= new Date().toISOString().slice(0, 10)
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="relative">
       <button
         onClick={toggle}
         disabled={busy}
@@ -67,7 +67,7 @@ export function SeriesFollowButton({ seriesName }: { seriesName: string }) {
         {follow ? 'Following' : 'Follow'}
       </button>
       {follow && vol != null && date && (
-        <p className="text-[10px] text-muted-foreground text-center">
+        <p className="absolute top-full left-1/2 -translate-x-1/2 mt-1 whitespace-nowrap text-[10px] text-muted-foreground text-center">
           {upcoming ? 'Next' : 'Latest'}: Vol {Number.isInteger(vol) ? vol : vol.toFixed(1)} · {formatDate(date)}
         </p>
       )}
