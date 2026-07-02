@@ -1,9 +1,9 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   RefreshCw, Loader2, BookOpen, Check, X, Trash2, Search,
   ChevronRight, ChevronDown, ArrowLeft, FolderOpen,
-  Inbox, Zap, Eye, HelpCircle,
+  Inbox, Zap, Eye, HelpCircle, Library as LibraryIcon,
 } from 'lucide-react'
 import { AppShell } from '@/components/AppShell'
 import { DOCS, docsLink } from '@/lib/docs'
@@ -59,6 +59,7 @@ interface BinderyAcceptFile {
   language?: string | null
   cover_url?: string | null
   tags?: string[]
+  library_ids?: number[]
 }
 
 type View = 'list' | 'review'
@@ -78,6 +79,7 @@ interface ItemForm {
   language: string
   tags: string
   cover_url: string
+  library_ids: number[]
 }
 
 function itemToForm(item: BinderyItem, bookTypes: BookType[]): ItemForm {
@@ -99,6 +101,7 @@ function itemToForm(item: BinderyItem, bookTypes: BookType[]): ItemForm {
     language: '',
     tags: '',
     cover_url: '',
+    library_ids: [],
   }
 }
 
@@ -120,6 +123,7 @@ function formToAcceptFile(path: string, form: ItemForm): BinderyAcceptFile {
     tags: form.tags
       ? form.tags.split(',').map(t => t.trim()).filter(Boolean)
       : [],
+    library_ids: form.library_ids,
   }
 }
 
@@ -178,16 +182,145 @@ const TEXTAREA_CLS =
 const LABEL_CLS = 'block text-xs font-medium text-muted-foreground mb-1'
 
 // ---------------------------------------------------------------------------
+// LibrariesSelect — same idea as the Book page's "Libraries" dropdown (#103)
+// ---------------------------------------------------------------------------
+
+interface LibraryOption {
+  id: number
+  name: string
+  can_edit: boolean
+}
+
+function LibrariesSelect({ value, onChange, libraries, className, placeholder = 'No libraries' }: {
+  value: number[]
+  onChange: (ids: number[]) => void
+  libraries: LibraryOption[]
+  className?: string
+  placeholder?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [open])
+
+  const editable = libraries.filter(l => l.can_edit)
+  if (editable.length === 0) return null
+  const toggle = (id: number) =>
+    onChange(value.includes(id) ? value.filter(v => v !== id) : [...value, id])
+
+  return (
+    <div className={cn('relative', className)} ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className={cn(
+          INPUT_CLS,
+          'flex items-center gap-2 cursor-pointer text-left',
+          value.length > 0 ? 'text-foreground' : 'text-muted-foreground'
+        )}
+      >
+        <LibraryIcon className="w-3.5 h-3.5 shrink-0" />
+        <span className="flex-1 truncate">
+          {value.length > 0
+            ? editable.filter(l => value.includes(l.id)).map(l => l.name).join(', ')
+            : placeholder}
+        </span>
+        <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-60" />
+      </button>
+      {open && (
+        <div className="absolute left-0 right-0 top-full mt-1 z-40 bg-card border border-border rounded-xl shadow-xl py-1 max-h-56 overflow-y-auto">
+          {editable.map(lib => {
+            const selected = value.includes(lib.id)
+            return (
+              <button
+                key={lib.id}
+                type="button"
+                onClick={() => toggle(lib.id)}
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted transition-colors text-left"
+              >
+                <LibraryIcon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <span className="flex-1 truncate">{lib.name}</span>
+                <Check className={cn('w-3.5 h-3.5 shrink-0', selected ? 'text-primary' : 'text-muted-foreground/30')} />
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// SelectMenu — custom single-select matching LibrariesSelect (native <select>
+// menus clash visually and their chevron never lines up with ours)
+// ---------------------------------------------------------------------------
+
+function SelectMenu({ value, onChange, options, className }: {
+  value: string
+  onChange: (v: string) => void
+  options: { value: string; label: string }[]
+  className?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [open])
+
+  const current = options.find(o => o.value === value)
+
+  return (
+    <div className={cn('relative', className)} ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className={cn(INPUT_CLS, 'flex items-center gap-2 cursor-pointer text-left')}
+      >
+        <span className="flex-1 truncate">{current?.label ?? value}</span>
+        <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-60" />
+      </button>
+      {open && (
+        <div className="absolute left-0 right-0 top-full mt-1 z-40 bg-card border border-border rounded-xl shadow-xl py-1 max-h-56 overflow-y-auto">
+          {options.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => { onChange(opt.value); setOpen(false) }}
+              className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted transition-colors text-left"
+            >
+              <span className="flex-1 truncate">{opt.label}</span>
+              <Check className={cn('w-3.5 h-3.5 shrink-0', opt.value === value ? 'text-primary' : 'text-transparent')} />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // MetadataForm
 // ---------------------------------------------------------------------------
 
 interface MetadataFormProps {
   form: ItemForm
-  onChange: (field: keyof ItemForm, value: string) => void
+  onChange: (field: keyof ItemForm, value: string | number[]) => void
   bookTypes: BookType[]
+  libraries: LibraryOption[]
 }
 
-function MetadataForm({ form, onChange, bookTypes }: MetadataFormProps) {
+function MetadataForm({ form, onChange, bookTypes, libraries }: MetadataFormProps) {
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 gap-3">
@@ -235,28 +368,32 @@ function MetadataForm({ form, onChange, bookTypes }: MetadataFormProps) {
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className={LABEL_CLS}>Content Type</label>
-          <select
-            className={cn(INPUT_CLS, 'cursor-pointer')}
+          <SelectMenu
             value={form.content_type}
-            onChange={e => onChange('content_type', e.target.value)}
-          >
-            <option value="volume">Volume</option>
-            <option value="chapter">Chapter</option>
-          </select>
+            onChange={v => onChange('content_type', v)}
+            options={[{ value: 'volume', label: 'Volume' }, { value: 'chapter', label: 'Chapter' }]}
+          />
         </div>
         <div>
           <label className={LABEL_CLS}>Book Type</label>
-          <select
-            className={cn(INPUT_CLS, 'cursor-pointer')}
+          <SelectMenu
             value={form.book_type_id}
-            onChange={e => onChange('book_type_id', e.target.value)}
-          >
-            <option value="">No type</option>
-            {bookTypes.map(bt => (
-              <option key={bt.id} value={String(bt.id)}>{bt.label}</option>
-            ))}
-          </select>
+            onChange={v => onChange('book_type_id', v)}
+            options={[{ value: '', label: 'No type' },
+                      ...bookTypes.map(bt => ({ value: String(bt.id), label: bt.label }))]}
+          />
         </div>
+      </div>
+      <div>
+        <label className={LABEL_CLS}>Libraries</label>
+        <LibrariesSelect
+          value={form.library_ids}
+          onChange={ids => onChange('library_ids', ids)}
+          libraries={libraries}
+        />
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          The book type's own library is always added automatically.
+        </p>
       </div>
       <div>
         <label className={LABEL_CLS}>Description</label>
@@ -351,12 +488,20 @@ interface CandidatePanelProps {
   onSearch: (q: string) => void
   onSelect: (c: MetadataCandidate) => void
   appliedId: string | null
+  targetLabel?: string
 }
 
-function CandidatePanel({ candidates, loading, searchQuery, onSearchQueryChange, onSearch, onSelect, appliedId }: CandidatePanelProps) {
+function CandidatePanel({ candidates, loading, searchQuery, onSearchQueryChange, onSearch, onSelect, appliedId, targetLabel }: CandidatePanelProps) {
   return (
     <div className="flex flex-col h-full">
-      <div className="text-sm font-medium mb-3">Metadata Suggestions</div>
+      <div className="mb-3">
+        <span className="text-sm font-medium">Metadata Suggestions</span>
+        {targetLabel && (
+          <span className="block text-xs text-muted-foreground truncate">
+            for {targetLabel} — click a file to switch
+          </span>
+        )}
+      </div>
       <form
         className="flex gap-1.5 mb-3"
         onSubmit={e => { e.preventDefault(); onSearch(searchQuery) }}
@@ -491,6 +636,10 @@ export function BinderyPage() {
   const { toast } = useToast()
   const bookTypes = useBookTypes()
   const navigate = useNavigate()
+  const [libraries, setLibraries] = useState<LibraryOption[]>([])
+  useEffect(() => {
+    api.get<LibraryOption[]>('/libraries').then(setLibraries).catch(() => {})
+  }, [])
 
   // List view state
   const [view, setView] = useState<View>('list')
@@ -541,7 +690,15 @@ export function BinderyPage() {
   const [batchSeries, setBatchSeries] = useState('')
   const [batchAuthor, setBatchAuthor] = useState('')
   const [batchBookTypeId, setBatchBookTypeId] = useState('')
+  const [batchLibraryIds, setBatchLibraryIds] = useState<number[]>([])
+  // Libraries picked in the LIST toolbar — consumed by the next Quick Accept
+  // or Review run, then reset so the next batch doesn't inherit it silently
+  const [listLibraryIds, setListLibraryIds] = useState<number[]>([])
+  const [matchingAll, setMatchingAll] = useState<number | null>(null)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  // Which file the suggestions panel searches/applies for in batch review —
+  // expanding a row retargets the panel (it used to silently hit file #1 only)
+  const [suggestPath, setSuggestPath] = useState<string | null>(null)
 
   // ---------------------------------------------------------------------------
   // View transition helper
@@ -653,6 +810,7 @@ export function BinderyPage() {
     const forms: Record<string, ItemForm> = {}
     for (const item of toReview) {
       forms[item.path] = itemToForm(item, bookTypes)
+      forms[item.path].library_ids = [...listLibraryIds]
     }
 
     setReviewItems(toReview)
@@ -663,14 +821,17 @@ export function BinderyPage() {
     setBatchSeries(toReview[0]?.series ?? '')
     setBatchAuthor('')
     setBatchBookTypeId(forms[toReview[0]?.path ?? '']?.book_type_id ?? '')
+    setBatchLibraryIds([...listLibraryIds])
+    setListLibraryIds([])
     setExpandedRows(new Set())
+    setSuggestPath(toReview[0]?.path ?? null)
     transitionTo('review')
 
     // Fetch metadata for the first item
     fetchPreview(toReview[0])
   }
 
-  async function fetchPreview(item: BinderyItem, queryOverride?: string) {
+  async function fetchPreview(item: BinderyItem, queryOverride?: string, autoApply = true) {
     const itemPath = item.path
     setFetchingMeta(true)
     setCandidates([])
@@ -683,8 +844,9 @@ export function BinderyPage() {
       )
       setCandidates(result.candidates)
       setSearchQuery(result.query_used)
-      // Auto-apply the best candidate on initial fetch (not manual re-search)
-      if (!queryOverride && result.candidates.length > 0) {
+      // Auto-apply the best candidate on initial fetch (not manual re-search,
+      // and not when retargeting to a row the user may have hand-edited)
+      if (autoApply && !queryOverride && result.candidates.length > 0) {
         applyCandidate(result.candidates[0], itemPath)
       }
     } catch {
@@ -694,8 +856,43 @@ export function BinderyPage() {
     }
   }
 
+  // Trust-the-matcher tier for batch review: fetch and apply the best
+  // candidate to EVERY file's form, then the user eyeballs the rows and
+  // Accept-Alls. Explicit button — it does overwrite hand edits.
+  async function matchAll() {
+    setMatchingAll(0)
+    let matched = 0
+    try {
+      for (let i = 0; i < reviewItems.length; i++) {
+        const item = reviewItems[i]
+        setMatchingAll(i + 1)
+        try {
+          const result = await api.post<{ candidates: MetadataCandidate[] }>(
+            '/bindery/preview',
+            { path: item.path }
+          )
+          if (result.candidates.length > 0) {
+            applyCandidate(result.candidates[0], item.path)
+            matched++
+          }
+        } catch {
+          // Non-fatal — leave this file's parsed data in place
+        }
+      }
+    } finally {
+      setMatchingAll(null)
+    }
+    if (matched === reviewItems.length) {
+      toast.success(`Best match applied to all ${matched} files`)
+    } else {
+      toast.success(`Best match applied to ${matched} of ${reviewItems.length} files — no match for the rest`)
+    }
+  }
+
   function manualSearch(query: string) {
-    const item = reviewItems[reviewIndex ?? 0]
+    const item = (reviewItems.length > 1 && suggestPath
+      ? reviewItems.find(i => i.path === suggestPath)
+      : reviewItems[reviewIndex ?? 0]) ?? reviewItems[reviewIndex ?? 0]
     if (!item) return
     fetchPreview(item, query)
   }
@@ -747,7 +944,7 @@ export function BinderyPage() {
   // Form field change
   // ---------------------------------------------------------------------------
 
-  function updateForm(path: string, field: keyof ItemForm, value: string) {
+  function updateForm(path: string, field: keyof ItemForm, value: string | number[]) {
     setFormData(prev => ({
       ...prev,
       [path]: { ...prev[path], [field]: value },
@@ -763,6 +960,7 @@ export function BinderyPage() {
       }
       return next
     })
+    toast.success(`Series applied to ${reviewItems.length} files`)
   }
 
   function applyBatchAuthor() {
@@ -773,6 +971,7 @@ export function BinderyPage() {
       }
       return next
     })
+    toast.success(`Author applied to ${reviewItems.length} files`)
   }
 
   function applyBatchBookType() {
@@ -783,6 +982,18 @@ export function BinderyPage() {
       }
       return next
     })
+    toast.success(`Book type applied to ${reviewItems.length} files`)
+  }
+
+  function applyBatchLibraries() {
+    setFormData(prev => {
+      const next = { ...prev }
+      for (const item of reviewItems) {
+        next[item.path] = { ...next[item.path], library_ids: [...batchLibraryIds] }
+      }
+      return next
+    })
+    toast.success(`Libraries applied to ${reviewItems.length} files`)
   }
 
   // ---------------------------------------------------------------------------
@@ -886,6 +1097,7 @@ export function BinderyPage() {
       if (!item) continue
 
       const form = itemToForm(item, bookTypes)
+      form.library_ids = [...listLibraryIds]
 
       // Fetch metadata
       updateStatus(path, 'fetching')
@@ -931,6 +1143,7 @@ export function BinderyPage() {
     }
 
     // Clean up
+    setListLibraryIds([])
     if (acceptedPaths.length > 0) {
       toast.success(`Accepted ${acceptedPaths.length} book${acceptedPaths.length !== 1 ? 's' : ''}`)
       setItems(prev => prev.filter(i => !acceptedPaths.includes(i.path)))
@@ -1186,6 +1399,18 @@ export function BinderyPage() {
                   >
                     <Trash2 className="h-3 w-3" /> Reject
                   </button>
+                  {libraries.some(l => l.can_edit) && (
+                    <>
+                      <div className="h-4 w-px bg-border" />
+                      <LibrariesSelect
+                        value={listLibraryIds}
+                        onChange={setListLibraryIds}
+                        libraries={libraries}
+                        className="w-56 [&>button]:py-1.5 [&>button]:text-xs"
+                        placeholder="Add to libraries…"
+                      />
+                    </>
+                  )}
                 </>
               )}
             </div>
@@ -1544,6 +1769,7 @@ export function BinderyPage() {
               form={currentForm}
               onChange={(field, value) => updateForm(currentItem.path, field, value)}
               bookTypes={bookTypes}
+              libraries={libraries}
             />
 
             {/* Action bar */}
@@ -1632,16 +1858,13 @@ export function BinderyPage() {
                 <div>
                   <label className={LABEL_CLS}>Book Type</label>
                   <div className="flex gap-2">
-                    <select
-                      className={cn(INPUT_CLS, 'flex-1 cursor-pointer')}
+                    <SelectMenu
+                      className="flex-1"
                       value={batchBookTypeId}
-                      onChange={e => setBatchBookTypeId(e.target.value)}
-                    >
-                      <option value="">No type</option>
-                      {bookTypes.map(bt => (
-                        <option key={bt.id} value={String(bt.id)}>{bt.label}</option>
-                      ))}
-                    </select>
+                      onChange={setBatchBookTypeId}
+                      options={[{ value: '', label: 'No type' },
+                                ...bookTypes.map(bt => ({ value: String(bt.id), label: bt.label }))]}
+                    />
                     <button
                       onClick={applyBatchBookType}
                       className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-muted hover:bg-accent transition-colors"
@@ -1650,20 +1873,69 @@ export function BinderyPage() {
                     </button>
                   </div>
                 </div>
+                {libraries.some(l => l.can_edit) && (
+                  <div>
+                    <label className={LABEL_CLS}>Libraries</label>
+                    <div className="flex gap-2">
+                      <LibrariesSelect
+                        value={batchLibraryIds}
+                        onChange={setBatchLibraryIds}
+                        libraries={libraries}
+                        className="flex-1"
+                      />
+                      <button
+                        onClick={applyBatchLibraries}
+                        className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-muted hover:bg-accent transition-colors"
+                      >
+                        Apply to all
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Per-item rows */}
             <div className="space-y-2">
-              <h3 className="text-sm font-semibold">Per-file details</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold">Per-file details</h3>
+                <button
+                  onClick={matchAll}
+                  disabled={matchingAll !== null || fetchingMeta}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border text-foreground hover:bg-muted disabled:opacity-50 transition-all"
+                >
+                  {matchingAll !== null
+                    ? <Loader2 className="h-3 w-3 animate-spin" />
+                    : <Zap className="h-3 w-3" />}
+                  {matchingAll !== null
+                    ? `Matching ${matchingAll}/${reviewItems.length}…`
+                    : 'Match all'}
+                </button>
+              </div>
               {reviewItems.map(item => {
                 const form = formData[item.path]
                 if (!form) return null
                 const isExpanded = expandedRows.has(item.path)
                 return (
-                  <div key={item.path} className="rounded-lg border border-border overflow-hidden">
-                    {/* Compact row */}
-                    <div className="flex items-center gap-3 px-3 py-2.5 bg-card">
+                  <div
+                    key={item.path}
+                    className={cn(
+                      'rounded-lg border overflow-hidden transition-colors',
+                      suggestPath === item.path
+                        ? 'border-primary/50 ring-1 ring-primary/25'
+                        : 'border-border'
+                    )}
+                  >
+                    {/* Compact row — clicking anywhere targets the suggestions panel */}
+                    <div
+                      className="flex items-center gap-3 px-3 py-2.5 bg-card"
+                      onClick={() => {
+                        if (suggestPath !== item.path) {
+                          setSuggestPath(item.path)
+                          fetchPreview(item, undefined, false)
+                        }
+                      }}
+                    >
                       <button
                         onClick={() => setExpandedRows(prev => {
                           const next = new Set(prev)
@@ -1711,6 +1983,7 @@ export function BinderyPage() {
                           form={form}
                           onChange={(field, value) => updateForm(item.path, field, value)}
                           bookTypes={bookTypes}
+                          libraries={libraries}
                         />
                       </div>
                     )}
@@ -1744,7 +2017,7 @@ export function BinderyPage() {
             </div>
           </div>
 
-          {/* Right: Candidates for batch (based on first item) */}
+          {/* Right: candidates for the targeted row — expand a row to retarget */}
           <div className="lg:w-2/5 overflow-y-auto p-6">
             <CandidatePanel
               candidates={candidates}
@@ -1752,8 +2025,9 @@ export function BinderyPage() {
               searchQuery={searchQuery}
               onSearchQueryChange={setSearchQuery}
               onSearch={manualSearch}
-              onSelect={applyCandidateWithFlash}
+              onSelect={c => applyCandidateWithFlash(c, suggestPath ?? undefined)}
               appliedId={appliedId}
+              targetLabel={reviewItems.find(i => i.path === suggestPath)?.filename}
             />
           </div>
         </div>

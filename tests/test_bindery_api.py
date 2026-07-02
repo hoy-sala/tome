@@ -324,6 +324,65 @@ class TestBinderyAccept:
         book = db.get(Book, book_id)
         assert book.book_type_id == bt.id
 
+    def test_accept_with_library_ids_files_book_into_libraries(
+        self, client: TestClient, bindery_dir, db: Session, monkeypatch
+    ):
+        """#103: accept can file the book into chosen libraries in one step."""
+        monkeypatch.setattr(
+            "backend.api.bindery.extract_metadata",
+            lambda *a, **kw: {"title": "Faust v1"},
+        )
+        monkeypatch.setattr("backend.api.bindery.sha256_file", lambda *a: "hashlib1")
+
+        from backend.models.library import Library
+        lib = Library(name="Favourites", icon="Library", is_public=True, owner_id=None)
+        db.add(lib)
+        db.flush()
+
+        resp = client.post(
+            "/api/bindery/accept",
+            json={"files": [{"path": "Faust v01.cbz", "title": "Faust",
+                             "library_ids": [lib.id, 99999]}]},
+        )
+        assert resp.status_code == 200
+        assert len(resp.json()["accepted"]) == 1
+
+        from backend.models.book import Book
+        book = db.get(Book, resp.json()["accepted"][0]["book_id"])
+        assert [l.id for l in book.libraries] == [lib.id]   # unknown id skipped
+
+    def test_accept_library_ids_respects_permissions(
+        self, client: TestClient, bindery_dir, db: Session, monkeypatch
+    ):
+        """A member can file into their OWN library but not a global one."""
+        monkeypatch.setattr(
+            "backend.api.bindery.extract_metadata",
+            lambda *a, **kw: {"title": "Beowulf"},
+        )
+        monkeypatch.setattr("backend.api.bindery.sha256_file", lambda *a: "hashlib2")
+
+        member, token = _make_non_admin(db, username="libmember", can_approve_bindery=True)
+        from backend.models.library import Library
+        own = Library(name="Mine", icon="Library", is_public=False, owner_id=member.id)
+        global_lib = Library(name="Global", icon="Library", is_public=True, owner_id=None)
+        db.add_all([own, global_lib])
+        db.flush()
+
+        resp = client.post(
+            "/api/bindery/accept",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"files": [{"path": "Beowulf/Beowulf v18.cbz", "title": "Beowulf",
+                             "library_ids": [own.id, global_lib.id]}]},
+        )
+        assert resp.status_code == 200
+        assert len(resp.json()["accepted"]) == 1
+
+        from backend.models.book import Book
+        book = db.get(Book, resp.json()["accepted"][0]["book_id"])
+        lib_ids = {l.id for l in book.libraries}
+        assert own.id in lib_ids            # own library filed
+        assert global_lib.id not in lib_ids  # global library skipped for member
+
     def test_accept_nonexistent_file_returns_error(
         self, client: TestClient, bindery_dir, monkeypatch
     ):

@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.security import get_current_user
-from backend.core.permissions import require_role
+from backend.core.permissions import require_role, is_admin
 from backend.models.book import Book, BookFile, BookTag
 from backend.models.user import User
 from backend.services.audit import audit
@@ -128,6 +128,9 @@ class BinderyAcceptFile(BaseModel):
     language: str | None = None
     cover_url: str | None = None
     tags: list[str] = []
+    # Libraries to file the accepted book into, on top of the automatic
+    # book-type library (issue #103). Ids the user may not edit are skipped.
+    library_ids: list[int] = []
 
 
 class BinderyAcceptRequest(BaseModel):
@@ -372,6 +375,24 @@ def bindery_accept(
                 bt = db.get(BookType, item.book_type_id)
                 if bt:
                     assign_book_to_type_library(db, book, bt)
+
+            # File into explicitly chosen libraries — same permission rule as
+            # the libraries API (global = admin-only, personal = owner/admin).
+            # Unknown or unpermitted ids are skipped, never fatal to the accept.
+            if item.library_ids:
+                from backend.models.library import Library
+                for lid in item.library_ids:
+                    lib = db.get(Library, lid)
+                    if not lib:
+                        continue
+                    if lib.owner_id is None:
+                        if not is_admin(current_user):
+                            continue
+                    elif lib.owner_id != current_user.id and not is_admin(current_user):
+                        continue
+                    if lib not in book.libraries:
+                        book.libraries.append(lib)
+                db.commit()
 
             db.refresh(book)
 

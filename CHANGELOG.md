@@ -7,6 +7,21 @@ All notable changes to Tome are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **File books into libraries straight from the Bindery.** The review form
+  (and the batch "apply to all" bar) now has a Libraries picker like the one
+  on the book page, so an accepted book lands in the right libraries in one
+  step instead of needing a second pass through each book (#103). There is
+  also an "Add to libraries" picker right in the Bindery toolbar: set it once
+  and the next Quick Accept or Review run files everything into those
+  libraries (it resets afterwards, so the next batch starts clean). The book
+  type's own library is still added automatically.
+- **Batch review got real per-file metadata matching.** The suggestions panel
+  used to silently search for the first file only; now clicking any file row
+  targets the panel at it (the active row is highlighted), and a new
+  "Match all" button fetches and applies the best match to every file in one
+  go — trust the matcher, eyeball the rows, Accept All. The batch
+  "Apply to all" buttons also confirm with a toast now instead of applying
+  silently.
 - **Create highlights in the web reader — they appear on your KOReader.** Select
   text while reading on the web, pick a colour, and optionally attach a note;
   the highlight paints immediately and syncs to your devices. Since the web
@@ -104,6 +119,13 @@ All notable changes to Tome are documented here. Format loosely follows
   optimistically and hid after the server said the feature is off — a visible
   flash on every page view. They now stay hidden until the check resolves, and
   a disabled verdict is remembered for the session.
+- **Bindery is back in the mobile menu.** The mobile drawer never got a
+  Bindery link when the desktop sidebar did, so on a phone admins could only
+  reach it by typing the URL (#101). It now sits under Wishlist with the
+  pending-file count.
+- **The mobile drawer got a tidy-up.** The five theme choices no longer stack
+  as full-height rows — they are one compact "Theme" row of icon buttons — so
+  the account section fits without pushing the navigation off screen.
 - **Deleting a highlight from the web now sticks, even for a highlight you just
   made.** The deletion marker was stamped with the server's clock, but compared
   against the device's local wall-clock — so with a UTC server and a device in a
