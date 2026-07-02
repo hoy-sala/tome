@@ -270,11 +270,24 @@ export function HighlightsPage() {
   async function deleteHighlight(h: Highlight) {
     // Was this the last loaded highlight for its book? If so the book drops off too.
     const lastOfBook = !items.some(x => x.book_id === h.book_id && x.id !== h.id)
+    // With unloaded pages the book may still have highlights beyond what we see,
+    // so a local decrement would under-count — refetch the counts instead.
+    const fullyLoaded = items.length >= total
     try {
       await api.delete(`/annotations/${h.id}`)
       setItems(prev => prev.filter(x => x.id !== h.id))
       setTotal(t => Math.max(0, t - 1))
-      if (lastOfBook) setBooks(b => Math.max(0, b - 1))
+      if (lastOfBook) {
+        if (fullyLoaded) {
+          setBooks(b => Math.max(0, b - 1))
+        } else {
+          const p = buildParams(0)
+          p.set('limit', '1')
+          api.get<HighlightsResponse>(`/annotations?${p.toString()}`)
+            .then(d => { setBooks(d.books); setTotal(d.total) })
+            .catch(() => {})
+        }
+      }
       toast.success('Highlight deleted')
     } catch (e) {
       toast.error((e as Error).message ?? 'Failed to delete highlight')
