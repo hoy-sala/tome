@@ -453,6 +453,7 @@ async def _run_auto_import() -> None:
                 title=book.title, author=book.author, isbn=book.isbn,
                 year=book.year, language=book.language,
                 series=book.series, series_index=book.series_index,
+                media_hint=book.book_type.slug if book.book_type else None,
             ))
             if confidence >= 6:
                 book.title = best.title or book.title

@@ -42,6 +42,9 @@ class ScoreContext:
     language: str | None = None
     series: str | None = None
     series_index: float | None = None
+    # BookType slug ("manga", "light_novel", …) — lets ranking reject the wrong
+    # EDITION of the right series (the manga adaptation of a light novel).
+    media_hint: str | None = None
 
 
 def score_candidate(candidate, ctx: ScoreContext) -> int:
@@ -104,6 +107,17 @@ def score_candidate(candidate, ctx: ScoreContext) -> int:
         if "ace's story" in ct or "film:" in ct or "color walk" in ct:
             score -= 5
 
+    # Wrong edition type of the right series: a light novel must not match the
+    # manga adaptation (Hardcover titles them "… (Manga), Vol. N") and vice versa.
+    if ctx.media_hint and candidate.title:
+        ct = candidate.title.lower()
+        cand_manga = "(manga)" in ct
+        cand_ln = "(light novel)" in ct or "light novel" in ct
+        if ctx.media_hint in ("light_novel", "novel", "book") and cand_manga:
+            score -= 5
+        elif ctx.media_hint in ("manga", "comic", "comics") and cand_ln:
+            score -= 5
+
     if candidate.source == "hardcover":
         score += 6
 
@@ -138,13 +152,21 @@ def merge_candidates(candidates: list) -> list:
     by_isbn: dict[str, int] = {}
     by_fuzzy: dict[tuple[str, str], int] = {}
 
+    def _langs_compatible(a, b) -> bool:
+        # A fuzzy title+author match across DIFFERENT languages is a different
+        # EDITION (e.g. the Italian Fellowship of the Ring) — merging it would
+        # poison the base candidate's language/ISBN. Unknown matches anything.
+        la = (a.language or "").lower()[:2]
+        lb = (b.language or "").lower()[:2]
+        return not la or not lb or la == lb
+
     for c in candidates:
         idx = None
         if c.isbn and c.isbn in by_isbn:
             idx = by_isbn[c.isbn]
         else:
             fk = _fuzzy_key(c)
-            if fk[0] and fk in by_fuzzy:
+            if fk[0] and fk in by_fuzzy and _langs_compatible(merged[by_fuzzy[fk]], c):
                 idx = by_fuzzy[fk]
 
         if idx is None:

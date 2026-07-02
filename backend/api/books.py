@@ -1258,6 +1258,7 @@ def _score_candidate(candidate, book: Book) -> int:
         title=book.title, author=book.author, isbn=book.isbn,
         year=book.year, language=book.language,
         series=book.series, series_index=book.series_index,
+        media_hint=book.book_type.slug if book.book_type else None,
     ))
 
 
@@ -1295,6 +1296,7 @@ async def bulk_fetch_candidates(
                     series_index=book.series_index,
                     year=book.year,
                     language=book.language,
+                    media_hint=book.book_type.slug if book.book_type else None,
                 )
             candidates = result.candidates
         except Exception as e:
@@ -2395,6 +2397,7 @@ async def fetch_metadata(
         query_override=q,
         year=book.year,
         language=book.language,
+        media_hint=book.book_type.slug if book.book_type else None,
     )
     return {
         "candidates": [MetadataCandidateOut.model_validate(c.__dict__) for c in result.candidates],

@@ -91,6 +91,7 @@ async def fetch_candidates(
     query_override: str | None = None,
     year: int | None = None,
     language: str | None = None,
+    media_hint: str | None = None,
 ) -> FetchResult:
     """Query Hardcover, Google Books and OpenLibrary in parallel; return up to
     _MAX_RESULTS candidates, cross-source merged and relevance-ranked.
@@ -108,7 +109,7 @@ async def fetch_candidates(
     # treat it like Plex "Fix Match": search only by what was typed.
     effective_isbn = None if query_override else isbn
     query = _build_query(title, author, effective_isbn, series, series_index, query_override)
-    hc_query = _build_hardcover_query(title, author, effective_isbn, series, series_index, query_override)
+    hc_query = _build_hardcover_query(title, author, effective_isbn, series, series_index, query_override, media_hint)
 
     async with httpx.AsyncClient(timeout=10) as client:
         async def _hc_disabled() -> tuple[list[MetadataCandidate], str]:
@@ -116,7 +117,7 @@ async def fetch_candidates(
 
         hc_call = (
             _call_with_retry("hardcover", lambda: _hardcover(
-                client, title, author, effective_isbn, series, series_index, query_override))
+                client, title, author, effective_isbn, series, series_index, query_override, media_hint))
             if settings.hardcover_token else _hc_disabled()
         )
         (hc, hc_status), (gb, gb_status), (ol, ol_status) = await asyncio.gather(
@@ -143,10 +144,35 @@ async def fetch_candidates(
                 hc, hc_status = await _call_with_retry("hardcover", lambda: _hardcover(
                     client, title, author, None, series, series_index, fallback_query))
 
+        # Suspect-ISBN fallback: a stored ISBN belonging to the WRONG edition
+        # (the manga's ISBN on a light novel — old auto-apply versions caused
+        # exactly this) monopolises retrieval, and ranking can't demote what
+        # search never returned. If every Hardcover hit violates the media
+        # hint, re-query by title/series with the edition bias and prepend.
+        def _violates_hint(c: MetadataCandidate) -> bool:
+            if not media_hint or not c.title:
+                return False
+            ct = c.title.lower()
+            if media_hint == "light_novel":
+                return "(manga)" in ct
+            if media_hint in ("manga", "comic", "comics"):
+                return "(light novel)" in ct
+            return False
+
+        if (
+            not query_override and effective_isbn and media_hint
+            and hc and all(_violates_hint(c) for c in hc)
+        ):
+            hc2, _st = await _call_with_retry("hardcover", lambda: _hardcover(
+                client, title, author, None, series, series_index, None, media_hint))
+            if hc2:
+                hc = [*hc2, *hc]
+
     merged = merge_candidates([*hc, *gb, *ol])
     ranked = rank_candidates(merged, ScoreContext(
         title=title, author=author, isbn=effective_isbn,
         year=year, language=language, series=series, series_index=series_index,
+        media_hint=media_hint,
     ))
     return FetchResult(
         candidates=ranked[:_MAX_RESULTS],
@@ -164,6 +190,7 @@ def _build_hardcover_query(
     series: str | None,
     series_index: float | None,
     query_override: str | None = None,
+    media_hint: str | None = None,
 ) -> str:
     """Build the query string sent to Hardcover's Typesense search."""
     if query_override:
@@ -174,6 +201,12 @@ def _build_hardcover_query(
     if series and series_index is not None and _title_is_series_variant(title, series):
         clean = _clean_series_name(series)
         vol = int(series_index) if series_index == int(series_index) else series_index
+        # Retrieval-side edition bias: Hardcover titles LN editions
+        # "... Vol. N (light novel)" and manga ones "(Manga)". For a
+        # series-variant query ("Slime 13") Typesense often surfaces ONLY the
+        # wrong edition — ranking can't fix what search never returned.
+        if media_hint == "light_novel":
+            return f"{clean} {vol} light novel"
         return f"{clean} {vol}"
     vol_match = re.search(r'\bv(\d{2,4})\b', title, re.IGNORECASE)
     if vol_match:
@@ -192,13 +225,14 @@ async def _hardcover(
     series: str | None,
     series_index: float | None,
     query_override: str | None = None,
+    media_hint: str | None = None,
 ) -> list[MetadataCandidate]:
     """Fetch candidates from Hardcover.app GraphQL API."""
     token = settings.hardcover_token
     if not token:
         return []
 
-    query_str = _build_hardcover_query(title, author, isbn, series, series_index, query_override)
+    query_str = _build_hardcover_query(title, author, isbn, series, series_index, query_override, media_hint)
 
     graphql_query = """
     query SearchBook($q: String!, $perPage: Int!) {
@@ -405,9 +439,15 @@ async def _fetch_hardcover_details(
     hc_ids: list[str],
     headers: dict,
 ) -> None:
-    """Fetch publisher and series info from Hardcover for each candidate, in-place."""
+    """Fetch publisher and series info from Hardcover for each candidate, in-place.
+
+    The search response's ``ids`` array holds INTS while document ids parse as
+    STRINGS — compare as strings, or nothing ever matches (this exact mismatch
+    made the details call a silent no-op in production: Hardcover series and
+    publisher were never filled).
+    """
     id_to_candidate = {c.source_id: c for c in candidates}
-    int_ids = [int(i) for i in hc_ids if i in id_to_candidate]
+    int_ids = [int(i) for i in hc_ids if str(i) in id_to_candidate]
     if not int_ids:
         return
 
@@ -604,9 +644,10 @@ async def _google_books(
     if settings.google_books_key:
         params["key"] = settings.google_books_key
     resp = await client.get(GOOGLE_BOOKS_URL, params=params)
-    if resp.status_code in (400, 429):
+    if resp.status_code in (400, 403, 429):
         # 400 is how Google reports an exhausted key quota ("Quota Exceeded");
-        # 429 is the anonymous shared-pool limit. Log loudly when a key is
+        # 429 is the anonymous shared-pool limit; 403 shows up for "usage
+        # limits" bursts on the anonymous pool. Log loudly when a key is
         # configured so the operator knows it's *their* project quota that's
         # drained, not a code bug — then let the retry/status machinery run.
         if settings.google_books_key:

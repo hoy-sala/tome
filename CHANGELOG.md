@@ -70,7 +70,20 @@ All notable changes to Tome are documented here. Format loosely follows
   renames a book on a low-confidence match (it fills blanks instead), applying
   fetched metadata no longer wipes your hand-added tags, and bulk fetching
   paces itself instead of firing a hundred parallel searches that tripped the
-  very rate limits above.
+  very rate limits above. A cross-check against realistic library shapes (manga
+  volumes, light novels with series-only titles, wrong-edition ISBNs, foreign
+  editions) caught four more: Hardcover's **series and publisher were never
+  actually filled in production** (an id-type mismatch made that lookup a
+  silent no-op since it shipped — fixed), foreign-language editions no longer
+  merge into (and poison) the English candidate, light novels no longer match
+  the manga adaptation of the same series (search is edition-aware now), and a
+  stored ISBN that points at the wrong edition — damage the old auto-apply
+  itself caused — no longer monopolises the results.
+- **No more flicker of the Follow UI on instances without release detection.**
+  The Follow button, Following section and Upcoming-releases card rendered
+  optimistically and hid after the server said the feature is off — a visible
+  flash on every page view. They now stay hidden until the check resolves, and
+  a disabled verdict is remembered for the session.
 - **Deleting a highlight from the web now sticks, even for a highlight you just
   made.** The deletion marker was stamped with the server's clock, but compared
   against the device's local wall-clock — so with a UTC server and a device in a
