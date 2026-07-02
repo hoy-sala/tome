@@ -193,7 +193,7 @@ const SHOTS = [
   { name: 'users-list',  path: '/users',    viewport: { width: 1600, height: 2000, deviceScaleFactor: 2 }, settle: 1000, autoCrop: true },
   { name: 'admin-page',  path: '/admin',    viewport: { width: 1600, height: 2000, deviceScaleFactor: 2 }, settle: 1000, autoCrop: true },
   { name: 'settings',    path: '/settings', viewport: { width: 1600, height: 2400, deviceScaleFactor: 2 }, settle: 1000, autoCrop: true },
-  { name: 'bindery',     path: '/bindery',  viewport: { width: 1600, height: 2000, deviceScaleFactor: 2 }, settle: 1200, autoCrop: true,
+  { name: 'bindery',     path: '/bindery',  viewport: { width: 1600, height: 880, deviceScaleFactor: 2 }, settle: 1200, autoCrop: true,
     after: async (page) => {
       // select everything so the toolbar (Review / Quick Accept / Add to libraries) shows
       for (const cb of await page.locator('input[type="checkbox"]').all()) await cb.check().catch(() => {})
@@ -560,7 +560,7 @@ const SHOTS = [
     prefs: { tome_home_mode: 'focus' },
     after: async (page) => {
       // spotlight a series book so the coverflow fan shows (standalones have none)
-      const strip = page.locator('button[title*="Berserk"], button[title*="Dungeon"]').first()
+      const strip = page.locator('button[title*="Skull"], button[title*="Berserk"]').first()
       if (await strip.count()) {
         await strip.click().catch(() => {})
         await page.waitForTimeout(2500)
@@ -591,6 +591,7 @@ const SHOTS = [
     viewport: { width: 1500, height: 1300, deviceScaleFactor: 2 },
     settle: 1800,
     element: 'div:has(> div > h2:text-is("Following"))',
+    pad: 32,
   },
 
   // ── Metadata fetch dialog (merged candidates, best match, sources) ─────────
@@ -902,7 +903,21 @@ async function captureShot(browser, token, shot) {
   if (shot.element) {
     const locator = page.locator(shot.element).first()
     await locator.waitFor({ timeout: 6000 }).catch(() => {})
-    await locator.screenshot({ path: file })
+    if (shot.pad) {
+      // generous breathing room around tight sections (borderless crops)
+      const b = await locator.boundingBox()
+      if (!b) throw new Error(`${shot.name}: element has no box`)
+      const vp = page.viewportSize()
+      const clip = {
+        x: Math.max(0, b.x - shot.pad),
+        y: Math.max(0, b.y - shot.pad),
+        width: Math.min(vp.width, b.x + b.width + shot.pad) - Math.max(0, b.x - shot.pad),
+        height: Math.min(vp.height, b.y + b.height + shot.pad) - Math.max(0, b.y - shot.pad),
+      }
+      await page.screenshot({ path: file, clip })
+    } else {
+      await locator.screenshot({ path: file })
+    }
     await context.close()
     return file
   }
