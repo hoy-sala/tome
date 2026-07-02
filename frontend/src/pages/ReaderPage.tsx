@@ -4,13 +4,14 @@ import {
   ArrowLeft, BookOpen, Settings, Rows4,
   ChevronLeft, ChevronRight, Minus, Plus, X,
   Loader2, AlignJustify, RotateCcw, GalleryHorizontalEnd, Columns2, Square,
-  StretchHorizontal, StretchVertical,
+  StretchHorizontal, StretchVertical, StickyNote,
 } from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { api } from '@/lib/api'
 import type { Book, BookFile } from '@/lib/books'
 import { cn } from '@/lib/utils'
+import { AnnotationPainter, fillForColor, type ReaderAnnotation } from '@/lib/readerAnnotations'
 
 // pdf.js renders pages off the main thread; point it at the bundled worker.
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
@@ -704,6 +705,9 @@ export default function ReaderPage() {
   // ── EPUB refs ────────────────────────────────────────────────────────────────
   const containerRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<FoliateViewElement | null>(null)
+  // KOReader highlights painted into the EPUB view; tapping one opens the card.
+  const painterRef = useRef<AnnotationPainter | null>(null)
+  const [activeHighlight, setActiveHighlight] = useState<ReaderAnnotation | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const initialCfi = useRef<string | null>(null)
   const readyToSave = useRef(false)
@@ -953,10 +957,26 @@ export default function ReaderPage() {
       container.appendChild(view)
       viewRef.current = view
 
-      view.addEventListener('load', () => {
+      // KOReader highlights, re-anchored by text and painted via the overlayer.
+      // The fetch runs in parallel with the EPUB download; painter.start() gates
+      // section scanning until both the set and the TOC map are ready.
+      const painter = new AnnotationPainter(
+        view as unknown as ConstructorParameters<typeof AnnotationPainter>[0],
+        a => setActiveHighlight(a),
+      )
+      painterRef.current = painter
+      const annotationsPromise = api
+        .get<ReaderAnnotation[]>(`/books/${bookId}/annotations`)
+        .catch(() => [] as ReaderAnnotation[])
+
+      view.addEventListener('load', (e: Event) => {
         applyStylesRef.current()
         if (view.book?.toc) {
           setToc(flattenToc(view.book.toc))
+        }
+        const detail = (e as CustomEvent).detail as { doc?: Document; index?: number } | undefined
+        if (detail?.doc && detail.index != null) {
+          painter.onSectionLoad(detail.doc, detail.index).catch(() => {})
         }
       })
 
@@ -988,6 +1008,10 @@ export default function ReaderPage() {
       }
 
       if (cancelled) return
+
+      annotationsPromise.then(list => {
+        if (!cancelled) painter.start(list).catch(() => {})
+      })
 
       try {
         const cfi = initialCfi.current
@@ -1690,6 +1714,52 @@ export default function ReaderPage() {
           {/* Click zones for prev/next */}
           <div className="absolute inset-y-0 left-0 w-1/5 cursor-pointer z-10" onClick={epubPrev} />
           <div className="absolute inset-y-0 right-0 w-1/5 cursor-pointer z-10" onClick={epubNext} />
+
+          {/* Tapped-highlight card — KOReader highlights painted in the text */}
+          {activeHighlight && (
+            <>
+              <div className="absolute inset-0 z-20" onClick={() => setActiveHighlight(null)} />
+              <div
+                className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 w-[min(34rem,calc(100%-2rem))] rounded-xl border shadow-2xl p-4"
+                style={{
+                  background: themeColors.bg,
+                  color: themeColors.text,
+                  borderColor: isDarkTheme ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)',
+                }}
+              >
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="flex items-center gap-2 min-w-0 text-xs" style={{ opacity: 0.6 }}>
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{ background: fillForColor(activeHighlight.color).replace(/[\d.]+\)$/, '1)') }}
+                    />
+                    {activeHighlight.chapter && <span className="truncate">{activeHighlight.chapter}</span>}
+                    {activeHighlight.datetime && (
+                      <span className="shrink-0">· {activeHighlight.datetime.slice(0, 10)}</span>
+                    )}
+                  </div>
+                  <button onClick={() => setActiveHighlight(null)} style={{ opacity: 0.5 }} aria-label="Close">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                {activeHighlight.highlighted_text && (
+                  <p
+                    className="text-sm leading-relaxed max-h-40 overflow-y-auto border-l-2 pl-2.5"
+                    style={{ borderColor: fillForColor(activeHighlight.color).replace(/[\d.]+\)$/, '0.9)') }}
+                  >
+                    {activeHighlight.highlighted_text}
+                  </p>
+                )}
+                {activeHighlight.note && (
+                  <p className="mt-2.5 flex items-start gap-1.5 text-sm" style={{ opacity: 0.75 }}>
+                    <StickyNote className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                    <span className="leading-relaxed">{activeHighlight.note}</span>
+                  </p>
+                )}
+                <p className="mt-2.5 text-[11px]" style={{ opacity: 0.4 }}>Synced from KOReader</p>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Settings panel */}

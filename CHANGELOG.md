@@ -7,6 +7,14 @@ All notable changes to Tome are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **Your KOReader highlights now show up inside the web reader.** Open a book on
+  the web and the passages you highlighted on your device are painted right in
+  the text, in their KOReader colours; tap one to see the full passage, its note
+  and when you made it. Under the hood each highlight is re-anchored by its own
+  text (device anchors don't translate to the web reader's engine), so a
+  highlight whose passage can't be located — say it spans a page-break element —
+  simply doesn't paint rather than pointing at the wrong words. Highlights load
+  lazily per chapter, so big collections don't slow the reader down.
 - **Focus mode on the Home page.** A new minimalist Home view that surfaces the one
   book you're most likely to pick up next — your most-recently-synced in-progress
   title — as a large cover with the upcoming volumes of its series fanned behind it
