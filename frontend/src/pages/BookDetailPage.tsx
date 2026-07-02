@@ -1229,22 +1229,39 @@ function ActivityChart({ timeline }: {
   timeline: { date: string; seconds: number; pages: number; progress_pct?: number | null }[]
 }) {
   if (timeline.length < 2) return null
-  const max = Math.max(...timeline.map(d => d.seconds), 1)
-  const n = timeline.length
-  const first = timeline[0]
-  const last = timeline[timeline.length - 1]
+  // Real time axis: fill the calendar days between the first and last reading
+  // day with zero bars. Active-days-only bars, evenly spaced, misrepresent the
+  // span (two adjacent bars could be one day or a month apart) — and with 2–3
+  // reading days they rendered as giant full-width slabs. Capped at the last
+  // 365 days so a years-long log can't produce more bars than pixels.
+  const byDate = new Map(timeline.map(d => [d.date, d]))
+  const startD = new Date(timeline[0].date + 'T00:00:00')
+  const endD = new Date(timeline[timeline.length - 1].date + 'T00:00:00')
+  let days: typeof timeline = []
+  for (const d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    days.push(byDate.get(key) ?? { date: key, seconds: 0, pages: 0 })
+  }
+  if (days.length > 365) days = days.slice(-365)
+  const max = Math.max(...days.map(d => d.seconds), 1)
+  const n = days.length
+  const first = days[0]
+  const last = days[days.length - 1]
   const fmtDay = (iso: string) =>
     new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
   // Progress journey: % complete on each reading day, drawn as a slim lane below.
-  const hasJourney = timeline.some(d => d.progress_pct != null)
-  const lanePts = (timeline
+  const hasJourney = days.some(d => d.progress_pct != null)
+  const lanePts = (days
     .map((d, i) => (d.progress_pct != null
       ? `${((i / (n - 1)) * 100).toFixed(2)},${(100 - d.progress_pct).toFixed(2)}`
       : null))
     .filter(Boolean) as string[])
-  const lastProgress = [...timeline].reverse().find(d => d.progress_pct != null)?.progress_pct ?? null
+  const lastProgress = [...days].reverse().find(d => d.progress_pct != null)?.progress_pct ?? null
   return (
-    <div className="flex flex-col">
+    // Short spans don't stretch edge-to-edge: cap the axis width so a 3-day
+    // book gets three day-sized bars, not three slabs. Labels + progress lane
+    // share the same width so the axis stays aligned.
+    <div className="flex flex-col" style={{ maxWidth: Math.max(n * 44, 320) }}>
       <p className="text-xs text-muted-foreground/70 mb-1.5 shrink-0">Activity</p>
       {/* Fixed-height strip: flex-1 fill only works inside a sized flex parent,
           and the hero wraps this in a plain div — flex-1 collapsed to 0px there
@@ -1252,8 +1269,8 @@ function ActivityChart({ timeline }: {
       <div className="relative h-20">
         {/* faint baseline rule */}
         <div className="absolute bottom-0 left-0 right-0 h-px bg-border/40" />
-        <div className="absolute inset-0 flex items-end gap-1.5">
-          {timeline.map(d => {
+        <div className={cn('absolute inset-0 flex items-end', n > 60 ? 'gap-px' : 'gap-1.5')}>
+          {days.map(d => {
             const pct = d.seconds > 0 ? Math.max(d.seconds / max, 0.06) : 0
             const mins = Math.round(d.seconds / 60)
             const tip = `${fmtDay(d.date)}: ${mins}m${d.pages > 0 ? `, ${d.pages} pages` : ''}${d.progress_pct != null ? ` · ${d.progress_pct}% in` : ''}`
@@ -1262,7 +1279,7 @@ function ActivityChart({ timeline }: {
                 key={d.date}
                 className="flex-1 min-w-px bg-primary/60 hover:bg-primary transition-colors rounded-t-sm"
                 style={{ height: pct > 0 ? `${Math.round(pct * 100)}%` : '0%' }}
-                title={tip}
+                title={d.seconds > 0 ? tip : undefined}
               />
             )
           })}
@@ -1314,7 +1331,8 @@ function SourceSplit({ sources }: { sources: { device: string; seconds: number; 
   return (
     <div className="mt-4">
       <p className="text-xs text-muted-foreground/70 mb-1.5">Where you read</p>
-      <div className="flex h-2 rounded-full overflow-hidden bg-muted">
+      {/* gap-px: adjacent primary shades are close — a hairline seam marks the split */}
+      <div className="flex gap-px h-2 rounded-full overflow-hidden bg-muted">
         {sources.map((s, i) => (
           <div
             key={s.device}
@@ -1598,7 +1616,8 @@ function StatsLayoutHero({ own, aggregate, bookId, onChange }: StatsLayoutProps)
           <p className="text-sm text-muted-foreground">read</p>
         </div>
         {own.momentum && <MomentumChip momentum={own.momentum} />}
-        <div className="flex items-baseline gap-x-5 gap-y-1 flex-wrap">
+        {/* 2×2 on phones — free wrapping left "pace" orphaned on its own line */}
+        <div className="grid grid-cols-2 gap-x-5 gap-y-1 sm:flex sm:items-baseline sm:flex-wrap">
           {supporting.map(s => (
             <div key={s.label} className="flex items-baseline gap-1.5">
               <span className="text-sm font-medium tabular-nums text-foreground">{s.value}</span>
@@ -1641,7 +1660,9 @@ function StatsLayoutHero({ own, aggregate, bookId, onChange }: StatsLayoutProps)
           ))}
         </div>
       )}
-      {aggregate && (
+      {/* Skip when the only reader is you — the line would just repeat the hero.
+          Still shown when someone ELSE read a book you haven't touched. */}
+      {aggregate && (aggregate.distinct_readers > 1 || own.total_seconds === 0) && (
         <p className="text-xs text-muted-foreground/60 mt-3">
           All readers: {formatDuration(aggregate.total_seconds)} · {aggregate.total_sessions} reading day{aggregate.total_sessions !== 1 ? 's' : ''} · {aggregate.distinct_readers} reader{aggregate.distinct_readers !== 1 ? 's' : ''}
         </p>

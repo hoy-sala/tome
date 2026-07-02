@@ -41,7 +41,13 @@ All notable changes to Tome are documented here. Format loosely follows
   on a device-synced book. Manual logging also got sturdier: a failed log now
   shows an error instead of silently resetting, absurd inputs (negative pages, a
   duration over 24h) are rejected instead of crashing, and a timezone-annotated
-  start time is converted to UTC instead of having its offset ignored.
+  start time is converted to UTC instead of having its offset ignored. The
+  Activity chart also earned a real time axis: days without reading now appear
+  as gaps instead of active days being stretched edge-to-edge (two adjacent
+  bars could silently be a month apart), short histories get day-sized bars
+  rather than full-width slabs, the "Where you read" bar separates its segments
+  with a hairline seam, and the admin "All readers" line stays hidden when the
+  only reader it would describe is you.
 - **The "Finished" date is now the date you finished.** It used to be the last
   time anything touched the status row — rating a book in March that you finished
   in January showed "Finished: Mar", and even a device sync could nudge it. The
