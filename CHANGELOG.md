@@ -38,6 +38,19 @@ All notable changes to Tome are documented here. Format loosely follows
   deleted copy always loses the tie while a deliberate re-highlight still wins.
   Also, the "N from M books" counter on the Highlights page no longer under-counts
   books after deleting when more highlights are still unloaded.
+- **A font change no longer scrambles a book's page stats.** KOReader re-paginates
+  when the font or margins change, and Tome sometimes mixed page numbers from
+  different paginations: a book finished at 250 pages then reopened once at a
+  1571-page pagination could show **"250 of 1571 pages · 16%"** despite being
+  fully read, the Completion Estimates tile could report a nearly-finished book
+  as barely started, and the **Re-reads** tile counted "page 10" under two
+  different paginations as a revisit of the same page. Page coverage and reading
+  position are now computed in fraction-of-book space (per row, against that
+  row's own page count) and expressed against the *latest* pagination. Two more
+  estimate fixes ride along: pages-per-day no longer drops the first active day
+  from the denominator (which doubled a two-day reader's pace and halved the
+  estimate), and the confidence label now comes from the signal that actually
+  drove the estimate instead of whichever source happened to have more data.
 - **Late-night reading no longer splits across two days — anywhere.** Tome has
   always counted a session started at, say, 1:30 am toward the previous evening's
   reading day for **streaks** (a local day with a 4-hour rollover), but newer

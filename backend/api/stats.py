@@ -921,7 +921,9 @@ def get_stats(
             _PageStat.page.label("page"),
         )
         .filter(_PageStat.user_id == current_user.id)
-        .group_by(_PageStat.book_id, _PageStat.page)
+        # Page N is only "the same page" within one pagination — after a font
+        # change, page 10 is different content, not a revisit.
+        .group_by(_PageStat.book_id, _PageStat.total_pages, _PageStat.page)
         .having(func.count(func.distinct(_day)) > 1)
         .subquery()
     )
@@ -933,11 +935,16 @@ def get_stats(
     reread_books: list[dict] = []
     if reread_counts:
         rr_ids = list(reread_counts.keys())
-        rr_totals = dict(
-            db.query(_PageStat.book_id, func.max(_PageStat.total_pages))
-            .filter(_PageStat.user_id == current_user.id, _PageStat.book_id.in_(rr_ids))
+        # Latest pagination per book (SQLite bare-column rule with a single
+        # max() aggregate) — not max(total_pages), which mixes paginations.
+        rr_totals = {
+            r[0]: int(r[1] or 0)
+            for r in db.query(_PageStat.book_id, _PageStat.total_pages,
+                              func.max(_PageStat.start_time))
+            .filter(_PageStat.user_id == current_user.id, _PageStat.book_id.in_(rr_ids),
+                    _PageStat.total_pages > 0)
             .group_by(_PageStat.book_id).all()
-        )
+        }
         rr_meta = {
             b.id: b for b in db.query(Book).filter(
                 Book.id.in_(rr_ids), Book.status == "active",
@@ -1070,29 +1077,41 @@ def get_completion_estimates(
         # count so device-only books (no live sessions) still get an estimate.
         ps = (
             db.query(
-                func.count(func.distinct(PageStat.page)),
-                func.max(PageStat.total_pages),
                 func.count(func.distinct(case((PageStat.start_time >= window_epoch, PageStat.page)))),
                 func.count(func.distinct(case((PageStat.start_time >= window_epoch,
                                                epoch_day(PageStat.start_time, tz_offset))))),
-                func.max(PageStat.page),
+                # Furthest position as a per-row page/total fraction — a page
+                # number only means anything against its own row's pagination.
+                func.max(PageStat.page * 1.0 / PageStat.total_pages),
             )
             .filter(PageStat.user_id == current_user.id, PageStat.book_id == row.id)
             .one()
         )
-        ps_pages, ps_total, ps_pages_30, ps_days_30, ps_max_page = (
-            int(ps[0] or 0), int(ps[1] or 0), int(ps[2] or 0), int(ps[3] or 0), int(ps[4] or 0))
-        ps_days_30 = max(ps_days_30 - (1 if ps_pages_30 else 0), 0)  # gained over the gaps, not the first day
+        ps_pages_30, ps_days_30 = int(ps[0] or 0), int(ps[1] or 0)
+        ps_frac = min(float(ps[2] or 0.0), 1.0)
+        # Latest pagination for the remaining-pages arithmetic: total_pages from
+        # the max(start_time) row (SQLite bare-column rule, single aggregate) —
+        # max(total_pages) would let a long-gone pagination inflate it.
+        latest = (
+            db.query(PageStat.total_pages, func.max(PageStat.start_time))
+            .filter(PageStat.user_id == current_user.id, PageStat.book_id == row.id,
+                    PageStat.total_pages > 0)
+            .one()
+        )
+        ps_total = int(latest[0] or 0)
         # Progress = how far through: the best of the synced position (set above)
-        # and the furthest page reached. Page-stats are coverage, so use the
-        # furthest page, not the distinct-page count. max() covers a synced
+        # and the furthest position reached. Page-stats are coverage, so use the
+        # furthest position, not the distinct-page count. max() covers a synced
         # position ahead of the dwell history *and* a stale position behind it.
-        page_pct = round(ps_max_page / ps_total * 100, 1) if (ps_total > 0 and ps_max_page > 0) else 0.0
+        page_pct = round(ps_frac * 100, 1)
         progress = min(max(progress, page_pct), 100.0)
 
         estimated_days: Optional[int] = None
         if session_count == 0 and ps_total > 0 and ps_pages_30 > 0 and ps_days_30 >= 1 and progress < 100:
             # Device-only: pages read per active-day → days to read the rest.
+            # All active days count — subtracting the first day (as the session
+            # path does for progress *deltas*) doubles the pace of a 2-day
+            # reader, because absolute page counts aren't gained "over gaps".
             pages_per_day = ps_pages_30 / ps_days_30
             # Remaining measured from your position, not from uncovered pages.
             remaining_pages = max(round((1 - progress / 100.0) * ps_total), 0)
@@ -1110,9 +1129,11 @@ def get_completion_estimates(
             remaining = 100.0 - progress
             estimated_days = max(1, round(remaining / progress_per_day))
 
-        # Confidence from whichever signal drove the estimate (live sessions or
-        # page-stat reading-days for device-only books).
-        evidence = max(session_count, ps_days_30)
+        # Confidence from the signal that actually drove the estimate: live
+        # sessions when present (the session path never looks at page-stat
+        # pace), else page-stat reading-days. max() of the two let unrelated
+        # evidence inflate confidence in the other path's estimate.
+        evidence = session_count if session_count > 0 else ps_days_30
         if evidence >= 5:
             confidence = "high"
         elif evidence >= 2:

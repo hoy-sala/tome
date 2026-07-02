@@ -152,6 +152,13 @@ async def lifespan(app: FastAPI):
         if rg_cols and "book_type_id" not in rg_cols:
             conn.execute(text("DROP TABLE reading_goals"))
             conn.commit()
+        # Composite index for the re-reads group-by over (user, book, page) —
+        # create_all only builds indexes for brand-new tables.
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_ko_page_stats_user_book_page "
+            "ON ko_page_stats (user_id, book_id, page)"
+        ))
+        conn.commit()
     ReadingGoal.__table__.create(bind=engine, checkfirst=True)
     init_fts(engine)
     backfill_fts(engine)
