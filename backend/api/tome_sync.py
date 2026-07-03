@@ -42,8 +42,8 @@ logger = logging.getLogger(__name__)
 # build than 13 — otherwise a device that updated to 1.2.1's build-13 impl and
 # later points at a main/1.3.0 server (also 13) would not re-download main's
 # richer impl. Hence 14.
-TOMESYNC_PLUGIN_BUILD = 28
-TOMESYNC_PLUGIN_SEMVER = "1.7.3"
+TOMESYNC_PLUGIN_BUILD = 29
+TOMESYNC_PLUGIN_SEMVER = "1.7.4"
 TOMESYNC_PLUGIN_VERSION = str(TOMESYNC_PLUGIN_BUILD)
 
 
@@ -1189,6 +1189,8 @@ local lfs              = require("libs/libkoreader-lfs")
 local util             = require("util")
 local Menu             = require("ui/widget/menu")
 local InputDialog      = require("ui/widget/inputdialog")
+local ConfirmBox       = require("ui/widget/confirmbox")
+local socketutil       = require("socketutil")
 local Dispatcher       = require("dispatcher")
 local Event            = require("ui/event")
 
@@ -1222,7 +1224,6 @@ local API_KEY    = "{api_key}"
 local USERNAME   = "{username}"
 
 -- Short timeout so unreachable server doesn't freeze the UI
-http.TIMEOUT = 5
 
 -- Track consecutive failures for backoff. Time-based so it self-heals:
 -- once we hit the threshold we go quiet for BACKOFF_COOLDOWN seconds, then
@@ -1292,6 +1293,9 @@ local function apiRequest(method, path, body)
         headers["Content-Length"] = tostring(#req_body)
     end
 
+    -- Tight per-request timeouts (block, total) via socketutil — bounded even
+    -- on a dead route, and no mutation of the global http.TIMEOUT.
+    socketutil:set_timeout(5, 10)
     local ok, code = http.request({{
         url     = url,
         method  = method,
@@ -1299,6 +1303,7 @@ local function apiRequest(method, path, body)
         source  = req_body and ltn12.source.string(req_body) or nil,
         sink    = ltn12.sink.table(resp_chunks),
     }})
+    socketutil:reset_timeout()
 
     if not ok then
         consecutive_failures = consecutive_failures + 1
@@ -1338,7 +1343,7 @@ local function pickBestFile(files)
     return files[1]
 end
 
-local function downloadFile(book_id, file_id, dest_path)
+local function downloadFile(book_id, file_id, dest_path, total_size, progress_cb)
     if not NetworkMgr:isConnected() then
         return false, "offline"
     end
@@ -1349,8 +1354,33 @@ local function downloadFile(book_id, file_id, dest_path)
         return false, "cannot open file for writing"
     end
 
-    local saved_timeout = http.TIMEOUT
-    http.TIMEOUT = 60
+    -- Generous total budget for large files; the block timeout still catches
+    -- a stalled connection quickly (no global http.TIMEOUT mutation).
+    socketutil:set_timeout(15, 900)
+
+    -- Count bytes as they stream to disk; repaint at most every 5% (known
+    -- size) or 256 KB (unknown) so e-ink isn't flooded — a 300 MB CBZ used
+    -- to sit mute for minutes with no sign of life.
+    local sink = ltn12.sink.file(fh)
+    if progress_cb then
+        local base_sink, received, last_bucket = sink, 0, 0
+        sink = function(chunk, err)
+            if chunk then
+                received = received + #chunk
+                local bucket
+                if type(total_size) == "number" and total_size > 0 then
+                    bucket = math.floor(received * 20 / total_size)
+                else
+                    bucket = math.floor(received / 262144)
+                end
+                if bucket ~= last_bucket then
+                    last_bucket = bucket
+                    pcall(progress_cb, received, total_size)
+                end
+            end
+            return base_sink(chunk, err)
+        end
+    end
 
     local ok, code = http.request({{
         url     = url,
@@ -1358,10 +1388,10 @@ local function downloadFile(book_id, file_id, dest_path)
         headers = {{
             ["Authorization"] = "Bearer " .. API_KEY,
         }},
-        sink = ltn12.sink.file(fh),
+        sink = sink,
     }})
 
-    http.TIMEOUT = saved_timeout
+    socketutil:reset_timeout()
 
     if not ok or (type(code) == "number" and code >= 300) then
         os.remove(dest_path)
@@ -1502,15 +1532,14 @@ end
 local function fetchText(path)
     if not NetworkMgr:isConnected() then return nil, "offline" end
     local chunks = {{}}
-    local saved_timeout = http.TIMEOUT
-    http.TIMEOUT = 30
+    socketutil:set_timeout(10, 60)
     local ok, code = http.request({{
         url     = SERVER_URL .. "/api" .. path,
         method  = "GET",
         headers = {{ ["Authorization"] = "Bearer " .. API_KEY }},
         sink    = ltn12.sink.table(chunks),
     }})
-    http.TIMEOUT = saved_timeout
+    socketutil:reset_timeout()
     if not ok then return nil, code end
     if type(code) == "number" and code >= 300 then return nil, code end
     return table.concat(chunks), code
@@ -1553,6 +1582,8 @@ function TomeSync:init()
     -- for foreign highlights that had to be re-anchored on this copy (see
     -- _applyForeign). Persisted so repairs survive restarts.
     self.repair_map = G_reader_settings:readSetting("tomesync_repair_map") or {{}}
+    self._heartbeat_armed = false
+    self._heartbeat_task = function() self:_heartbeatNow() end
     -- Per-book annotation sync baseline: book_id -> {{ anchor -> mtime }} as of last
     -- sync. Lets a diff tell "I deleted this" from "this is new from another device".
     self.annot_baseline = G_reader_settings:readSetting("tomesync_annot_baseline") or {{}}
@@ -1698,21 +1729,35 @@ function TomeSync:onPageUpdate(pageno)
     end
 
     self.page_count = self.page_count + 1
-    if self.page_count % HEARTBEAT_PAGES == 0 then
-        local pct = self:_getCurrentPercentage()
-        self.last_progress = pct
-        pcall(apiRequest, "PUT", "/tome-sync/position/" .. self.book_id, {{
-            progress   = self:_getCurrentProgress(),
-            percentage = pct,
-            device     = deviceName(),
-        }})
-        -- Flush any offline sessions while we know WiFi is up
-        self:_flushPendingSessions()
-        self:_flushPendingRatings()
+    -- Idle-debounced heartbeat: reaching the page threshold ARMS the push, and
+    -- every further turn re-delays it — the HTTP call runs 10s after the LAST
+    -- page turn, never on the page-turn path itself (which used to stall the
+    -- turn for up to the request timeout on a flaky network).
+    if self.page_count % HEARTBEAT_PAGES == 0 or self._heartbeat_armed then
+        self._heartbeat_armed = true
+        UIManager:unschedule(self._heartbeat_task)
+        UIManager:scheduleIn(10, self._heartbeat_task)
     end
 end
 
+function TomeSync:_heartbeatNow()
+    self._heartbeat_armed = false
+    if not self.enabled or not self.book_id then return end
+    local pct = self:_getCurrentPercentage()
+    self.last_progress = pct
+    pcall(apiRequest, "PUT", "/tome-sync/position/" .. self.book_id, {{
+        progress   = self:_getCurrentProgress(),
+        percentage = pct,
+        device     = deviceName(),
+    }})
+    -- Flush any offline sessions while we know WiFi is up
+    self:_flushPendingSessions()
+    self:_flushPendingRatings()
+end
+
 function TomeSync:onSuspend()
+    UIManager:unschedule(self._heartbeat_task)
+    self._heartbeat_armed = false
     if not self.enabled or not self.book_id then return end
 
     -- Record the reading session (lid close = end of session)
@@ -1943,6 +1988,8 @@ function TomeSync:_flushPendingSessions()
 end
 
 function TomeSync:onCloseDocument()
+    UIManager:unschedule(self._heartbeat_task)
+    self._heartbeat_armed = false
     if not self.enabled or not self.book_id then return end
 
     local pct      = self:_getCurrentPercentage()
@@ -2708,22 +2755,36 @@ function TomeSync:_downloadSeriesBooks(series_name, books, min_index, book_type,
         UIManager:forceRePaint()
     end
 
+    local function fmtMB(n)
+        return string.format("%.1f MB", n / 1048576)
+    end
     local downloaded, failed = 0, 0
+    local failed_books = {{}}
     for i, item in ipairs(queue) do
-        showProgress(string.format(
-            "%s\\n\\nDownloading %d of %d\\n%s",
-            batch_label, i, #queue, item.book.title
-        ))
+        local head = string.format("%s\\n\\nDownloading %d of %d\\n%s",
+                                   batch_label, i, #queue, item.book.title)
+        showProgress(head)
         if not item.file then
             failed = failed + 1
+            table.insert(failed_books, item.book)
         else
-            local ok, err = downloadFile(item.book.id, item.file.id, item.dest)
+            local total = type(item.file.file_size) == "number" and item.file.file_size or nil
+            local ok, err = downloadFile(item.book.id, item.file.id, item.dest, total,
+                function(received, size)
+                    if size then
+                        showProgress(string.format("%s\\n%d%% of %s", head,
+                            math.floor(received * 100 / size), fmtMB(size)))
+                    else
+                        showProgress(string.format("%s\\n%s", head, fmtMB(received)))
+                    end
+                end)
             if ok then
                 downloaded = downloaded + 1
                 self.book_map[item.dest] = item.book.id
             else
                 logger.warn("TomeSync: download failed for", item.book.title, err)
                 failed = failed + 1
+                table.insert(failed_books, item.book)
             end
         end
     end
@@ -2733,13 +2794,41 @@ function TomeSync:_downloadSeriesBooks(series_name, books, min_index, book_type,
     G_reader_settings:saveSetting("tomesync_book_map", self.book_map)
 
     if not quiet then
-        UIManager:show(InfoMessage:new{{
-            text = string.format(
-                "%s\\n\\nDownloaded: %d\\nSkipped: %d\\nFailed: %d\\n\\nSaved to: %s",
-                batch_label, downloaded, skipped, failed, save_location or base_dir
-            ),
-            timeout = 8,
-        }})
+        if failed > 0 and #failed_books > 0 then
+            -- Offer a retry instead of a one-shot failure count: transient
+            -- WiFi drops are the usual culprit and a second pass fixes them.
+            UIManager:show(ConfirmBox:new{{
+                text = string.format(
+                    "%s\\n\\nDownloaded: %d\\nSkipped: %d\\nFailed: %d",
+                    batch_label, downloaded, skipped, failed
+                ),
+                ok_text = "Retry failed",
+                cancel_text = "Close",
+                ok_callback = function()
+                    self:_downloadSeriesBooks(series_name, failed_books, min_index, book_type, quiet)
+                end,
+            }})
+        else
+            UIManager:show(InfoMessage:new{{
+                text = string.format(
+                    "%s\\n\\nDownloaded: %d\\nSkipped: %d\\nFailed: %d\\n\\nSaved to: %s",
+                    batch_label, downloaded, skipped, failed, save_location or base_dir
+                ),
+                timeout = 8,
+            }})
+            if downloaded == 1 and #queue == 1 and queue[1].dest then
+                -- Single fresh download: offer to jump straight into it.
+                local dest = queue[1].dest
+                UIManager:show(ConfirmBox:new{{
+                    text = string.format('Open "%s" now?', queue[1].book.title or "book"),
+                    ok_text = "Open",
+                    cancel_text = "Later",
+                    ok_callback = function()
+                        require("apps/reader/readerui"):showReader(dest)
+                    end,
+                }})
+            end
+        end
     end
     return {{ downloaded = downloaded, skipped = skipped, failed = failed }}
 end
@@ -2757,6 +2846,11 @@ function TomeSync:_seriesBooksMenu(data)
             self:_downloadSeriesBooks(data.series_name, data.books, nil, data.book_type)
         end,
     }})
+    -- book_id → on-device path (same signal the download queue uses to skip)
+    local id_to_path = {{}}
+    for path, bid in pairs(self.book_map) do
+        if lfs.attributes(path) then id_to_path[bid] = path end
+    end
     for _, book in ipairs(data.books) do
         local label
         if type(book.series_index) == "number" then
@@ -2765,6 +2859,9 @@ function TomeSync:_seriesBooksMenu(data)
             label = "Vol. " .. tostring(vol) .. " — " .. book.title
         else
             label = book.title
+        end
+        if id_to_path[book.id] then
+            label = label .. "  · on device"
         end
         table.insert(items, {{
             text     = label,
@@ -2798,10 +2895,12 @@ function TomeSync:_browseSeriesMenuImpl()
     end
 
     local ok, series_list, code = pcall(apiRequest, "GET", "/tome-sync/series")
-    if not ok or not series_list or (type(code) == "number" and code >= 300) then
-        UIManager:show(InfoMessage:new{{
+    if not ok or type(series_list) ~= "table" or (type(code) == "number" and code >= 300) then
+        UIManager:show(ConfirmBox:new{{
             text = "Failed to load series list.",
-            timeout = 4,
+            ok_text = "Retry",
+            cancel_text = "Close",
+            ok_callback = function() self:_browseSeriesMenuImpl() end,
         }})
         return
     end
@@ -2819,18 +2918,7 @@ function TomeSync:_browseSeriesMenuImpl()
         table.insert(items, {{
             text = text,
             callback = function()
-                -- Fetch the books in this series, then drill into a per-book list
-                -- so a single title can be downloaded instead of the whole series.
-                local ok2, data, code2 = pcall(apiRequest, "GET",
-                    "/tome-sync/series/" .. s.first_book_id)
-                if ok2 and data and data.books then
-                    self:_seriesBooksMenu(data)
-                else
-                    UIManager:show(InfoMessage:new{{
-                        text = "Failed to load series books.",
-                        timeout = 4,
-                    }})
-                end
+                self:_openSeriesBooks(s.first_book_id)
             end,
         }})
     end
@@ -2843,6 +2931,23 @@ function TomeSync:_browseSeriesMenuImpl()
         show_parent = self.ui or UIManager,
     }}
     UIManager:show(menu)
+end
+
+function TomeSync:_openSeriesBooks(first_book_id)
+    -- Fetch the books in this series, then drill into a per-book list so a
+    -- single title can be downloaded instead of the whole series.
+    local ok2, data, code2 = pcall(apiRequest, "GET", "/tome-sync/series/" .. first_book_id)
+    if ok2 and type(data) == "table" and data.books then
+        self:_seriesBooksMenu(data)
+    else
+        UIManager:show(ConfirmBox:new{{
+            text = "Failed to load series books.",
+            ok_text = "Retry",
+            cancel_text = "Close",
+            ok_callback = function() self:_openSeriesBooks(first_book_id) end,
+        }})
+    end
+    local _ = code2
 end
 
 function TomeSync:_downloadCurrentBookSeries(rest_only)

@@ -107,3 +107,21 @@ def test_foreign_highlights_are_verified_before_painting(impl):
     assert "New highlight from another device: reconstruct so it renders." not in impl
     # pushes translate repaired items back to the server identity
     assert "it.anchor = anchor" in impl
+
+
+def test_ux_batch_mechanics_present(impl):
+    """Build 29: bounded socketutil timeouts, byte-progress sink, retry
+    dialogs, open-now, on-device markers, idle-debounced heartbeat.
+    (A Trapper-subprocess variant was tried and dropped: forked sockets from
+    plugin context proved unverifiable on the emulator.)"""
+    assert "socketutil:set_timeout" in impl
+    assert "http.TIMEOUT =" not in impl        # no global timeout mutation left
+    assert impl.count("ok_text = \"Retry") >= 2
+    assert "· on device" in impl
+    assert "Open \\" in impl or "now?" in impl
+    # heartbeat: armed + rescheduled, fired via _heartbeatNow off the turn path
+    assert "function TomeSync:_heartbeatNow" in impl
+    assert "_heartbeat_armed" in impl
+    # progress sink buckets: 5% steps when size known, 256KB otherwise
+    assert "received * 20 / total_size" in impl
+    assert "262144" in impl

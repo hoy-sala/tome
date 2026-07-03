@@ -7,6 +7,14 @@ All notable changes to Tome are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **The KOReader series browser got a quality pass** (plugin build 29). Big
+  downloads show live progress (percent of file size) instead of sitting mute;
+  a failed list-load or download offers **Retry** instead of a dead-end popup;
+  a single fresh download asks **"Open now?"**; volumes you already have are
+  marked **"on device"** in the list; and every request now has tight network
+  timeouts, so a dead server stalls the reader for seconds, not a minute. The
+  position heartbeat also moved off the page-turn path — it fires when the
+  reader is idle, never while you're turning.
 - **KOReader files are now recognised by content, not just by name.** Tome
   records the KOReader-style hash of every file it scans and every copy it
   serves, and the plugin (build 27) sends the open file's hash when it asks

@@ -172,5 +172,13 @@ def test_build_bumped_for_rebake():
     # repaired by text search (rendered locally, server identity kept via
     # repair_map — no cross-device anchor ping-pong); unlocatable text is
     # skipped rather than painted on the wrong words.
-    assert TOMESYNC_PLUGIN_BUILD >= 28
-    assert TOMESYNC_PLUGIN_SEMVER == "1.7.3"
+    # 1.7.4 / build 29 is the UX batch: bounded socketutil timeouts on every
+    # request (no more global http.TIMEOUT mutation; a dead server stalls the
+    # UI seconds, not a minute), failed fetches/downloads offer Retry,
+    # downloads show live byte/percent progress, a single fresh download
+    # offers "Open now?", volume rows are marked "· on device", and the
+    # position heartbeat is idle-debounced off the page-turn path. (A Trapper
+    # subprocess variant for fetches was built and dropped: forked sockets
+    # from plugin context proved unverifiable on the emulator.)
+    assert TOMESYNC_PLUGIN_BUILD >= 29
+    assert TOMESYNC_PLUGIN_SEMVER == "1.7.4"
