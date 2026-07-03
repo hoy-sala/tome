@@ -1549,9 +1549,12 @@ function TomeSync:init()
     -- Web-adoption ledger: real_anchor -> provisional "web:" anchor, persisted so a
     -- failed push retries next sync (baseline alone would swallow the adoption).
     self.adopt_pending = G_reader_settings:readSetting("tomesync_adopt_pending") or {{}}
-    -- local rendering position -> {{ anchor, anchor_end }} of the SERVER identity
-    -- for foreign highlights that had to be re-anchored on this copy (see
-    -- _applyForeign). Persisted so repairs survive restarts.
+    -- "<book_id>|<local pos0>" -> {{ anchor, anchor_end }} of the SERVER
+    -- identity for foreign highlights that had to be re-anchored on this copy
+    -- (see _applyForeign). Keys are book-scoped: xPointers are only unique
+    -- WITHIN a book, and structurally common positions (p[1]/text().0) would
+    -- otherwise collide across books and mistranslate pushes. Persisted so
+    -- repairs survive restarts.
     self.repair_map = G_reader_settings:readSetting("tomesync_repair_map") or {{}}
     -- Per-book annotation sync baseline: book_id -> {{ anchor -> mtime }} as of last
     -- sync. Lets a diff tell "I deleted this" from "this is new from another device".
@@ -2284,7 +2287,8 @@ function TomeSync:_localAnnotationMap()
             -- their SERVER identity: index them under the server anchor so
             -- edits/deletes/tombstones from other devices reach them, and our
             -- own pushes never mint a duplicate identity for the same words.
-            local alias = self.repair_map and self.repair_map[anchor]
+            local alias = self.repair_map and self.book_id
+                and self.repair_map[tostring(self.book_id) .. "|" .. anchor]
             map[(alias and alias.anchor) or anchor] = {{ item = a, mtime = annotMtime(a) }}
         end
     end
@@ -2418,7 +2422,7 @@ function TomeSync:_applyForeign(ann, s)
         if a.pos0 == p0 then return false end   -- already rendered by an earlier repair
     end
     if not add(p0, p1) then return false end
-    self.repair_map[p0] = {{ anchor = s.anchor, anchor_end = s.anchor_end }}
+    self.repair_map[tostring(self.book_id) .. "|" .. p0] = {{ anchor = s.anchor, anchor_end = s.anchor_end }}
     G_reader_settings:saveSetting("tomesync_repair_map", self.repair_map)
     logger.info("TomeSync: repaired foreign highlight to", p0)
     return true
@@ -2485,7 +2489,7 @@ function TomeSync:_syncAnnotations()
                 if it.anchor ~= anchor then
                     -- repaired item: push under its server identity, with the
                     -- ORIGIN device's positions (ours are local rendering only)
-                    local alias = self.repair_map[it.anchor]
+                    local alias = self.repair_map[bk .. "|" .. it.anchor]
                     it.anchor = anchor
                     it.anchor_end = (alias and alias.anchor_end) or it.anchor_end
                 end
@@ -2543,8 +2547,11 @@ function TomeSync:_syncAnnotations()
         if type(a.pos0) == "string" then raw[a.pos0] = true end
     end
     local pruned = false
-    for pos0 in pairs(self.repair_map) do
-        if not raw[pos0] then self.repair_map[pos0] = nil; pruned = true end
+    local prefix = bk .. "|"
+    for key in pairs(self.repair_map) do
+        if key:sub(1, #prefix) == prefix and not raw[key:sub(#prefix + 1)] then
+            self.repair_map[key] = nil; pruned = true
+        end
     end
     if pruned then G_reader_settings:saveSetting("tomesync_repair_map", self.repair_map) end
     return resp
