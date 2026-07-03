@@ -86,6 +86,18 @@ All notable changes to Tome are documented here. Format loosely follows
   Small "i" hints explain the progress and reading-intensity charts in plain language.
 
 ### Fixed
+- **Highlights from another device can no longer land on the wrong words.**
+  Before painting a highlight that was made elsewhere, the plugin (build 28)
+  now verifies the stored position actually reproduces the highlighted text on
+  this copy of the book. When it doesn't (a re-downloaded copy can shift
+  positions), the passage is found by its text and painted there — while the
+  original device's position stays untouched on the server, so the two devices
+  can't fight over it. Text that can't be located is skipped rather than
+  guessed. Notes edited on a repaired highlight still sync everywhere.
+- **Book matching no longer trusts a stale device checksum.** KOReader's
+  sidecar hash can be inherited from a different copy of a book (metadata
+  restores); the plugin now hashes the actual file when identifying it,
+  which the emulator tests caught producing wrong lookups.
 - **The KOReader reading-history import no longer risks out-of-memory on big
   histories.** The plugin used to load every page-stat row since the last sync
   into memory at once — tens of thousands of rows on a device with years of

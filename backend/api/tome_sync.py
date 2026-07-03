@@ -42,8 +42,8 @@ logger = logging.getLogger(__name__)
 # build than 13 — otherwise a device that updated to 1.2.1's build-13 impl and
 # later points at a main/1.3.0 server (also 13) would not re-download main's
 # richer impl. Hence 14.
-TOMESYNC_PLUGIN_BUILD = 27
-TOMESYNC_PLUGIN_SEMVER = "1.7.2"
+TOMESYNC_PLUGIN_BUILD = 28
+TOMESYNC_PLUGIN_SEMVER = "1.7.3"
 TOMESYNC_PLUGIN_VERSION = str(TOMESYNC_PLUGIN_BUILD)
 
 
@@ -1549,6 +1549,10 @@ function TomeSync:init()
     -- Web-adoption ledger: real_anchor -> provisional "web:" anchor, persisted so a
     -- failed push retries next sync (baseline alone would swallow the adoption).
     self.adopt_pending = G_reader_settings:readSetting("tomesync_adopt_pending") or {{}}
+    -- local rendering position -> {{ anchor, anchor_end }} of the SERVER identity
+    -- for foreign highlights that had to be re-anchored on this copy (see
+    -- _applyForeign). Persisted so repairs survive restarts.
+    self.repair_map = G_reader_settings:readSetting("tomesync_repair_map") or {{}}
     -- Per-book annotation sync baseline: book_id -> {{ anchor -> mtime }} as of last
     -- sync. Lets a diff tell "I deleted this" from "this is new from another device".
     self.annot_baseline = G_reader_settings:readSetting("tomesync_annot_baseline") or {{}}
@@ -1984,15 +1988,15 @@ function TomeSync:_tryResolve()
     local doc = self.ui and self.ui.document
     if not doc then return end
     local filename = doc.file:match("([^/]+)$") or doc.file
-    -- KOReader's own file identity: the partial-MD5 from the sidecar when
-    -- present (no extra IO), else computed (~12KB of reads). The server
-    -- matches it against the hashes recorded when it scanned or served the
-    -- artifact — deterministic even for renamed/moved files; the filename
-    -- heuristics remain as fallback.
-    local md5 = self.ui.doc_settings and self.ui.doc_settings:readSetting("partial_md5_checksum")
-    if not md5 then
-        local mok, computed = pcall(function() return require("util").partialMD5(doc.file) end)
-        if mok then md5 = computed end
+    -- KOReader's own file identity, computed FRESH from the file (~12KB of
+    -- reads). The sidecar's partial_md5_checksum is only a fallback: metadata
+    -- archive restores can inherit it from ANOTHER copy of the book, so it is
+    -- not a reliable hash of these bytes (observed in emulator testing). The
+    -- server matches against the hashes recorded when it scanned or served
+    -- the artifact; the filename heuristics remain as final fallback.
+    local mok, md5 = pcall(function() return require("util").partialMD5(doc.file) end)
+    if not mok or type(md5) ~= "string" then
+        md5 = self.ui.doc_settings and self.ui.doc_settings:readSetting("partial_md5_checksum")
     end
     logger.info("TomeSync: resolving filename:", filename)
     local rok, result, rcode = pcall(apiRequest, "GET",
@@ -2275,7 +2279,14 @@ function TomeSync:_localAnnotationMap()
     local map = {{}}
     for _, a in ipairs(list) do
         local anchor = annotAnchor(a)
-        if anchor then map[anchor] = {{ item = a, mtime = annotMtime(a) }} end
+        if anchor then
+            -- Repaired foreign highlights render at a local position but keep
+            -- their SERVER identity: index them under the server anchor so
+            -- edits/deletes/tombstones from other devices reach them, and our
+            -- own pushes never mint a duplicate identity for the same words.
+            local alias = self.repair_map and self.repair_map[anchor]
+            map[(alias and alias.anchor) or anchor] = {{ item = a, mtime = annotMtime(a) }}
+        end
     end
     return map
 end
@@ -2297,20 +2308,9 @@ function TomeSync:_applyServerState(alive, tombstones)
             local L = localmap[s.anchor]
             local smtime = s.datetime_updated or s.datetime or ""
             if not L then
-                -- New highlight from another device: reconstruct so it renders.
-                -- Rolling (crengine) docs can only draw real xPointers ("/body…");
-                -- anything else (PDF datetime fallbacks, corrupt data) would
-                -- hard-crash drawSavedHighlight → getPosFromXPointer on repaint.
-                local drawable = (not self.ui.rolling) or s.anchor:sub(1, 5) == "/body"
-                local ok = drawable and pcall(function()
-                    ann:addItem({{
-                        page = s.anchor, pos0 = s.anchor, pos1 = s.anchor_end or s.anchor,
-                        text = s.highlighted_text, note = s.note, chapter = s.chapter,
-                        color = s.color, drawer = "lighten",
-                        datetime = s.datetime, datetime_updated = s.datetime_updated,
-                    }})
-                end)
-                changed = changed or (ok == true)
+                -- New highlight from another device: verify it reproduces its
+                -- text on THIS copy before drawing; repair or skip otherwise.
+                changed = self:_applyForeign(ann, s) or changed
             elseif smtime > L.mtime then
                 -- Newer edit from elsewhere wins (note/color/text).
                 L.item.text  = s.highlighted_text
@@ -2345,6 +2345,85 @@ function TomeSync:_applyServerState(alive, tombstones)
     end
 end
 
+function TomeSync:_locateText(text, chapter)
+    -- Find `text` in the open (rolling) document; when several places carry
+    -- the same words prefer the hit inside `chapter`. Returns start/end
+    -- xPointers or nil. Shared by web adoption and foreign-highlight repair.
+    local ok, results = pcall(function()
+        -- (pattern, case_insensitive, nb_context_words, max_hits, regex)
+        return self.ui.document:findAllText(text, false, 2, 5, false)
+    end)
+    if not ok or type(results) ~= "table" then return nil end
+    local hit = results[1]
+    if #results > 1 and chapter then
+        for _, r in ipairs(results) do
+            local okc, title = pcall(function()
+                local page = self.ui.document:getPageFromXPointer(r.start)
+                return self.ui.toc:getTocTitleByPage(page)
+            end)
+            if okc and title == chapter then hit = r; break end
+        end
+    end
+    if hit and type(hit.start) == "string" and type(hit["end"]) == "string" then
+        return hit.start, hit["end"]
+    end
+    return nil
+end
+
+function TomeSync:_applyForeign(ann, s)
+    -- A highlight made on another device. NEVER paint it on the wrong words:
+    -- verify that the anchor reproduces the highlighted text on THIS copy of
+    -- the book, repair by text search when it doesn't (a different bake of the
+    -- same book shifts xPointers), and skip entirely when the text can't be
+    -- located. Repairs keep the SERVER identity (repair_map) so the origin
+    -- device's anchor is never rewritten — no cross-device anchor ping-pong.
+    local function norm(t)
+        if type(t) ~= "string" then return nil end
+        t = t:gsub("\194\173", "")       -- soft hyphens (U+00AD)
+        t = t:gsub("%s+", " ")
+        return t:match("^%s*(.-)%s*$")
+    end
+    local function add(p0, p1)
+        return pcall(function()
+            ann:addItem({{
+                page = p0, pos0 = p0, pos1 = p1,
+                text = s.highlighted_text, note = s.note, chapter = s.chapter,
+                color = s.color, drawer = "lighten",
+                datetime = s.datetime, datetime_updated = s.datetime_updated,
+            }})
+        end) == true
+    end
+
+    if not self.ui.rolling then
+        -- PDF: positions aren't xPointers and extracted text isn't comparable —
+        -- keep the pre-verify behaviour (the /body guard is a crengine concern).
+        return add(s.anchor, s.anchor_end or s.anchor)
+    end
+
+    local want = norm(s.highlighted_text)
+    if s.anchor:sub(1, 5) == "/body" then
+        local okx, got = pcall(function()
+            return self.ui.document:getTextFromXPointers(s.anchor, s.anchor_end or s.anchor)
+        end)
+        if okx and (not want or norm(got) == want) then
+            -- verified (or nothing to verify against): draw at the real anchor
+            return add(s.anchor, s.anchor_end or s.anchor)
+        end
+    end
+
+    if not want or want == "" then return false end
+    local p0, p1 = self:_locateText(s.highlighted_text, s.chapter)
+    if not p0 then return false end   -- unlocatable here: skip, never wrong words
+    for _, a in ipairs(ann.annotations or {{}}) do
+        if a.pos0 == p0 then return false end   -- already rendered by an earlier repair
+    end
+    if not add(p0, p1) then return false end
+    self.repair_map[p0] = {{ anchor = s.anchor, anchor_end = s.anchor_end }}
+    G_reader_settings:saveSetting("tomesync_repair_map", self.repair_map)
+    logger.info("TomeSync: repaired foreign highlight to", p0)
+    return true
+end
+
 function TomeSync:_adoptWebAnnotations(pending)
     -- Highlights created in Tome's web reader arrive with a provisional "web:"
     -- anchor and no position. Locate each one's text with crengine and create a
@@ -2364,25 +2443,11 @@ function TomeSync:_adoptWebAnnotations(pending)
     for _, s in ipairs(pending) do
         local text = s.highlighted_text
         if type(text) == "string" and text ~= "" and not seen_text[text] then
-            local ok, results = pcall(function()
-                -- (pattern, case_insensitive, nb_context_words, max_hits, regex)
-                return self.ui.document:findAllText(text, false, 2, 5, false)
-            end)
-            local hit = (ok and type(results) == "table") and results[1] or nil
-            if ok and type(results) == "table" and #results > 1 and s.chapter then
-                -- Same text in several places: prefer the chapter the web named.
-                for _, r in ipairs(results) do
-                    local okc, title = pcall(function()
-                        local page = self.ui.document:getPageFromXPointer(r.start)
-                        return self.ui.toc:getTocTitleByPage(page)
-                    end)
-                    if okc and title == s.chapter then hit = r; break end
-                end
-            end
-            if hit and type(hit.start) == "string" and type(hit["end"]) == "string" then
+            local hit_start, hit_end = self:_locateText(text, s.chapter)
+            if hit_start then
                 local okAdd = pcall(function()
                     ann:addItem({{
-                        page = hit.start, pos0 = hit.start, pos1 = hit["end"],
+                        page = hit_start, pos0 = hit_start, pos1 = hit_end,
                         text = text, note = s.note, chapter = s.chapter,
                         color = s.color, drawer = "lighten",
                         datetime = s.datetime, datetime_updated = s.datetime_updated,
@@ -2390,7 +2455,7 @@ function TomeSync:_adoptWebAnnotations(pending)
                 end)
                 if okAdd then
                     seen_text[text] = true
-                    self.adopt_pending[hit.start] = s.anchor
+                    self.adopt_pending[hit_start] = s.anchor
                     adopted = adopted + 1
                 end
             end
@@ -2416,7 +2481,16 @@ function TomeSync:_syncAnnotations()
     for anchor, L in pairs(localmap) do
         if baseline[anchor] == nil or baseline[anchor] ~= L.mtime then
             local it = self:_annotItem(L.item)
-            if it then table.insert(upserts, it) end
+            if it then
+                if it.anchor ~= anchor then
+                    -- repaired item: push under its server identity, with the
+                    -- ORIGIN device's positions (ours are local rendering only)
+                    local alias = self.repair_map[it.anchor]
+                    it.anchor = anchor
+                    it.anchor_end = (alias and alias.anchor_end) or it.anchor_end
+                end
+                table.insert(upserts, it)
+            end
         end
     end
     local now = os.date("%Y-%m-%d %H:%M:%S")   -- local wall-clock, matches KOReader's
@@ -2461,6 +2535,18 @@ function TomeSync:_syncAnnotations()
     for anchor, L in pairs(after) do newbase[anchor] = L.mtime end
     self.annot_baseline[bk] = newbase
     G_reader_settings:saveSetting("tomesync_annot_baseline", self.annot_baseline)
+
+    -- Drop aliases whose local rendering is gone (a local delete already went
+    -- out under the server identity above) so the map can't grow stale.
+    local raw = {{}}
+    for _, a in ipairs((self.ui.annotation and self.ui.annotation.annotations) or {{}}) do
+        if type(a.pos0) == "string" then raw[a.pos0] = true end
+    end
+    local pruned = false
+    for pos0 in pairs(self.repair_map) do
+        if not raw[pos0] then self.repair_map[pos0] = nil; pruned = true end
+    end
+    if pruned then G_reader_settings:saveSetting("tomesync_repair_map", self.repair_map) end
     return resp
 end
 

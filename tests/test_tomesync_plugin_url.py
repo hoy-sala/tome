@@ -167,5 +167,10 @@ def test_build_bumped_for_rebake():
     # file's KOReader partial-MD5 with resolve calls; the server matches it
     # against ko_hashes (recorded at scan/serve time) before any filename
     # heuristics — renamed/moved device files resolve exactly.
-    assert TOMESYNC_PLUGIN_BUILD >= 27
-    assert TOMESYNC_PLUGIN_SEMVER == "1.7.2"
+    # 1.7.3 / build 28 verifies foreign highlights before painting them: the
+    # anchor must reproduce its highlighted text on this copy; mismatches are
+    # repaired by text search (rendered locally, server identity kept via
+    # repair_map — no cross-device anchor ping-pong); unlocatable text is
+    # skipped rather than painted on the wrong words.
+    assert TOMESYNC_PLUGIN_BUILD >= 28
+    assert TOMESYNC_PLUGIN_SEMVER == "1.7.3"

@@ -93,3 +93,17 @@ def test_impl_still_compiles_under_luajit(impl):
     else:
         res = subprocess.run([checker, "-p", path], capture_output=True, text=True)
     assert res.returncode == 0, res.stderr[:2000]
+
+
+def test_foreign_highlights_are_verified_before_painting(impl):
+    """Build 28: incoming cross-device highlights verify their text via
+    getTextFromXPointers, repair via _locateText, and keep server identity in
+    repair_map — never painted on the wrong words, never re-anchored server-side."""
+    assert "function TomeSync:_applyForeign" in impl
+    assert "getTextFromXPointers" in impl
+    assert "function TomeSync:_locateText" in impl
+    assert "tomesync_repair_map" in impl
+    # the old blind reconstruct (draw whatever the anchor resolves to) is gone
+    assert "New highlight from another device: reconstruct so it renders." not in impl
+    # pushes translate repaired items back to the server identity
+    assert "it.anchor = anchor" in impl
