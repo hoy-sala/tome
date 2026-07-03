@@ -72,3 +72,73 @@ def test_top_books_reconciled_ordering(client, db, admin_user, make_book):
     db.flush()
     top = client.get("/api/stats?days=0").json()["top_books"]
     assert [b["title"] for b in top[:2]] == ["Big", "Small"]
+
+
+# ── Gap-clustered session counts (replaced the one-per-(book,day) approximation) ──
+
+def _seed_stats(db, user_id, book_id, rows):
+    from backend.models.ko_stats import PageStat
+    for start, dur in rows:
+        db.add(PageStat(user_id=user_id, book_id=book_id, page=1, total_pages=100,
+                        start_time=start, duration_seconds=dur, device="Kindle"))
+    db.commit()
+
+
+def test_two_sittings_same_day_are_two_sessions(db, admin_user, make_book):
+    from backend.services.reconciled_reading import totals, covered_book_ids
+    user, _ = admin_user
+    book = make_book(title="Cluster Book", author="A")
+    base = 1_720_000_000  # mid-day epoch
+    # morning sitting: 3 pages close together; evening sitting 4h later
+    _seed_stats(db, user.id, book.id,
+                [(base, 60), (base + 70, 60), (base + 140, 60),
+                 (base + 4 * 3600, 60), (base + 4 * 3600 + 90, 60)])
+    covered = covered_book_ids(db, user.id)
+    secs, sessions, pages = totals(db, user.id, "+0 hours", covered, None, None)
+    assert sessions == 2          # the old approximation reported 1
+    assert secs == 300 and pages == 5
+
+
+def test_midnight_crossing_is_one_session_on_start_day(db, admin_user, make_book):
+    from backend.services.reconciled_reading import daily_map, covered_book_ids
+    from datetime import datetime, timezone
+    user, _ = admin_user
+    book = make_book(title="Midnight Book", author="A")
+    # 23:50 UTC .. 00:20 UTC — continuous reading across the day boundary
+    start = int(datetime(2026, 3, 10, 23, 50, tzinfo=timezone.utc).timestamp())
+    _seed_stats(db, user.id, book.id,
+                [(start + i * 300, 240) for i in range(7)])  # 35 min span
+    covered = covered_book_ids(db, user.id)
+    dm = daily_map(db, user.id, "+0 hours", covered, None, None)
+    total_sessions = sum(v[1] for v in dm.values())
+    assert total_sessions == 1                       # old: 2 (one per day touched)
+    assert dm["2026-03-10"][1] == 1                  # attributed to the start day
+    assert dm.get("2026-03-11", (0, 0, 0))[1] == 0   # not double-counted
+    # seconds still land on the day the pages were read
+    assert dm["2026-03-11"][0] > 0
+
+
+def test_noise_flip_not_counted_as_session(db, admin_user, make_book):
+    from backend.services.reconciled_reading import totals, covered_book_ids
+    user, _ = admin_user
+    book = make_book(title="Flip Book", author="A")
+    base = 1_720_100_000
+    _seed_stats(db, user.id, book.id,
+                [(base, 3),                    # 3s flip — below MIN_SESSION_SECONDS
+                 (base + 7200, 120), (base + 7300, 120)])  # a real sitting later
+    covered = covered_book_ids(db, user.id)
+    _, sessions, _ = totals(db, user.id, "+0 hours", covered, None, None)
+    assert sessions == 1
+
+
+def test_per_book_session_counts_are_clustered(db, admin_user, make_book):
+    from backend.services.reconciled_reading import book_seconds, covered_book_ids
+    user, _ = admin_user
+    book = make_book(title="Per Book Cluster", author="A")
+    base = 1_720_200_000
+    # three sittings, two on the same day — old distinct-day count said 2
+    _seed_stats(db, user.id, book.id,
+                [(base, 60), (base + 3 * 3600, 60), (base + 30 * 3600, 60)])
+    covered = covered_book_ids(db, user.id)
+    bs = book_seconds(db, user.id, "+0 hours", covered, None, None)
+    assert bs[book.id][1] == 3

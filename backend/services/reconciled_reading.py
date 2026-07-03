@@ -18,7 +18,10 @@ unchanged (and the existing test suite stays valid).
 Each helper returns plain Python structures keyed the way `stats.py` needs, merging:
   - page-stat aggregates (for covered books), and
   - session aggregates for books NOT covered.
-Sessions count from page-stats is approximated as one "session" per (book, local-day).
+Session counts from page-stats use real gap-clustering: consecutive page rows of a
+book belong to one session until a gap exceeds SESSION_GAP_SECONDS (mirrors how the
+live recorder and KOReader's own stats view think about sessions). Clusters shorter
+than MIN_SESSION_SECONDS are noise (a page flip while shelving) and aren't counted.
 """
 from __future__ import annotations
 
@@ -80,6 +83,60 @@ def _ps_local(tzm: str):
     return func.datetime(PageStat.start_time, "unixepoch", tzm)
 
 
+# A new session starts when the gap between consecutive page rows of the same
+# book exceeds this (same 30-minute idea KOReader's stats plugin uses).
+SESSION_GAP_SECONDS = 1800
+# Clusters shorter than this are page-flip noise, mirroring the live
+# recorder's minimum-session threshold.
+MIN_SESSION_SECONDS = 10
+
+
+def _cluster_rows(db, user_id: int, tzm: str,
+                  cutoff: Optional[datetime], range_end: Optional[datetime]):
+    """Gap-clustered page-stat sessions: (book_id, day, start, secs, pages).
+
+    Pure SQL (SQLite window functions): number the breaks with LAG, run a
+    cumulative sum for cluster ids, aggregate. The day is the cluster's START
+    day in the user's timezone — a read across midnight is one session, on
+    the day it began, exactly like a live-recorded session.
+    """
+    from sqlalchemy import text
+
+    where, params = ["user_id = :uid"], {"uid": user_id, "tzm": tzm,
+                                         "gap": SESSION_GAP_SECONDS,
+                                         "min_secs": MIN_SESSION_SECONDS}
+    ce, ee = _epoch(cutoff), _epoch(range_end)
+    if ce is not None:
+        where.append("start_time >= :ce"); params["ce"] = ce
+    if ee is not None:
+        where.append("start_time < :ee"); params["ee"] = ee
+
+    sql = text(f"""
+        WITH ordered AS (
+            SELECT book_id, start_time, duration_seconds,
+                   CASE WHEN start_time - LAG(start_time) OVER w > :gap
+                        THEN 1 ELSE 0 END AS brk
+            FROM ko_page_stats
+            WHERE {' AND '.join(where)}
+            WINDOW w AS (PARTITION BY book_id ORDER BY start_time)
+        ), clustered AS (
+            SELECT book_id, start_time, duration_seconds,
+                   SUM(brk) OVER (PARTITION BY book_id ORDER BY start_time
+                                  ROWS UNBOUNDED PRECEDING) AS cluster_id
+            FROM ordered
+        )
+        SELECT book_id,
+               date(MIN(start_time), 'unixepoch', :tzm) AS day,
+               MIN(start_time) AS start,
+               SUM(duration_seconds) AS secs,
+               COUNT(*) AS pages
+        FROM clustered
+        GROUP BY book_id, cluster_id
+        HAVING SUM(duration_seconds) >= :min_secs
+    """)
+    return db.execute(sql, params).all()
+
+
 # ── Totals ────────────────────────────────────────────────────────────────────
 
 def totals(db, user_id, tzm, covered, cutoff, range_end) -> tuple[int, int, int]:
@@ -91,20 +148,14 @@ def totals(db, user_id, tzm, covered, cutoff, range_end) -> tuple[int, int, int]
     ).one()
     secs, sessions, pages = int(rs[0] or 0), int(rs[1] or 0), int(rs[2] or 0)
     if covered:
-        # page-stat day-groups: one "session" per (book, local-day)
-        day_groups = (
-            _ps_filtered(db, user_id, cutoff, range_end)
-            .with_entities(
-                PageStat.book_id, _ps_day(tzm).label("day"),
-                func.sum(PageStat.duration_seconds).label("secs"),
-                func.count(PageStat.id).label("pages"),
-            )
-            .group_by(PageStat.book_id, "day")
-            .all()
-        )
-        secs += sum(int(g.secs or 0) for g in day_groups)
-        pages += sum(int(g.pages or 0) for g in day_groups)
-        sessions += len(day_groups)
+        ps = _ps_filtered(db, user_id, cutoff, range_end).with_entities(
+            func.coalesce(func.sum(PageStat.duration_seconds), 0),
+            func.coalesce(func.count(PageStat.id), 0),
+        ).one()
+        secs += int(ps[0] or 0)
+        pages += int(ps[1] or 0)
+        # real sessions: gap-clustered, not one-per-(book, day)
+        sessions += len(_cluster_rows(db, user_id, tzm, cutoff, range_end))
     return secs, sessions, pages
 
 
@@ -124,20 +175,24 @@ def daily_map(db, user_id, tzm, covered, start_dt, end_dt) -> dict[str, tuple[in
     )
     out: dict[str, list[int]] = {r.day: [int(r.secs or 0), int(r.sessions or 0), int(r.pages or 0)] for r in rows}
     if covered:
-        # aggregate page-stats per (book, day) first, then roll up to day so "sessions"
-        # = distinct books read that day.
+        # seconds/pages stay allocated to the day each page was read; session
+        # COUNTS come from gap-clusters, attributed to the cluster's start day
+        # (a read across midnight is one session, like a live-recorded one).
         day_groups = (
             _ps_filtered(db, user_id, start_dt, end_dt)
             .with_entities(
-                PageStat.book_id, _ps_day(tzm).label("day"),
+                _ps_day(tzm).label("day"),
                 func.sum(PageStat.duration_seconds).label("secs"),
                 func.count(PageStat.id).label("pages"),
             )
-            .group_by(PageStat.book_id, "day").all()
+            .group_by("day").all()
         )
         for g in day_groups:
             e = out.setdefault(g.day, [0, 0, 0])
-            e[0] += int(g.secs or 0); e[1] += 1; e[2] += int(g.pages or 0)
+            e[0] += int(g.secs or 0); e[2] += int(g.pages or 0)
+        for c in _cluster_rows(db, user_id, tzm, start_dt, end_dt):
+            e = out.setdefault(c.day, [0, 0, 0])
+            e[1] += 1
     return {d: (v[0], v[1], v[2]) for d, v in out.items()}
 
 
@@ -163,14 +218,16 @@ def book_seconds(db, user_id, tzm, covered, cutoff, range_end) -> dict[int, tupl
             .with_entities(
                 PageStat.book_id,
                 func.sum(PageStat.duration_seconds).label("secs"),
-                func.count(func.distinct(_ps_day(tzm))).label("sessions"),
                 func.count(PageStat.id).label("pages"),
             )
             .group_by(PageStat.book_id).all()
         )
         for r in rows2:
             e = out.setdefault(r.book_id, [0, 0, 0])
-            e[0] += int(r.secs or 0); e[1] += int(r.sessions or 0); e[2] += int(r.pages or 0)
+            e[0] += int(r.secs or 0); e[2] += int(r.pages or 0)
+        for c in _cluster_rows(db, user_id, tzm, cutoff, range_end):
+            e = out.setdefault(c.book_id, [0, 0, 0])
+            e[1] += 1
     return {b: (v[0], v[1], v[2]) for b, v in out.items()}
 
 

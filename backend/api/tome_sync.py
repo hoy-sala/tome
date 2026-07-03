@@ -42,8 +42,8 @@ logger = logging.getLogger(__name__)
 # build than 13 — otherwise a device that updated to 1.2.1's build-13 impl and
 # later points at a main/1.3.0 server (also 13) would not re-download main's
 # richer impl. Hence 14.
-TOMESYNC_PLUGIN_BUILD = 26
-TOMESYNC_PLUGIN_SEMVER = "1.7.1"
+TOMESYNC_PLUGIN_BUILD = 27
+TOMESYNC_PLUGIN_SEMVER = "1.7.2"
 TOMESYNC_PLUGIN_VERSION = str(TOMESYNC_PLUGIN_BUILD)
 
 
@@ -83,6 +83,7 @@ def _get_position(db: Session, user_id: int, book_id: int) -> Optional[TomeSyncP
 @router.get("/tome-sync/resolve")
 def resolve_book(
     filename: str,
+    ko_md5: str = "",
     db: Session = Depends(get_db),
     user: User = Depends(_get_api_key_user),
 ):
@@ -98,6 +99,18 @@ def resolve_book(
     title appeared inside vol-2's filename).
     """
     import re
+
+    # 0. Deterministic identity: the device file's KOReader partial-MD5 against
+    #    the hashes Tome recorded when it scanned or served the artifact. Exact
+    #    however the file was renamed or moved on the device; everything below
+    #    is heuristic fallback for files that never passed through Tome.
+    if ko_md5:
+        from backend.services.ko_hash import lookup_book_ids
+        hit = lookup_book_ids(db, [ko_md5]).get(ko_md5)
+        if hit is not None:
+            book = db.get(Book, hit)
+            if book and book.status == "active":
+                return {"book_id": book.id, "method": "ko_hash"}
 
     stem = filename.rsplit(".", 1)[0] if "." in filename else filename
     stem_l = stem.lower()
@@ -841,7 +854,9 @@ def download_book_via_api_key(
         raise HTTPException(status_code=404, detail="File no longer on disk")
 
     from backend.services.metadata_embed import get_baked_path
+    from backend.services.ko_hash import record_served_artifact
     serve_path = get_baked_path(book_file.book, book_file)
+    record_served_artifact(db, book_file.book_id, book_file, serve_path)
 
     filename = f"{book_file.book.title}.{book_file.format}"
     return FileResponse(
@@ -1969,9 +1984,20 @@ function TomeSync:_tryResolve()
     local doc = self.ui and self.ui.document
     if not doc then return end
     local filename = doc.file:match("([^/]+)$") or doc.file
+    -- KOReader's own file identity: the partial-MD5 from the sidecar when
+    -- present (no extra IO), else computed (~12KB of reads). The server
+    -- matches it against the hashes recorded when it scanned or served the
+    -- artifact — deterministic even for renamed/moved files; the filename
+    -- heuristics remain as fallback.
+    local md5 = self.ui.doc_settings and self.ui.doc_settings:readSetting("partial_md5_checksum")
+    if not md5 then
+        local mok, computed = pcall(function() return require("util").partialMD5(doc.file) end)
+        if mok then md5 = computed end
+    end
     logger.info("TomeSync: resolving filename:", filename)
     local rok, result, rcode = pcall(apiRequest, "GET",
-        "/tome-sync/resolve?filename=" .. urlEncode(filename))
+        "/tome-sync/resolve?filename=" .. urlEncode(filename)
+        .. (md5 and ("&ko_md5=" .. urlEncode(md5)) or ""))
     if rok and result and type(rcode) == "number" and rcode == 200 and result.book_id then
         self.book_id = result.book_id
         self.book_map[doc.file] = self.book_id

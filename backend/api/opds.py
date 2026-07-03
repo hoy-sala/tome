@@ -408,7 +408,9 @@ def opds_download(
         pass
 
     from backend.services.metadata_embed import get_baked_path
+    from backend.services.ko_hash import record_served_artifact
     serve_path = get_baked_path(book, book_file)
+    record_served_artifact(db, book.id, book_file, serve_path)
 
     media_type = FORMAT_MIME.get(book_file.format, "application/octet-stream")
     filename = f"{book.title}.{book_file.format}"

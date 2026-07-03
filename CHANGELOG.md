@@ -7,6 +7,20 @@ All notable changes to Tome are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **KOReader files are now recognised by content, not just by name.** Tome
+  records the KOReader-style hash of every file it scans and every copy it
+  serves, and the plugin (build 27) sends the open file's hash when it asks
+  "which book is this?". A book you renamed or moved on the device — or
+  sideloaded from the same source — now resolves exactly, with the careful
+  filename matching kept as fallback. The reading-history import uses the same
+  hashes first, so device history matches your library deterministically
+  before any title guessing.
+- **Session counts from imported device history are real sessions now.** The
+  stats reconciliation used to approximate "one session per book per day";
+  it now splits device reading at 30-minute gaps, the same way sessions are
+  actually experienced. On a real multi-year device history that corrected a
+  one-third undercount (320 → 470 sessions); reading time and page counts are
+  unchanged, and a read across midnight counts once, on the day it began.
 - **File books into libraries straight from the Bindery.** The review form
   (and the batch "apply to all" bar) now has a Libraries picker like the one
   on the book page, so an accepted book lands in the right libraries in one

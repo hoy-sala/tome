@@ -163,5 +163,9 @@ def test_build_bumped_for_rebake():
     # keyset-windowed reads over (start_time, rowid) instead of loading every
     # page-stat row since the watermark at once, and each upload chunk carries
     # only the books it references. Verified against a 34k-row device DB.
-    assert TOMESYNC_PLUGIN_BUILD >= 26
-    assert TOMESYNC_PLUGIN_SEMVER == "1.7.1"
+    # 1.7.2 / build 27 adds deterministic book identity: the plugin sends the
+    # file's KOReader partial-MD5 with resolve calls; the server matches it
+    # against ko_hashes (recorded at scan/serve time) before any filename
+    # heuristics — renamed/moved device files resolve exactly.
+    assert TOMESYNC_PLUGIN_BUILD >= 27
+    assert TOMESYNC_PLUGIN_SEMVER == "1.7.2"

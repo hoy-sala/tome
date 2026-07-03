@@ -130,3 +130,34 @@ class KoStatsBookMatch(Base):
     )
 
     book: Mapped[Optional["Book"]] = relationship("Book")  # type: ignore[name-defined]
+
+
+class KoHash(Base):
+    """KOReader partial-MD5s of the artifacts a device may actually hold.
+
+    KOReader identifies books by ``util.partialMD5`` (1KB samples at
+    exponentially spaced offsets). Tome's downloads are *baked* copies, so
+    a device file's hash never matches ``BookFile.content_hash`` (sha256 of
+    the raw library file). This table records the partial-MD5 of both the
+    raw file (``kind="raw"``, for sideloaded originals) and every baked
+    artifact we serve (``kind="baked"``) — deterministic identity for any
+    file however it reached the device, with the filename heuristics as
+    fallback. Baked bytes change when metadata changes, so a book keeps its
+    last few baked hashes (older device copies still match); pruning is the
+    recorder's job (see ``backend/services/ko_hash.py``).
+    """
+    __tablename__ = "ko_hashes"
+    __table_args__ = (
+        UniqueConstraint("book_id", "ko_partial_md5", name="uq_ko_hash_book_md5"),
+        Index("ix_ko_hashes_md5", "ko_partial_md5"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    book_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("books.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    ko_partial_md5: Mapped[str] = mapped_column(String(32), nullable=False)
+    kind: Mapped[str] = mapped_column(String(8), nullable=False, default="raw")  # raw | baked
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    book: Mapped["Book"] = relationship("Book")  # type: ignore[name-defined]

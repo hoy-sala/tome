@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from backend.core.permissions import book_visibility_filter
 from backend.models.book import Book, BookFile
+from backend.services.ko_hash import lookup_book_ids
 from backend.models.ko_stats import KoStatsBookMatch, PageStat, StatsImport
 
 # NOTE: the import deliberately does NOT write Tome read-status (read/reading/finished).
@@ -247,6 +248,33 @@ def import_batch(
             if md5:
                 seen_md5[md5] = existing.book_id
             continue
+
+        # Deterministic identity first: KOReader's md5 IS the partial-MD5 Tome
+        # records for every artifact it scans or serves (ko_hashes), so a hash
+        # hit is exact — no title heuristics, works for renamed files. The
+        # fuzzy matcher below stays as the fallback for history whose files
+        # never came from (or into) this library.
+        if md5:
+            hash_hit = lookup_book_ids(db, [md5]).get(md5)
+            if hash_hit is not None:
+                ko_to_book[ko_id] = hash_hit
+                counts["matched"] += 1
+                if existing:
+                    existing.book_id = hash_hit
+                    existing.confidence = 1.0
+                    existing.method = "ko_hash"
+                    existing.status = "matched"
+                    existing.ko_title = b.get("title")
+                    existing.ko_authors = b.get("authors")
+                else:
+                    db.add(KoStatsBookMatch(
+                        user_id=user.id, ko_md5=md5,
+                        ko_title=b.get("title"), ko_authors=b.get("authors"),
+                        book_id=hash_hit, confidence=1.0,
+                        method="ko_hash", status="matched",
+                    ))
+                seen_md5[md5] = hash_hit
+                continue
 
         res = match_book(
             candidates, b.get("title") or "", b.get("authors"),

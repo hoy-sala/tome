@@ -39,6 +39,7 @@ def bulk_download(
         raise HTTPException(404, "No books found")
 
     from backend.services.metadata_embed import get_baked_path
+    from backend.services.ko_hash import record_served_artifact
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -54,6 +55,7 @@ def bulk_download(
                 # download path (single/OPDS/TomeSync). Falls back to the raw
                 # file if baking fails. Keep the original filename in the zip.
                 serve = get_baked_path(book, f)
+                record_served_artifact(db, book.id, f, serve)
                 zf.write(str(serve), f"{folder}/{raw.name}")
 
     buf.seek(0)

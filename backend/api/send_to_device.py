@@ -28,6 +28,7 @@ from backend.services.email import (
     send_test_email,
 )
 from backend.services.metadata_embed import get_baked_path
+from backend.services.ko_hash import record_served_artifact
 from backend.services.organizer import koreader_style_name
 
 log = logging.getLogger(__name__)
@@ -229,6 +230,7 @@ def send_to_device(
         raise HTTPException(404, "Device not found")
 
     baked = get_baked_path(book, book_file)
+    record_served_artifact(db, book.id, book_file, baked)
     if not baked.exists():
         raise HTTPException(404, "Book file not found on disk")
 
@@ -304,6 +306,7 @@ def bulk_send_to_device(
             errors.append({"book_id": bid, "error": "No file available"})
             continue
         baked = get_baked_path(book, bf)
+        record_served_artifact(db, book.id, bf, baked)
         if not baked.exists():
             errors.append({"book_id": bid, "error": "File not found on disk"})
             continue

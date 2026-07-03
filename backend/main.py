@@ -203,6 +203,13 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("Auto-import disabled (set TOME_AUTO_IMPORT=true to enable)")
 
+    # One-shot backfill of KOReader partial-MD5s for pre-existing library
+    # files (new files are hashed at ingest/serve time). No-op once done.
+    import threading
+    from backend.services.ko_hash import backfill_missing_raw_hashes
+    threading.Thread(target=backfill_missing_raw_hashes, daemon=True,
+                     name="ko-hash-backfill").start()
+
     release_task: asyncio.Task | None = None
     if settings.release_detection:
         logger.info("Release detection enabled — checking follows every %d seconds",

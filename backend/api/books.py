@@ -11,6 +11,7 @@ from typing import Optional
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile, File, Form, status
 from backend.services.safe_fetch import fetch_safe_image, UnsafeURLError
+from backend.services.ko_hash import ko_partial_md5, record_ko_hash, record_served_artifact
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -1671,6 +1672,7 @@ def download_book(
 
     from backend.services.metadata_embed import get_baked_path
     serve_path = get_baked_path(book_file.book, book_file)
+    record_served_artifact(db, book_file.book_id, book_file, serve_path)
 
     filename = f"{book_file.book.title}.{book_file.format}"
     audit(db, "books.downloaded", user_id=current_user.id, username=current_user.username,
@@ -2041,6 +2043,7 @@ def upload_book(
                 file_size=dest.stat().st_size,
                 content_hash=content_hash,
             ))
+            record_ko_hash(db, existing.id, ko_partial_md5(dest), "raw")
         else:
             tmp_path.unlink(missing_ok=True)
         db.commit()
@@ -2093,6 +2096,7 @@ def upload_book(
         file_size=dest.stat().st_size,
         content_hash=content_hash,
     ))
+    record_ko_hash(db, book.id, ko_partial_md5(dest), "raw")
 
     # Create genre tags from embedded metadata (epub dc:subject / CBZ ComicInfo)
     if meta.get("_genres"):
@@ -2313,6 +2317,7 @@ def ingest_book(
         file_size=dest.stat().st_size,
         content_hash=content_hash,
     ))
+    record_ko_hash(db, book.id, ko_partial_md5(dest), "raw")
 
     # Word count (EPUB only) — parsed from the ingested file on disk.
     if suffix == "epub":
