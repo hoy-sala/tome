@@ -62,6 +62,13 @@ class Settings(BaseSettings):
     release_detection: bool = False        # env TOME_RELEASE_DETECTION
     release_check_interval: int = 86400    # env TOME_RELEASE_CHECK_INTERVAL, seconds
 
+    # Hardcover sync (one-way Tome → Hardcover, ratings + reading progress).
+    # Kill switch only: the feature is inert until a user links their PERSONAL
+    # Hardcover API token in Settings (TOME_HARDCOVER_TOKEN above stays
+    # metadata-fetch-only and is never used for sync).
+    hardcover_sync_enabled: bool = True    # env TOME_HARDCOVER_SYNC_ENABLED
+    hardcover_sync_interval: int = 1800    # env TOME_HARDCOVER_SYNC_INTERVAL, seconds between reconcile cycles
+
     # Send-to-KOReader inbox (env TOME_SEND_TO_KOREADER). On by default since
     # v1.7.0 ("Signature") after real-hardware validation; the web UI queues a
     # book to be pulled onto KOReader by the TomeSync plugin's inbox (no

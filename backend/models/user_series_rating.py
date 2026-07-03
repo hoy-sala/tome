@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.core.database import Base
@@ -23,7 +23,9 @@ class UserSeriesRating(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     series_name: Mapped[str] = mapped_column(String(512), nullable=False, index=True)
-    rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Half-star steps (1.0–5.0). Same mixed int/float story as
+    # UserBookStatus.rating — legacy whole-star ints coexist untouched.
+    rating: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     review: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     rated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(

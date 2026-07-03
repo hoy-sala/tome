@@ -56,6 +56,8 @@ def apply_progress_to_status(
             finished_at=datetime.utcnow() if finished else None,
         )
         db.add(status_row)
+        if finished:
+            _nudge_hardcover()
         return status_row
 
     # Resume position tracks the latest report even on finished books.
@@ -75,7 +77,16 @@ def apply_progress_to_status(
         status_row.status = "read"
         status_row.progress_pct = 1.0
         status_row.finished_at = datetime.utcnow()
+        _nudge_hardcover()
     elif status_row.status == "unread" and pct > 0:
         status_row.status = "reading"
 
     return status_row
+
+
+def _nudge_hardcover() -> None:
+    """Finishing a book is the socially meaningful event — ask the Hardcover
+    sync worker for a near-term (debounced) push instead of waiting out the
+    batch interval. Lazy import keeps this module dependency-light."""
+    from backend.services.hardcover_sync import nudge
+    nudge()

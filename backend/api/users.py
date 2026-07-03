@@ -8,8 +8,10 @@ from sqlalchemy.orm import Session
 
 from backend import __version__
 from backend.core.database import get_db
+from backend.core.ratings import validate_rating
 from backend.core.security import get_current_user
 from backend.core.permissions import require_role
+from backend.services.hardcover_sync import nudge as hardcover_nudge
 from backend.models.user import User, UserPermission
 from backend.models.user_book_status import UserBookStatus
 from backend.models.tome_sync import ReadingSession, TomeSyncPosition
@@ -25,7 +27,7 @@ class StatusOut(BaseModel):
     status: str
     progress_pct: Optional[float]
     cfi: Optional[str] = None
-    rating: Optional[int] = None
+    rating: Optional[float] = None
     review: Optional[str] = None
     updated_at: Optional[str]
 
@@ -39,8 +41,8 @@ class StatusIn(BaseModel):
 
 
 class RatingIn(BaseModel):
-    rating: Optional[int] = None  # 1–5, or null to clear the rating
-    review: Optional[str] = None  # free-text; null leaves it unchanged
+    rating: Optional[float] = None  # 1–5 in half-star steps, or null to clear
+    review: Optional[str] = None    # free-text; null leaves it unchanged
 
 
 def _status_out(row: UserBookStatus) -> StatusOut:
@@ -79,8 +81,7 @@ def set_book_rating(
     Rating and review live on the same per-user-per-book row as reading status,
     so rating a book you've never opened just creates an 'unread' row.
     """
-    if body.rating is not None and not (1 <= body.rating <= 5):
-        raise HTTPException(400, "rating must be between 1 and 5, or null to clear")
+    validate_rating(body.rating)
     from backend.models.book import Book
     if not db.get(Book, book_id):
         raise HTTPException(404, "Book not found")
@@ -91,6 +92,7 @@ def set_book_rating(
         row = UserBookStatus(user_id=current_user.id, book_id=book_id, status="unread")
         db.add(row)
 
+    rating_changed = "rating" in raw and body.rating != row.rating
     if "rating" in raw:
         row.rating = body.rating
         row.rated_at = datetime.utcnow() if body.rating is not None else None
@@ -98,6 +100,8 @@ def set_book_rating(
         row.review = (body.review or None)
     db.commit()
     db.refresh(row)
+    if rating_changed:
+        hardcover_nudge()
     return _status_out(row)
 
 
@@ -123,6 +127,7 @@ def set_book_status(
         # the user un-finishes the book.
         if body.status == "read" and row.status != "read":
             row.finished_at = datetime.utcnow()
+            hardcover_nudge()
         elif body.status != "read":
             row.finished_at = None
         row.status = body.status

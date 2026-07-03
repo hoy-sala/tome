@@ -186,5 +186,8 @@ def test_build_bumped_for_rebake():
     # device re-fetches regardless of which 26 it took; 27-29 are the
     # foundations-stack builds (identity+clustering, verify/repair, UX batch),
     # and the paging guard's semantics are folded into _applyForeign.
-    assert TOMESYNC_PLUGIN_BUILD >= 30
-    assert TOMESYNC_PLUGIN_SEMVER == "1.7.4"
+    # 1.8.0 / build 31 introduces half-star ratings server-side: the plugin's
+    # rating_baseline splits into {remote, device} so a Tome half-star rounded
+    # onto the whole-star sidecar is never pushed back as a "local edit".
+    assert TOMESYNC_PLUGIN_BUILD >= 31
+    assert TOMESYNC_PLUGIN_SEMVER == "1.8.0"

@@ -28,6 +28,24 @@ class Book(Base):
     # ingest (or backfilled by the admin word-count job). NULL for PDF/CBZ or
     # not-yet-parsed books. Feeds words-read / true-WPM stats (Phase 4).
     word_count: Mapped[Optional[int]] = mapped_column(Integer)
+    # Hardcover identity — book-level because a title's Hardcover book/edition is
+    # user-independent. Matched lazily by the sync worker (ISBN first, strict
+    # title+author search as fallback). match_method "none" + matched_at set =
+    # "tried and failed"; re-tried only after a metadata edit bumps updated_at.
+    # hardcover_pages is the matched edition's page count, captured at match time
+    # — Tome stores no page counts of its own, and progress→pages math must use
+    # the edition's own pagination anyway.
+    hardcover_book_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    hardcover_edition_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    hardcover_pages: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # isbn13 | isbn10 | search | manual (user-pinned, never auto-cleared) |
+    # none (tried+failed, auto-retryable) | excluded (user said never) |
+    # NULL (not attempted yet — "pending" in the API)
+    hardcover_match_method: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    hardcover_matched_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # The matched record's URL slug — lets the UI link to hardcover.app/books/{slug}
+    # so users can AUDIT what their books matched to and re-match wrong ones.
+    hardcover_slug: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     cover_path: Mapped[Optional[str]] = mapped_column(Text)
     content_hash: Mapped[Optional[str]] = mapped_column(String(64), index=True)
     book_type_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("book_types.id"), nullable=True)

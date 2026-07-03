@@ -17,8 +17,9 @@ import {
   Tooltip,
   CartesianGrid,
 } from 'recharts'
-import { Star, FileText } from 'lucide-react'
-import { cn, formatDuration } from '@/lib/utils'
+import { FileText } from 'lucide-react'
+import { formatDuration } from '@/lib/utils'
+import { StarRating } from '@/components/StarRating'
 import { useChartColors } from '@/lib/useChartAccent'
 import { ChartTooltip, type StatsResponse } from '@/components/stats/shared'
 
@@ -29,13 +30,9 @@ function Empty({ text = 'No ratings yet.' }: { text?: string }) {
 }
 
 function Stars({ value }: { value: number }) {
-  return (
-    <span className="inline-flex shrink-0">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <Star key={i} className={cn('h-3 w-3', i <= value ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30')} />
-      ))}
-    </span>
-  )
+  // Half-star aware (ratings are 0.5 steps now); uses the themed rating token
+  // like every other star row instead of hardcoded amber.
+  return <StarRating value={value} readOnly starClassName="h-3 w-3" className="shrink-0" />
 }
 
 function Cover({ id, has, alt }: { id: number | null; has: boolean; alt: string }) {

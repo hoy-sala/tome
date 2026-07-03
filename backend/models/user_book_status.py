@@ -16,13 +16,29 @@ class UserBookStatus(Base):
     status: Mapped[str] = mapped_column(String(16), default="unread", nullable=False)
     progress_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     cfi: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
-    # Per-user rating (1–5 stars) + optional free-text review. NULL = unrated.
-    # Held here because this row is already the per-user-per-book record. The
-    # optional hardcover_* columns are reserved so a future Hardcover sync is
-    # additive — see docs/plans (ratings POC).
-    rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Per-user rating in half-star steps (1.0–5.0) + optional free-text review.
+    # NULL = unrated. Declared Float but the physical SQLite column keeps its
+    # original INTEGER declaration: NUMERIC affinity stores 4.5 as REAL
+    # losslessly, and legacy whole-star rows read back as ints that compare/hash
+    # equal to their float forms — no data migration, mixed values coexist.
+    # Half-step validation lives in the endpoints (users.py, series.py,
+    # tome_sync.py).
+    rating: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     review: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     rated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Hardcover sync state (per user+book). synced_* is the snapshot of what was
+    # last pushed successfully — the worker is a stateless reconciler that syncs
+    # iff current values differ from the snapshot, so nothing is ever lost to a
+    # crashed cycle. user_book_id / read_id are Hardcover's own row ids, captured
+    # after the first write to avoid a lookup per push.
+    hardcover_user_book_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    hardcover_read_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    hardcover_synced_rating: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    hardcover_synced_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    hardcover_synced_status: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    hardcover_synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    hardcover_error: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    hardcover_fail_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # When the book was marked read. updated_at is NOT a finish date — it moves
     # on every rating/review/CFI write (onupdate), so it must not be displayed
     # as one. Stamped by apply_progress_to_status / the status endpoint on the

@@ -5,7 +5,7 @@ import {
   BookOpen, Plus, Pencil, Trash2,
   ChevronLeft, ChevronRight, Bookmark, Library as LibraryIcon, Layers, Home, BarChart3,
   Settings, Shield, LogOut, ChevronsUpDown, Lock, X, BookPlus, ExternalLink,
-  Sun, Moon, MoonStar, Flame, Coffee, Check, Sparkles, Users, Quote,
+  Sun, Moon, MoonStar, Flame, Coffee, Check, Sparkles, Users, Quote, BookMarked,
   type LucideIcon,
 } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -516,6 +516,20 @@ export function Sidebar({ libraries, savedFilters, activeTab, onLibrariesChange,
                 >
                   <Sparkles className="w-4 h-4 shrink-0 group-hover:animate-[wiggle_0.4s_ease-in-out]" />
                   <span className="truncate">Wishlist</span>
+                </Link>
+              )}
+              {isMember(user) && (
+                <Link
+                  to="/hardcover"
+                  className={cn(
+                    'group flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm transition-all touch-feedback',
+                    location.pathname === '/hardcover'
+                      ? 'bg-primary/10 text-primary font-medium'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  )}
+                >
+                  <BookMarked className="w-4 h-4 shrink-0 group-hover:animate-[wiggle_0.4s_ease-in-out]" />
+                  <span className="truncate">Hardcover</span>
                 </Link>
               )}
               {isAdmin(user) && (

@@ -13,6 +13,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { useSidebarLists } from '@/lib/sidebarLists'
 import { BookCard, type ViewMode } from '@/components/BookCard'
 import { SeriesStackCard } from '@/components/SeriesStackCard'
+import { StarRating } from '@/components/StarRating'
 import { SeriesRating } from '@/components/SeriesRating'
 import { SeriesFollowButton } from '@/components/SeriesFollowButton'
 import { UpcomingReleases } from '@/components/UpcomingReleases'
@@ -1686,11 +1687,7 @@ export function DashboardPage() {
                             </div>
                             {!isUnserialized && s.author && <span className="text-[10px] text-muted-foreground truncate">{s.author}</span>}
                             {!isUnserialized && s.rating != null && (
-                              <span className="inline-flex items-center gap-px mt-0.5" aria-label={`Rated ${s.rating} of 5`}>
-                                {[1, 2, 3, 4, 5].map(n => (
-                                  <Star key={n} className={cn('w-3 h-3', n <= s.rating! ? 'fill-rating text-rating' : 'text-muted-foreground/30')} />
-                                ))}
-                              </span>
+                              <StarRating value={s.rating} readOnly starClassName="w-3 h-3" className="mt-0.5" />
                             )}
                             {!isUnserialized && s.description && (
                               <p className="text-[10px] text-muted-foreground leading-snug line-clamp-2 mt-0.5">{s.description}</p>

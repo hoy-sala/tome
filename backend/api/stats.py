@@ -672,7 +672,7 @@ def get_stats(
             {
                 "book_id": r.id, "title": r.title, "author": r.author,
                 "has_cover": bool(r.cover_path), "category": r.category,
-                "rating": int(r.rating),
+                "rating": float(r.rating),  # half-star steps — do NOT truncate
                 "seconds": int(book_seconds_all.get(r.id, (0, 0, 0))[0]),
                 "rated_at": (r.rated_at or r.updated_at).isoformat() if (r.rated_at or r.updated_at) else None,
             }
@@ -682,10 +682,12 @@ def get_stats(
     )
 
     dist_counts = {i: 0 for i in range(1, 6)}
-    cat_acc: dict[str, list[int]] = {}
+    cat_acc: dict[str, list[float]] = {}
     for b in rated_books:
         if 1 <= b["rating"] <= 5:
-            dist_counts[b["rating"]] += 1
+            # Histogram keeps whole-star buckets; halves round up (4.5 → 5★),
+            # matching the display rounding elsewhere. Averages stay exact.
+            dist_counts[min(5, int(b["rating"] + 0.5))] += 1
         cat_acc.setdefault(b["category"], []).append(b["rating"])
     rating_distribution = [{"rating": i, "count": dist_counts[i]} for i in range(1, 6)]
     rating_by_category = [
@@ -709,7 +711,7 @@ def get_stats(
         ):
             series_sample[sname] = bid
     series_ratings = [
-        {"series": s.series_name, "rating": int(s.rating),
+        {"series": s.series_name, "rating": float(s.rating),  # half-star steps
          "sample_book_id": series_sample.get(s.series_name)}
         for s in series_rating_rows
     ]

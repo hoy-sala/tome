@@ -64,6 +64,12 @@ class BookDetailOut(BookOut):
     content_hash: Optional[str] = None
     added_by: Optional[int] = None
     updated_at: datetime
+    # Matched Hardcover edition's page count (set by the sync matcher). Lets the
+    # UI show a font-size-agnostic "page ~X of Y" from progress_pct.
+    hardcover_pages: Optional[int] = None
+    # Matched record's slug — the book page shows a "Hardcover" details entry
+    # linking to hardcover.app/books/{slug} when set.
+    hardcover_slug: Optional[str] = None
     # Wishlist: populated on upload/ingest when the new book matches open wishes.
     # list of wish IDs (not book IDs) — frontend uses this to prompt "Fulfill N wishes?".
     # None means matcher was not run or no matches found.

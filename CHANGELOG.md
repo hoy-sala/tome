@@ -6,6 +6,31 @@ All notable changes to Tome are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- **Hardcover sync.** Link your personal Hardcover account in Settings and Tome
+  pushes your ratings and reading progress to it — one-way, opt-in, and nothing
+  is ever deleted on Hardcover. Ratings go out shortly after you change them;
+  progress goes out in batches as print-edition pages (`round(pct × pages)`),
+  and books whose edition has no page count sync status-only. Matching is
+  ISBN-first with a strictly-guarded, volume-aware title+author search
+  fallback that prefers the community's record over catalogue stubs. A
+  dedicated **Hardcover page** (sidebar) shows every synced book with its
+  cover and exact matched record, filterable by state, with per-book
+  actions: pick the right record manually (search modal), re-match, or
+  exclude. Matched books also link to their Hardcover record from the book
+  page's Details grid. Tokens are stored encrypted, and when
+  Hardcover's annual January-1 token reset hits you get a notification to
+  re-link. Server kill switch: `TOME_HARDCOVER_SYNC_ENABLED` (the existing
+  `TOME_HARDCOVER_TOKEN` stays metadata-only).
+- **Half-star ratings.** Book and series ratings now take 4.5-style values —
+  the star widgets select halves by clicking the left or right side of a star.
+  Existing whole-star ratings are untouched. KOReader's native rating stays
+  whole-star: the plugin (build 31) rounds a pulled half-star for the device
+  without ever pushing the rounded value back over your half-star.
+- **Page numbers on the book page.** Once a book is matched on Hardcover, the
+  progress bar shows a font-size-agnostic "p. 142 of 384" from the print
+  edition's page count alongside the percentage.
+
 ### Changed
 - **Dark themes got a contrast pass.** Hairline borders were sitting at an
   alpha where most panels had none to speak of; they're a step stronger now

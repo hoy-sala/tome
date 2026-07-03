@@ -33,6 +33,7 @@ from backend.api import notifications as notifications_api
 from backend.api import oidc as oidc_api
 from backend.api import goals as goals_api
 from backend.api import annotations as annotations_api
+from backend.api import hardcover as hardcover_api
 from backend.models.kosync import KOSyncUser, KOSyncProgress, OPDSPendingLink, ReadingHistory  # noqa: F401
 from backend.models.opds_pin import OpdsPin  # noqa: F401
 from backend.models.tome_sync import ApiKey, ReadingSession, TomeSyncPosition  # noqa: F401
@@ -181,6 +182,40 @@ async def lifespan(app: FastAPI):
             conn.execute(text("ALTER TABLE wishes ADD COLUMN latest_known_title VARCHAR(512)"))
             conn.execute(text("ALTER TABLE wishes ADD COLUMN latest_release_date VARCHAR(10)"))
             conn.commit()
+        # Hardcover sync — per-user credentials (users), book-level match
+        # identity (books), and per-user-per-book push state (user_book_status).
+        # All nullable, so existing rows are untouched. Note ratings themselves
+        # need no migration: the rating columns keep their INTEGER declaration
+        # and SQLite's NUMERIC affinity stores new half-star values as REAL.
+        if "hardcover_token" not in user_cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN hardcover_token TEXT"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN hardcover_user_id INTEGER"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN hardcover_username VARCHAR(255)"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN hardcover_token_status VARCHAR(16)"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN hardcover_linked_at DATETIME"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN hardcover_sync_enabled BOOLEAN NOT NULL DEFAULT 0"))
+            conn.commit()
+        if "hardcover_book_id" not in cols:
+            conn.execute(text("ALTER TABLE books ADD COLUMN hardcover_book_id INTEGER"))
+            conn.execute(text("ALTER TABLE books ADD COLUMN hardcover_edition_id INTEGER"))
+            conn.execute(text("ALTER TABLE books ADD COLUMN hardcover_pages INTEGER"))
+            conn.execute(text("ALTER TABLE books ADD COLUMN hardcover_match_method VARCHAR(16)"))
+            conn.execute(text("ALTER TABLE books ADD COLUMN hardcover_matched_at DATETIME"))
+            conn.commit()
+        if "hardcover_slug" not in cols:
+            conn.execute(text("ALTER TABLE books ADD COLUMN hardcover_slug VARCHAR(255)"))
+            conn.commit()
+        ubs_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(user_book_status)")).fetchall()}
+        if ubs_cols and "hardcover_user_book_id" not in ubs_cols:
+            conn.execute(text("ALTER TABLE user_book_status ADD COLUMN hardcover_user_book_id INTEGER"))
+            conn.execute(text("ALTER TABLE user_book_status ADD COLUMN hardcover_read_id INTEGER"))
+            conn.execute(text("ALTER TABLE user_book_status ADD COLUMN hardcover_synced_rating FLOAT"))
+            conn.execute(text("ALTER TABLE user_book_status ADD COLUMN hardcover_synced_pct FLOAT"))
+            conn.execute(text("ALTER TABLE user_book_status ADD COLUMN hardcover_synced_status VARCHAR(16)"))
+            conn.execute(text("ALTER TABLE user_book_status ADD COLUMN hardcover_synced_at DATETIME"))
+            conn.execute(text("ALTER TABLE user_book_status ADD COLUMN hardcover_error VARCHAR(255)"))
+            conn.execute(text("ALTER TABLE user_book_status ADD COLUMN hardcover_fail_count INTEGER NOT NULL DEFAULT 0"))
+            conn.commit()
     ReadingGoal.__table__.create(bind=engine, checkfirst=True)
     init_fts(engine)
     backfill_fts(engine)
@@ -216,10 +251,16 @@ async def lifespan(app: FastAPI):
                     settings.release_check_interval)
         release_task = asyncio.create_task(_release_check_loop())
 
+    # Hardcover sync worker (inert until a user links a personal token).
+    hardcover_task: asyncio.Task | None = None
+    if settings.hardcover_sync_enabled:
+        from backend.services.hardcover_sync import hardcover_sync_loop
+        hardcover_task = asyncio.create_task(hardcover_sync_loop())
+
     yield
 
     # Shutdown: cancel the background tasks cleanly
-    for task in (auto_import_task, release_task):
+    for task in (auto_import_task, release_task, hardcover_task):
         if task is not None:
             task.cancel()
             try:
@@ -623,6 +664,7 @@ def create_app() -> FastAPI:
     app.include_router(bindery.router, prefix="/api/bindery", tags=["bindery"])
     app.include_router(api_tokens.router, prefix="/api")
     app.include_router(series_api.router, prefix="/api")
+    app.include_router(hardcover_api.router, prefix="/api")
     app.include_router(send_to_device.router, prefix="/api")
     # Wishlist + notifications — static paths registered before /{id} routes
     app.include_router(wishlist_api.router, prefix="/api")

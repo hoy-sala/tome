@@ -21,6 +21,7 @@ from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.urls import public_base_url
 from backend.core.permissions import book_visibility_filter, user_can_see_book
+from backend.core.ratings import validate_rating
 from backend.core.security import get_current_user
 from backend.models.user import User
 from backend.models.book import Book, BookFile
@@ -29,6 +30,7 @@ from backend.models.tome_sync import Annotation, AnnotationTombstone, ApiKey, Re
 from backend.models.ko_stats import StatsImport
 from backend.models.send_queue import SendQueueItem
 from backend.services.book_progress import apply_progress_to_status
+from backend.services.hardcover_sync import nudge as hardcover_nudge
 
 router = APIRouter(tags=["tome-sync"])
 logger = logging.getLogger(__name__)
@@ -42,8 +44,11 @@ logger = logging.getLogger(__name__)
 # build than 13 — otherwise a device that updated to 1.2.1's build-13 impl and
 # later points at a main/1.3.0 server (also 13) would not re-download main's
 # richer impl. Hence 14.
-TOMESYNC_PLUGIN_BUILD = 30
-TOMESYNC_PLUGIN_SEMVER = "1.7.4"
+# BUILD 31: half-star ratings — rating_baseline entries split into
+# {remote, device} so a Tome half-star rounded onto the whole-star sidecar is
+# never pushed back as a "local edit" (old {rating=...} entries migrate on read).
+TOMESYNC_PLUGIN_BUILD = 31
+TOMESYNC_PLUGIN_SEMVER = "1.8.0"
 TOMESYNC_PLUGIN_VERSION = str(TOMESYNC_PLUGIN_BUILD)
 
 
@@ -288,8 +293,11 @@ def get_rating(
 
 
 class PutRatingRequest(PydanticBaseModel):
-    rating: Optional[int] = None  # 1–5, or null to clear
-    review: Optional[str] = None  # free-text, or null to clear
+    # The plugin only ever sends whole stars (KOReader's sidecar rating is an
+    # int), but the field is float for symmetry with the web endpoint's
+    # half-star steps.
+    rating: Optional[float] = None  # 1–5 in half-star steps, or null to clear
+    review: Optional[str] = None    # free-text, or null to clear
 
 
 @router.put("/tome-sync/rating/{book_id}")
@@ -302,8 +310,7 @@ def put_rating(
     book = db.get(Book, book_id)
     if not book or book.status != "active":
         raise HTTPException(status_code=404, detail="Book not found")
-    if body.rating is not None and not (1 <= body.rating <= 5):
-        raise HTTPException(status_code=400, detail="rating must be 1-5, or null to clear")
+    validate_rating(body.rating)
 
     row = (
         db.query(UserBookStatus)
@@ -316,10 +323,13 @@ def put_rating(
 
     # The plugin always sends both fields (nil → JSON null), so set both. A null
     # clears, matching the web endpoint's semantics.
+    rating_changed = body.rating != row.rating
     row.rating = body.rating
     row.rated_at = datetime.utcnow() if body.rating is not None else None
     row.review = body.review or None
     db.commit()
+    if rating_changed:
+        hardcover_nudge()
     return {"ok": True, "rating": row.rating, "review": row.review}
 
 
@@ -2160,6 +2170,30 @@ end
 --   both changed (tie)    -> Tome wins (single source of truth)
 -- `summary.status` (reading/complete/abandoned) is left untouched — reading
 -- status already syncs via TomeSyncPosition.
+--
+-- Half-stars (build 31): Tome ratings can be 4.5 etc.; KOReader's sidecar is
+-- whole-star, so a pulled half-star is rounded to the NEAREST star for the
+-- device (halves round up: 4.5 → 5). The baseline
+-- therefore keeps TWO values per book — `remote` (Tome's exact value) and
+-- `device` (what we wrote to the sidecar) — so the rounded copy is never
+-- mistaken for a local edit and pushed back (which would destroy the half-star
+-- server-side). Old single-value baselines ({{rating=...}}) migrate on read.
+
+local function ratingBase(tbl, key)
+    local base = tbl[key] or {{}}
+    if base.rating ~= nil and base.remote == nil and base.device == nil then
+        base.remote, base.device = base.rating, base.rating
+        base.rating = nil
+    end
+    return base
+end
+
+local function deviceStars(rating)
+    -- Sidecar value for a (possibly half-star) Tome rating: nearest whole
+    -- star, halves rounding UP (4.5 → 5).
+    if type(rating) ~= "number" then return rating end
+    return math.floor(rating + 0.5)
+end
 
 -- Read the live sidecar summary's rating/review for the open book.
 function TomeSync:_localRating()
@@ -2182,24 +2216,28 @@ function TomeSync:_pullRatingAtOpen()
     local remote_review = jval(status.review)
 
     local key  = tostring(self.book_id)
-    local base = self.rating_baseline[key] or {{}}
-    local local_changed  = (loc.rating ~= base.rating) or (loc.review ~= base.review)
-    local remote_changed = (remote_rating ~= base.rating) or (remote_review ~= base.review)
+    local base = ratingBase(self.rating_baseline, key)
+    -- Local edits compare against what we last WROTE to the sidecar (whole
+    -- stars); remote changes compare against Tome's exact value. A pulled 4.5
+    -- rounded to 4 on the device is neither.
+    local local_changed  = (loc.rating ~= base.device) or (loc.review ~= base.review)
+    local remote_changed = (remote_rating ~= base.remote) or (remote_review ~= base.review)
 
     if remote_changed then
         -- Tome changed (and, on a both-changed tie, Tome wins): write the sidecar.
+        local device_rating = deviceStars(remote_rating)
         local _, summary = self:_localRating()
-        summary.rating   = remote_rating
+        summary.rating   = device_rating
         summary.note     = remote_review
         summary.modified = os.date("%Y-%m-%d")
         self.ui.doc_settings:saveSetting("summary", summary)
-        if type(remote_rating) == "number" then
+        if type(device_rating) == "number" then
             pcall(function()
                 require("ui/widget/booklist")
-                    .setBookInfoCacheProperty(self.ui.document.file, "rating", remote_rating)
+                    .setBookInfoCacheProperty(self.ui.document.file, "rating", device_rating)
             end)
         end
-        base.rating, base.review = remote_rating, remote_review
+        base.remote, base.device, base.review = remote_rating, device_rating, remote_review
         self.rating_baseline[key] = base
         G_reader_settings:saveSetting("tomesync_rating_baseline", self.rating_baseline)
         -- Tome's value supersedes any device rating still queued for this book.
@@ -2226,8 +2264,9 @@ function TomeSync:_putRating(book_id, rating, review)
         return false
     end
     local key = tostring(book_id)
-    local base = self.rating_baseline[key] or {{}}
-    base.rating, base.review = rating, review
+    local base = ratingBase(self.rating_baseline, key)
+    -- A device push is whole-star, so remote and device coincide.
+    base.remote, base.device, base.review = rating, rating, review
     self.rating_baseline[key] = base
     G_reader_settings:saveSetting("tomesync_rating_baseline", self.rating_baseline)
     return true
@@ -2280,8 +2319,10 @@ function TomeSync:_pushRatingOnLeave()
     if not self.enabled or not self.book_id then return end
     local loc = self:_localRating()
     if not loc then return end
-    local base = self.rating_baseline[tostring(self.book_id)] or {{}}
-    if loc.rating == base.rating and loc.review == base.review then return end
+    local base = ratingBase(self.rating_baseline, tostring(self.book_id))
+    -- Compare against what we wrote to the sidecar (whole stars): a rounded
+    -- half-star pull must not read as a local edit.
+    if loc.rating == base.device and loc.review == base.review then return end
     self:_pushRating(loc.rating, loc.review)
 end
 

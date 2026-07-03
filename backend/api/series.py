@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.core.database import get_db
+from backend.core.ratings import validate_rating
 from backend.core.security import get_current_user
 from backend.core.permissions import require_role, is_admin
 from backend.models.series_meta import Arc, SeriesMeta
@@ -273,15 +274,15 @@ NO_SERIES_SENTINEL = "__unserialized__"
 
 class SeriesRatingOut(BaseModel):
     series_name: str
-    rating: Optional[int] = None        # explicit series rating
+    rating: Optional[float] = None      # explicit series rating (half-star steps)
     review: Optional[str] = None
     volume_average: Optional[float] = None  # avg of the user's volume ratings
     rated_volumes: int = 0
-    display: Optional[int] = None        # explicit if set, else rounded average
+    display: Optional[float] = None      # explicit if set, else rounded average
 
 
 class SeriesRatingIn(BaseModel):
-    rating: Optional[int] = None         # 1–5, or null to clear
+    rating: Optional[float] = None       # 1–5 in half-star steps, or null to clear
     review: Optional[str] = None
 
 
@@ -302,7 +303,8 @@ def _series_rating_out(db: Session, user: User, name: str) -> "SeriesRatingOut":
         .one()
     )
     explicit = row.rating if row else None
-    display = explicit if explicit is not None else (round(avg) if avg is not None else None)
+    # Derived average rounds to the nearest HALF star (widgets render halves).
+    display = explicit if explicit is not None else (round(avg * 2) / 2 if avg is not None else None)
     return SeriesRatingOut(
         series_name=name,
         rating=explicit,
@@ -335,8 +337,7 @@ def set_series_rating(
     current_user: User = Depends(get_current_user),
 ):
     _reject_no_series(name)
-    if body.rating is not None and not (1 <= body.rating <= 5):
-        raise HTTPException(400, "rating must be between 1 and 5, or null to clear")
+    validate_rating(body.rating)
     from datetime import datetime
     raw = body.model_dump(exclude_unset=True)
     row = (

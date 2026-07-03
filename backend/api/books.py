@@ -495,9 +495,11 @@ def get_series(
 
         vol_ratings = [all_ratings[b.id] for b in series_books if b.id in all_ratings]
         explicit = series_ratings.get(series_name)
+        # Derived average rounds to the nearest HALF star — ratings are
+        # half-step values now, and the star widgets can render halves.
         display_rating = (
             explicit if explicit is not None
-            else (round(sum(vol_ratings) / len(vol_ratings)) if vol_ratings else None)
+            else (round(sum(vol_ratings) / len(vol_ratings) * 2) / 2 if vol_ratings else None)
         )
 
         result.append({

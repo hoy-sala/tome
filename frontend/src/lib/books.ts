@@ -43,6 +43,10 @@ export interface BookDetail extends Book {
   content_hash: string | null
   added_by: number | null
   updated_at: string
+  // Matched Hardcover edition's page count — font-size-agnostic "page X of Y"
+  hardcover_pages?: number | null
+  // Matched Hardcover record's slug — Details grid links to it
+  hardcover_slug?: string | null
 }
 
 export interface MetadataCandidate {

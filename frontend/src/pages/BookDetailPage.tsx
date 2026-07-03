@@ -4,7 +4,7 @@ import {
   Camera, Download, Edit2, Save, X,
   Calendar, Globe, Hash, Building2, FileText, Trash2, Loader2,
   Sparkles, Library, Check, BookMarked, ChevronLeft, ChevronRight, Home,
-  Tag as TagIcon, StickyNote, ChevronDown, Archive, Star, AlignLeft,
+  Tag as TagIcon, StickyNote, ChevronDown, Archive, AlignLeft,
   Plus, TrendingUp, TrendingDown, Minus, Info
 } from 'lucide-react'
 import { useAuth, isMember } from '@/contexts/AuthContext'
@@ -14,6 +14,7 @@ import { MetadataFetchModal } from '@/components/MetadataFetchModal'
 import { CoverPickerModal } from '@/components/CoverPickerModal'
 import { SendButton } from '@/components/SendButton'
 import { BookAnimation } from '@/components/BookAnimation'
+import { StarRating } from '@/components/StarRating'
 import { CoverImage } from '@/components/CoverImage'
 import { AutocompleteInput } from '@/components/AutocompleteInput'
 import { api } from '@/lib/api'
@@ -125,7 +126,6 @@ export function BookDetailPage() {
   const [statusSaving, setStatusSaving] = useState(false)
   const [statusPopKey, setStatusPopKey] = useState(0)
   const [rating, setRating] = useState<number | null>(null)
-  const [hoverRating, setHoverRating] = useState<number | null>(null)
   const [review, setReview] = useState('')       // saved review text
   const [reviewDraft, setReviewDraft] = useState('')  // in-progress edit
   const [editingReview, setEditingReview] = useState(false)
@@ -622,6 +622,13 @@ export function BookDetailPage() {
           </div>
           <span className="text-xs text-muted-foreground tabular-nums shrink-0">
             {Math.round(progressPct * 100)}%
+            {book?.hardcover_pages != null && book.hardcover_pages > 0 && (
+              // Print-edition pagination (from the matched Hardcover edition) —
+              // font-size agnostic, unlike the device's reflowed page count.
+              <span className="ml-1 opacity-60">
+                · p. {Math.max(1, Math.round(progressPct * book.hardcover_pages))} of {book.hardcover_pages}
+              </span>
+            )}
             {kosyncDevice && (
               <span className="ml-1 opacity-60">· {kosyncDevice}</span>
             )}
@@ -635,31 +642,7 @@ export function BookDetailPage() {
   const ratingBlock = (
     <div className="mb-5">
       <div className="flex items-center gap-2.5">
-        <div
-          className="flex items-center gap-0.5"
-          onMouseLeave={() => setHoverRating(null)}
-        >
-          {[1, 2, 3, 4, 5].map(n => {
-            const active = (hoverRating ?? rating ?? 0) >= n
-            return (
-              <button
-                key={n}
-                type="button"
-                aria-label={`${n} star${n > 1 ? 's' : ''}`}
-                onMouseEnter={() => setHoverRating(n)}
-                onClick={() => saveRating(rating === n ? null : n)}
-                className="p-0.5 transition-transform hover:scale-110"
-              >
-                <Star
-                  className={cn(
-                    'w-5 h-5 transition-colors',
-                    active ? 'fill-rating text-rating' : 'text-muted-foreground/40'
-                  )}
-                />
-              </button>
-            )
-          })}
-        </div>
+        <StarRating value={rating} onChange={saveRating} />
         <span className="text-xs text-muted-foreground">
           {rating ? `You rated this ${rating}/5` : 'Rate this book'}
         </span>
@@ -826,6 +809,22 @@ export function BookDetailPage() {
         <MetaField icon={<AlignLeft className="w-3.5 h-3.5" />} label="Words"
           value={book.word_count != null ? `${book.word_count.toLocaleString()} words` : ''}
           editing={false} onChange={() => {}} />
+        {/* Hardcover match — only when the sync matcher has linked this book */}
+        {!editing && book.hardcover_slug && (
+          <div className="flex items-start gap-2">
+            <span className="text-muted-foreground mt-0.5 shrink-0"><BookMarked className="w-3.5 h-3.5" /></span>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-muted-foreground/70 mb-0.5">Hardcover</p>
+              <a
+                href={`https://hardcover.app/books/${book.hardcover_slug}`}
+                target="_blank" rel="noopener noreferrer"
+                className="text-sm text-primary hover:underline truncate block"
+              >
+                {book.hardcover_slug}
+              </a>
+            </div>
+          </div>
+        )}
         {/* Book Type */}
         <div className="flex items-start gap-2">
           <span className="text-muted-foreground mt-0.5 shrink-0"><TagIcon className="w-3.5 h-3.5" /></span>

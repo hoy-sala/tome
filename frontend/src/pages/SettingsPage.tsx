@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { DOCS, docsLink } from '@/lib/docs'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { HardcoverSync } from '@/components/HardcoverSync'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import {
@@ -362,6 +363,8 @@ export function SettingsPage() {
   const [deviceDeleting, setDeviceDeleting] = useState<number | null>(null)
   const [deviceError, setDeviceError] = useState<string | null>(null)
   const [setupGuideOpen, setSetupGuideOpen] = useState(false)
+  // Hardcover sync section hides itself when the server has the feature off
+  const [hardcoverAvailable, setHardcoverAvailable] = useState(true)
 
   useEffect(() => {
     api.get<{ configured: boolean }>('/smtp-status').then(r => {
@@ -1271,6 +1274,14 @@ export function SettingsPage() {
             </div>
           </div>
         </section>
+
+        {/* ── Hardcover ────────────────────────────────────────────────── */}
+        {hardcoverAvailable && (
+          <section>
+            <SectionHeader title="Hardcover" />
+            <HardcoverSync onAvailable={setHardcoverAvailable} />
+          </section>
+        )}
 
         {/* ── API Tokens ───────────────────────────────────────────────── */}
         <section>
