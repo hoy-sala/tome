@@ -1293,9 +1293,11 @@ local function apiRequest(method, path, body)
         headers["Content-Length"] = tostring(#req_body)
     end
 
-    -- Tight per-request timeouts (block, total) via socketutil — bounded even
-    -- on a dead route, and no mutation of the global http.TIMEOUT.
-    socketutil:set_timeout(5, 10)
+    -- Bounded per-request timeouts (block, total) via socketutil — no global
+    -- http.TIMEOUT mutation. Block 5s catches a dead route fast; the total is
+    -- deliberately generous: annotation-sync responses can be large and slow
+    -- device wifi through an HTTPS proxy must not get truncated mid-body.
+    socketutil:set_timeout(5, 45)
     local ok, code = http.request({{
         url     = url,
         method  = method,
