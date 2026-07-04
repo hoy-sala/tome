@@ -31,6 +31,17 @@ All notable changes to Tome are documented here. Format loosely follows
   progress bar shows a font-size-agnostic "p. 142 of 384" from the print
   edition's page count alongside the percentage.
 
+### Fixed
+- **Hardcover sync could pin a translation's or the audiobook's edition.**
+  Publishers reuse one catalogue across translations and audio, so a stored
+  ISBN sometimes names the German edition (or the audiobook) of the right
+  book — your Hardcover profile then showed the German cover and title.
+  Edition selection is now language-aware and audio-averse everywhere a match
+  is made (ISBN, search, and manual pick): the book match is kept, but the
+  pinned edition must agree with the book's language and prefers text
+  editions with page data. Existing wrong matches repair via the Hardcover
+  page's per-book "Re-match".
+
 ### Changed
 - **Dark themes got a contrast pass.** Hairline borders were sitting at an
   alpha where most panels had none to speak of; they're a step stronger now

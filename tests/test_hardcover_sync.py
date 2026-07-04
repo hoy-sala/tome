@@ -291,6 +291,162 @@ async def test_match_book_isbn_hit_sanity_checked(make_book):
     assert book.hardcover_match_method == "search"
 
 
+@respx.mock
+async def test_match_book_isbn_wrong_language_edition_repicks(make_book):
+    """Observed live (Eric Ugland / The Good Guys): the stored Podium ISBN
+    resolves to the GERMAN-translation edition of the correct book. The book
+    match must stick, but the pinned edition must be re-picked to the one
+    matching the Tome book's language — else the user's Hardcover profile
+    shows the German cover and title."""
+    book = make_book(title="Heir Today, Pawn Tomorrow", author="Eric Ugland",
+                     series="The Good Guys", series_index=2,
+                     isbn="9781649712400", language="en")
+
+    def responder(request):
+        body = request.read().decode()
+        if "EditionByIsbn" in body:
+            return httpx.Response(200, json={"data": {"editions": [
+                {"id": 30978966, "title": "Heute Erbe, morgen Schachfigur",
+                 "pages": 322, "book_id": 637923, "reading_format_id": 1,
+                 "language": {"code2": "de"},
+                 "book": {"id": 637923, "title": "Heir Today, Pawn Tomorrow",
+                          "pages": 254, "slug": "heir-today-pawn-tomorrow"}}
+            ]}})
+        return httpx.Response(200, json={"data": {"books": [
+            {"id": 637923, "pages": 254, "slug": "heir-today-pawn-tomorrow",
+             "editions": [
+                 {"id": 30615792, "pages": 254, "users_count": 28,
+                  "reading_format_id": 1, "language": {"code2": "en"}},
+                 {"id": 30978966, "pages": 322, "users_count": 0,
+                  "reading_format_id": 1, "language": {"code2": "de"}},
+                 {"id": 31793774, "pages": None, "users_count": 0,
+                  "reading_format_id": 2, "language": None},
+             ]}
+        ]}})
+
+    respx.post(HARDCOVER_URL).mock(side_effect=responder)
+    async with httpx.AsyncClient() as client:
+        assert await hs.match_book(client, "tok", book) is True
+    assert book.hardcover_book_id == 637923
+    assert book.hardcover_match_method == "isbn13"
+    assert book.hardcover_edition_id == 30615792     # English, not the ISBN's German
+    assert book.hardcover_pages == 254
+
+
+@respx.mock
+async def test_match_book_isbn_audio_edition_repicks(make_book):
+    """An ISBN naming the audiobook edition must not pin it (no pages, audio
+    cover on the profile) — re-pick a text edition of the same book."""
+    book = make_book(title="Dune", isbn="9780441013593", language="en")
+
+    def responder(request):
+        body = request.read().decode()
+        if "EditionByIsbn" in body:
+            return httpx.Response(200, json={"data": {"editions": [
+                {"id": 1, "title": "Dune", "pages": None, "book_id": 77,
+                 "reading_format_id": 2, "language": {"code2": "en"},
+                 "book": {"id": 77, "title": "Dune", "pages": 412, "slug": "dune"}}
+            ]}})
+        return httpx.Response(200, json={"data": {"books": [
+            {"id": 77, "pages": 412, "slug": "dune", "editions": [
+                {"id": 2, "pages": 412, "users_count": 900,
+                 "reading_format_id": 1, "language": {"code2": "en"}},
+                {"id": 1, "pages": None, "users_count": 1200,
+                 "reading_format_id": 2, "language": {"code2": "en"}},
+            ]}
+        ]}})
+
+    respx.post(HARDCOVER_URL).mock(side_effect=responder)
+    async with httpx.AsyncClient() as client:
+        assert await hs.match_book(client, "tok", book) is True
+    assert book.hardcover_edition_id == 2            # text edition beats popular audio
+    assert book.hardcover_pages == 412
+
+
+@respx.mock
+async def test_match_book_isbn_repick_fetch_failure_keeps_isbn_edition(make_book):
+    """If the edition re-pick query fails, degrade to the old behaviour (pin
+    the ISBN's own edition) rather than losing the match."""
+    book = make_book(title="Dune", isbn="9780441013593", language="en")
+
+    def responder(request):
+        body = request.read().decode()
+        if "EditionByIsbn" in body:
+            return httpx.Response(200, json={"data": {"editions": [
+                {"id": 5, "title": "Der Wüstenplanet", "pages": 800, "book_id": 77,
+                 "reading_format_id": 1, "language": {"code2": "de"},
+                 "book": {"id": 77, "title": "Dune", "pages": 412, "slug": "dune"}}
+            ]}})
+        return httpx.Response(200, json={"errors": [{"message": "boom"}]})
+
+    respx.post(HARDCOVER_URL).mock(side_effect=responder)
+    async with httpx.AsyncClient() as client:
+        assert await hs.match_book(client, "tok", book) is True
+    assert book.hardcover_book_id == 77
+    assert book.hardcover_edition_id == 5
+    assert book.hardcover_pages == 800
+
+
+@respx.mock
+async def test_match_book_search_picks_language_matching_edition(make_book):
+    """The search path must not blindly take the most-used edition — a German
+    Tome book pins the German edition even when the English one is bigger."""
+    book = make_book(title="Der Wüstenplanet", author="Frank Herbert",
+                     isbn=None, language="de")
+
+    def responder(request):
+        body = request.read().decode()
+        if "SearchBook" in body:
+            return httpx.Response(200, json=_search_payload([
+                {"document": {"id": 77, "title": "Der Wüstenplanet",
+                              "author_names": ["Frank Herbert"]}},
+            ]))
+        return httpx.Response(200, json={"data": {"books": [
+            {"id": 77, "pages": 412, "slug": "dune", "editions": [
+                {"id": 2, "pages": 412, "users_count": 900,
+                 "reading_format_id": 1, "language": {"code2": "en"}},
+                {"id": 9, "pages": 800, "users_count": 3,
+                 "reading_format_id": 1, "language": {"code2": "de"}},
+            ]}
+        ]}})
+
+    respx.post(HARDCOVER_URL).mock(side_effect=responder)
+    async with httpx.AsyncClient() as client:
+        assert await hs.match_book(client, "tok", book) is True
+    assert book.hardcover_edition_id == 9
+    assert book.hardcover_pages == 800
+
+
+def test_edition_picker_helpers():
+    assert hs._lang2("en") == "en"
+    assert hs._lang2("en-US") == "en"
+    assert hs._lang2("English") == "en"
+    assert hs._lang2("Deutsch") == "de"
+    assert hs._lang2(None) is None
+    assert hs._lang2("  ") is None
+
+    de = {"id": 1, "reading_format_id": 1, "language": {"code2": "de"}, "users_count": 50, "pages": 300}
+    en = {"id": 2, "reading_format_id": 1, "language": {"code2": "en"}, "users_count": 5, "pages": 250}
+    unk = {"id": 3, "reading_format_id": 1, "language": None, "users_count": 80, "pages": 260}
+    audio = {"id": 4, "reading_format_id": 2, "language": {"code2": "en"}, "users_count": 999, "pages": None}
+    # language match wins over popularity and over unknown
+    assert hs._pick_edition([de, en, unk, audio], "en")["id"] == 2
+    # unknown want-language: unknown/known tie on language, popularity decides
+    assert hs._pick_edition([de, unk], None)["id"] == 3
+    # language outranks format: if the only right-language edition is the
+    # audiobook, it still beats a wrong-language text edition
+    assert hs._pick_edition([de, audio], "en")["id"] == 4
+    # within one language, text always beats audio regardless of popularity
+    assert hs._pick_edition([en, audio], "en")["id"] == 2
+    assert hs._pick_edition([], "en") is None
+
+    assert hs._edition_acceptable(en, "en")
+    assert hs._edition_acceptable(unk, "en")      # unknown language: permissive
+    assert hs._edition_acceptable(en, None)
+    assert not hs._edition_acceptable(de, "en")
+    assert not hs._edition_acceptable(audio, "en")
+
+
 def test_isbn_hit_plausible(make_book):
     vol2 = make_book(title="Black Summoner", series="Black Summoner", series_index=2)
     assert not hs._isbn_hit_plausible(vol2, "Black Summoner: Volume 10")
