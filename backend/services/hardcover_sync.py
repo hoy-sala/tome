@@ -14,6 +14,10 @@ Design (docs/plans/hardcover-sync-plan.md):
   query returns book id + edition id + pages), then a title+author search
   gated by a strict similarity guard — a wrong match writes reading data onto
   a stranger's book on a public profile, so we refuse rather than guess.
+- The pinned EDITION is language-aware and audio-averse: an ISBN that names a
+  translation's or the audiobook's edition (publishers share catalogues across
+  both) still matches the book, but the edition is re-picked to agree with the
+  Tome book's language and to have pages.
 - Progress is page-based on Hardcover: ``round(pct × edition pages)``. Books
   whose matched edition has no page count get status-only sync.
 - Rate limit: Hardcover allows 60 req/min. All users share one worker queue
@@ -61,6 +65,10 @@ NUDGE_DEBOUNCE = 30            # seconds of quiet after a rating nudge before sy
 TITLE_SIM_MIN = 0.85
 AUTHOR_SIM_MIN = 0.7
 
+# Hardcover reading_format_id for audiobook editions. Audio editions carry
+# ISBNs too (Podium!) and have no page counts — never pin one.
+AUDIO_FORMAT_ID = 2
+
 # ── GraphQL documents ─────────────────────────────────────────────────────────
 # Pinned to the beta schema as of 2026-07. Responses are parsed defensively;
 # schema drift surfaces as a per-row error, not a crash.
@@ -74,6 +82,8 @@ query EditionByIsbn($isbn: String!) {
         title
         pages
         book_id
+        reading_format_id
+        language { code2 }
         book { id title pages slug }
     }
 }
@@ -107,7 +117,13 @@ query BookEdition($id: Int!) {
         id
         pages
         slug
-        editions(limit: 1, order_by: {users_count: desc}) { id pages }
+        editions(limit: 30, order_by: {users_count: desc}) {
+            id
+            pages
+            users_count
+            reading_format_id
+            language { code2 }
+        }
     }
 }
 """
@@ -296,6 +312,58 @@ def _is_manga_title(title: str) -> bool:
     return "(manga)" in title.lower() or "manga vol" in title.lower()
 
 
+_LANG_NAMES = {
+    "english": "en", "german": "de", "deutsch": "de", "japanese": "ja",
+    "french": "fr", "spanish": "es", "italian": "it", "chinese": "zh",
+    "korean": "ko", "portuguese": "pt",
+}
+
+
+def _lang2(raw: Optional[str]) -> Optional[str]:
+    """Tome's Book.language down to a 2-letter code ('en-US' → 'en',
+    'English' → 'en'), or None when unknown."""
+    if not raw:
+        return None
+    s = raw.strip().lower()
+    if s in _LANG_NAMES:
+        return _LANG_NAMES[s]
+    return s[:2] if len(s) >= 2 else None
+
+
+def _edition_lang(ed: dict) -> Optional[str]:
+    code = ((ed.get("language") or {}).get("code2") or "").strip().lower()
+    return code or None
+
+
+def _edition_acceptable(ed: dict, want_lang: Optional[str]) -> bool:
+    """Is this specific edition safe to pin? Audio editions never are (no page
+    counts, and the profile shows the audiobook cover); a known language must
+    not contradict the Tome book's known language."""
+    if ed.get("reading_format_id") == AUDIO_FORMAT_ID:
+        return False
+    ed_lang = _edition_lang(ed)
+    return want_lang is None or ed_lang is None or ed_lang == want_lang
+
+
+def _pick_edition(editions: list[dict], want_lang: Optional[str]) -> Optional[dict]:
+    """Choose the edition to pin on a matched Hardcover book: language match
+    first (unknown language beats a contradicting one), then non-audio, then
+    the edition the community actually uses, then one with page data."""
+    def score(ed: dict) -> tuple:
+        ed_lang = _edition_lang(ed)
+        if want_lang and ed_lang == want_lang:
+            lang_rank = 2
+        elif ed_lang is None or want_lang is None:
+            lang_rank = 1
+        else:
+            lang_rank = 0
+        non_audio = 0 if ed.get("reading_format_id") == AUDIO_FORMAT_ID else 1
+        return (lang_rank, non_audio, ed.get("users_count") or 0,
+                1 if ed.get("pages") else 0)
+    candidates = [e for e in editions if e.get("id") is not None]
+    return max(candidates, key=score) if candidates else None
+
+
 def _isbn_hit_plausible(book, hc_title: str) -> bool:
     """Sanity-check an ISBN edition hit against what we think the book is.
 
@@ -321,6 +389,31 @@ def _isbn_hit_plausible(book, hc_title: str) -> bool:
             references.append(f"{book.series} Vol. {_fmt_index(want_vol)}")
     best = max(_sim(_norm_title(hc_title), _norm_title(r)) for r in references)
     return best >= 0.5
+
+
+async def _adopt_best_edition(client: httpx.AsyncClient, token: str, book: Book) -> bool:
+    """Fetch the matched Hardcover book's editions and pin the best one
+    (language-aware, audio-averse). Returns False when nothing usable came
+    back so the caller can keep its own fallback. Auth/rate-limit errors
+    propagate; a plain API error is just 'no better edition'."""
+    try:
+        data = await _gql(client, token, Q_BOOK_EDITION, {"id": book.hardcover_book_id})
+    except HardcoverAPIError:
+        return False
+    books = data.get("books") or []
+    if not books:
+        return False
+    b = books[0]
+    if not book.hardcover_slug:
+        book.hardcover_slug = b.get("slug")
+    ed = _pick_edition(b.get("editions") or [], _lang2(book.language))
+    if ed is None:
+        book.hardcover_edition_id = None
+        book.hardcover_pages = b.get("pages")
+        return True
+    book.hardcover_edition_id = ed.get("id")
+    book.hardcover_pages = ed.get("pages") or b.get("pages")
+    return True
 
 
 async def match_book(client: httpx.AsyncClient, token: str, book: Book) -> bool:
@@ -351,10 +444,24 @@ async def match_book(client: httpx.AsyncClient, token: str, book: Book) -> bool:
                     "check for %r — falling back to search", isbn, hc_title, book.title)
                 continue
             book.hardcover_book_id = ed.get("book_id") or (ed.get("book") or {}).get("id")
-            book.hardcover_edition_id = ed.get("id")
-            book.hardcover_pages = ed.get("pages") or (ed.get("book") or {}).get("pages")
             book.hardcover_slug = (ed.get("book") or {}).get("slug")
             book.hardcover_match_method = "isbn13" if len(isbn) == 13 else "isbn10"
+            # The ISBN nails the BOOK, but its own edition may be one we must
+            # not pin: publishers reuse a catalogue across translations and
+            # audio (observed live: Podium ISBNs on English books resolving to
+            # the German-translation edition — the user's profile then shows
+            # the German cover), so a wrong-language or audio edition falls
+            # back to a language-aware pick among the book's editions.
+            if _edition_acceptable(ed, _lang2(book.language)):
+                book.hardcover_edition_id = ed.get("id")
+                book.hardcover_pages = ed.get("pages") or (ed.get("book") or {}).get("pages")
+            elif not await _adopt_best_edition(client, token, book):
+                logger.info(
+                    "Hardcover: ISBN %s edition %s is wrong-language/audio for %r "
+                    "and no better edition could be fetched — pinning it anyway",
+                    isbn, ed.get("id"), book.title)
+                book.hardcover_edition_id = ed.get("id")
+                book.hardcover_pages = ed.get("pages") or (ed.get("book") or {}).get("pages")
             return True
 
     # 2. Title+author search, strictly guarded. Refuse rather than guess.
@@ -441,17 +548,8 @@ async def match_book(client: httpx.AsyncClient, token: str, book: Book) -> bool:
         book.hardcover_book_id = hc_id
         book.hardcover_slug = doc.get("slug")
         book.hardcover_match_method = "search"
-        # Second query for the representative edition + page count.
-        data = await _gql(client, token, Q_BOOK_EDITION, {"id": hc_id})
-        books = data.get("books") or []
-        if books:
-            b = books[0]
-            eds = b.get("editions") or []
-            if eds:
-                book.hardcover_edition_id = eds[0].get("id")
-                book.hardcover_pages = eds[0].get("pages") or b.get("pages")
-            else:
-                book.hardcover_pages = b.get("pages")
+        # Second query picks the edition to pin (language-aware, audio-averse).
+        await _adopt_best_edition(client, token, book)
         return True
 
     book.hardcover_match_method = "none"
@@ -494,9 +592,9 @@ async def resolve_manual_match(token: str, book, hardcover_book_id: int) -> None
     b = books[0]
     book.hardcover_book_id = hardcover_book_id
     book.hardcover_slug = b.get("slug")
-    eds = b.get("editions") or []
-    book.hardcover_edition_id = eds[0].get("id") if eds else None
-    book.hardcover_pages = (eds[0].get("pages") if eds else None) or b.get("pages")
+    ed = _pick_edition(b.get("editions") or [], _lang2(book.language))
+    book.hardcover_edition_id = ed.get("id") if ed else None
+    book.hardcover_pages = (ed.get("pages") if ed else None) or b.get("pages")
     book.hardcover_match_method = "manual"
     book.hardcover_matched_at = datetime.utcnow()
 
