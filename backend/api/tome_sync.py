@@ -52,7 +52,11 @@ logger = logging.getLogger(__name__)
 # pull-conflict strategy settings (forward/backward × prompt/silent/never), and
 # a dedicated tomesync_state.lua for the data tables (migrated out of
 # G_reader_settings, pruned for books no longer on disk).
-TOMESYNC_PLUGIN_BUILD = 32
+# BUILD 33: catalog batch — device search (submit-based + recent searches),
+# author browse axis, read-status write-back (hold a book row); the shared
+# _bookListMenu drill-down shows per-book status markers. Server side: series
+# list N+1 fixed, /tome-sync/{authors,author-books,search} + PUT status.
+TOMESYNC_PLUGIN_BUILD = 33
 TOMESYNC_PLUGIN_SEMVER = "1.8.0"
 TOMESYNC_PLUGIN_VERSION = str(TOMESYNC_PLUGIN_BUILD)
 
@@ -763,6 +767,40 @@ def get_annotations_plugin(
 
 # ── Series endpoints (API-key-authed, for the plugin) ────────────────────────
 
+def _status_map(db: Session, user_id: int, book_ids: list[int]) -> dict[int, str]:
+    """book_id -> reading status for this user, one query."""
+    if not book_ids:
+        return {}
+    rows = (
+        db.query(UserBookStatus.book_id, UserBookStatus.status)
+        .filter(UserBookStatus.user_id == user_id, UserBookStatus.book_id.in_(book_ids))
+        .all()
+    )
+    return {bid: status for bid, status in rows if status}
+
+
+def _book_entry(b: Book, status_map: dict[int, str]) -> dict:
+    """The book shape the plugin's volume-list menus consume. `series` and
+    `status` are additive (build 33+); older plugins ignore them."""
+    entry = {
+        "id": b.id,
+        "title": b.title,
+        "series_index": b.series_index,
+        "author": b.author,
+        "book_type": b.book_type.slug if b.book_type else None,
+        "status": status_map.get(b.id, "unread"),
+        "files": [
+            {"id": f.id, "format": f.format, "file_size": f.file_size}
+            for f in b.files
+        ],
+    }
+    # Only include series when real — JSON null crashes the KOReader menus
+    # (rapidjson decodes it to a truthy userdata sentinel).
+    if b.series:
+        entry["series"] = b.series
+    return entry
+
+
 @router.get("/tome-sync/series")
 def list_series(
     db: Session = Depends(get_db),
@@ -772,57 +810,170 @@ def list_series(
     # Only count/expose books this user is allowed to see. book_visibility_filter
     # uses correlated EXISTS subqueries (no joins), so it doesn't duplicate rows
     # under the group_by, and returns True (no-op) for admins.
+    #
+    # One query for everything: ordered by (series, series_index, title), the
+    # first row seen per series IS its first book — the old per-series
+    # first_book query was an N+1 that scaled with the library.
     visibility = book_visibility_filter(db, user)
     rows = (
-        db.query(Book.series, func.count(Book.id).label("book_count"))
+        db.query(Book.series, Book.id, Book.author)
         .filter(Book.status == "active", Book.series.isnot(None), visibility)
-        .group_by(Book.series)
-        .order_by(Book.series)
+        .order_by(Book.series.asc(),
+                  Book.series_index.asc().nullslast(), Book.title.asc())
         .all()
     )
 
     result = []
-    for series_name, book_count in rows:
-        first_book = (
-            db.query(Book)
-            .filter(Book.status == "active", Book.series == series_name, visibility)
-            .order_by(Book.series_index.asc().nullslast(), Book.title.asc())
-            .first()
-        )
-        entry = {
-            "name": series_name,
-            "book_count": book_count,
-            "first_book_id": first_book.id if first_book else None,
-        }
-        # Only include author when it's a real string. Emitting JSON null here
-        # crashes the KOReader series browser, because rapidjson decodes null to
-        # a (truthy) userdata sentinel that the plugin then tries to concatenate.
-        if first_book and first_book.author:
-            entry["author"] = first_book.author
-        result.append(entry)
+    by_name: dict[str, dict] = {}
+    for series_name, book_id, author in rows:
+        entry = by_name.get(series_name)
+        if entry is None:
+            entry = {"name": series_name, "book_count": 0, "first_book_id": book_id}
+            # Only include author when it's a real string. Emitting JSON null here
+            # crashes the KOReader series browser, because rapidjson decodes null to
+            # a (truthy) userdata sentinel that the plugin then tries to concatenate.
+            if author:
+                entry["author"] = author
+            by_name[series_name] = entry
+            result.append(entry)
+        entry["book_count"] += 1
 
     # Append the unserialized bucket last, mirroring backend/api/books.py, so the
     # plugin's series browser exposes a single "No Series" entry through which
     # standalone books can be browsed and downloaded.
-    unserialized_count = (
-        db.query(func.count(Book.id))
+    unserialized = (
+        db.query(Book.id)
         .filter(Book.status == "active", Book.series.is_(None), visibility)
-        .scalar()
+        .order_by(Book.id)
+        .all()
     )
-    if unserialized_count:
-        first_unserialized = (
-            db.query(Book)
-            .filter(Book.status == "active", Book.series.is_(None), visibility)
-            .order_by(Book.id)
-            .first()
-        )
+    if unserialized:
         result.append({
             "name": "__unserialized__",
-            "book_count": unserialized_count,
-            "first_book_id": first_unserialized.id if first_unserialized else None,
+            "book_count": len(unserialized),
+            "first_book_id": unserialized[0][0],
         })
 
     return result
+
+
+@router.get("/tome-sync/authors")
+def list_authors(
+    db: Session = Depends(get_db),
+    user: User = Depends(_get_api_key_user),
+):
+    """List authors for the plugin's author browse axis — the natural way into
+    standalone books, which the series browser lumps into one No Series bucket."""
+    visibility = book_visibility_filter(db, user)
+    rows = (
+        db.query(Book.author, func.count(Book.id))
+        .filter(Book.status == "active", Book.author.isnot(None), Book.author != "", visibility)
+        .group_by(Book.author)
+        .order_by(Book.author.asc())
+        .all()
+    )
+    result = [{"name": name, "book_count": count} for name, count in rows]
+    unknown = (
+        db.query(func.count(Book.id))
+        .filter(Book.status == "active",
+                (Book.author.is_(None)) | (Book.author == ""), visibility)
+        .scalar()
+    )
+    if unknown:
+        result.append({"name": "__unknown__", "book_count": unknown})
+    return result
+
+
+@router.get("/tome-sync/author-books")
+def get_author_books(
+    author: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(_get_api_key_user),
+):
+    """All of one author's visible books, shaped like a series volume list so
+    the plugin reuses the same drill-down menu. Query param (not a path
+    segment): author names contain slashes, dots, and everything else."""
+    visibility = book_visibility_filter(db, user)
+    if author == "__unknown__":
+        author_filter = (Book.author.is_(None)) | (Book.author == "")
+    else:
+        author_filter = Book.author == author
+    books = (
+        db.query(Book)
+        .options(joinedload(Book.files), joinedload(Book.book_type))
+        .filter(Book.status == "active", author_filter, visibility)
+        .order_by(Book.series.asc().nullslast(),
+                  Book.series_index.asc().nullslast(), Book.title.asc())
+        .all()
+    )
+    smap = _status_map(db, user.id, [b.id for b in books])
+    return {"author": author, "books": [_book_entry(b, smap) for b in books]}
+
+
+@router.get("/tome-sync/search")
+def search_books(
+    q: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(_get_api_key_user),
+):
+    """Free-text search over title/author/series for the plugin (LIKE terms,
+    all must match). Same book shape as the series drill-down."""
+    terms = [t for t in q.strip().split() if t]
+    if not terms:
+        return {"query": q, "total": 0, "books": []}
+    visibility = book_visibility_filter(db, user)
+    query = (
+        db.query(Book)
+        .options(joinedload(Book.files), joinedload(Book.book_type))
+        .filter(Book.status == "active", visibility)
+    )
+    for t in terms:
+        like = f"%{t}%"
+        query = query.filter(
+            Book.title.ilike(like) | Book.author.ilike(like) | Book.series.ilike(like)
+        )
+    total = query.count()
+    books = (
+        query.order_by(Book.series.asc().nullslast(),
+                       Book.series_index.asc().nullslast(), Book.title.asc())
+        .limit(50)
+        .all()
+    )
+    smap = _status_map(db, user.id, [b.id for b in books])
+    return {"query": q, "total": total, "books": [_book_entry(b, smap) for b in books]}
+
+
+class StatusUpdate(PydanticBaseModel):
+    status: str
+
+
+@router.put("/tome-sync/status/{book_id}")
+def put_reading_status(
+    book_id: int,
+    body: StatusUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(_get_api_key_user),
+):
+    """Set unread/reading/read from the device's volume list (write-back).
+
+    A deliberate user action, so it writes status directly — unlike telemetry
+    (position/stats), which only ever *suggests* status via the sticky rule."""
+    if body.status not in ("unread", "reading", "read"):
+        raise HTTPException(status_code=422, detail="status must be unread|reading|read")
+    book = db.get(Book, book_id)
+    if not book or book.status != "active" or not user_can_see_book(db, user, book):
+        raise HTTPException(status_code=404, detail="Book not found")
+    row = (
+        db.query(UserBookStatus)
+        .filter(UserBookStatus.user_id == user.id, UserBookStatus.book_id == book_id)
+        .first()
+    )
+    if row is None:
+        row = UserBookStatus(user_id=user.id, book_id=book_id)
+        db.add(row)
+    row.status = body.status
+    db.commit()
+    return {"ok": True, "book_id": book_id, "status": body.status}
 
 
 @router.get("/tome-sync/series/{book_id}")
@@ -860,23 +1011,11 @@ def get_series_books(
     # below, which newer plugins prefer when filing downloads.
     book_type_slug = books[0].book_type.slug if books and books[0].book_type else "book"
 
+    smap = _status_map(db, user.id, [b.id for b in books])
     return {
         "series_name": series_name,
         "book_type": book_type_slug,
-        "books": [
-            {
-                "id": b.id,
-                "title": b.title,
-                "series_index": b.series_index,
-                "author": b.author,
-                "book_type": b.book_type.slug if b.book_type else None,
-                "files": [
-                    {"id": f.id, "format": f.format, "file_size": f.file_size}
-                    for f in b.files
-                ],
-            }
-            for b in books
-        ],
+        "books": [_book_entry(b, smap) for b in books],
     }
 
 
@@ -1312,6 +1451,7 @@ local Dispatcher       = require("dispatcher")
 local Event            = require("ui/event")
 local LuaSettings      = require("luasettings")
 local DataStorage      = require("datastorage")
+local ButtonDialog     = require("ui/widget/buttondialog")
 
 -- ── Register in wrench menu (tools tab, after calibre) ──────────────────────
 -- Runs once per KOReader process via require() caching.
@@ -3184,18 +3324,20 @@ function TomeSync:_downloadSeriesBooks(series_name, books, min_index, book_type,
     return {{ downloaded = downloaded, skipped = skipped, failed = failed }}
 end
 
--- Drill-down list for one series (or the No Series bucket): a "Download all" row
--- plus one row per book, so a single title can be downloaded on its own.
-function TomeSync:_seriesBooksMenu(data)
-    local display = data.series_name
-    if display == "__unserialized__" then display = "No Series" end
-
+-- Shared drill-down list: a "Download all" row plus one row per book. Used by
+-- the series browser, the author browser, and search results. Tap downloads a
+-- book; hold sets its read status. `data`:
+--   title        menu title
+--   books        list of server book entries
+--   series_name  filing default for books without their own series (optional)
+--   book_type    filing fallback for older servers (optional)
+--   mixed        true → prefix each row with the book's own series
+--   reload       called after a status write-back to rebuild with fresh data
+function TomeSync:_bookListMenu(data)
     local items = {{}}
     table.insert(items, {{
         text     = string.format("Download all (%d)", #data.books),
-        callback = function()
-            self:_downloadSeriesBooks(data.series_name, data.books, nil, data.book_type)
-        end,
+        callback = function() self:_downloadListBooks(data, nil) end,
     }})
     -- book_id → on-device path (same signal the download queue uses to skip)
     local id_to_path = {{}}
@@ -3211,25 +3353,273 @@ function TomeSync:_seriesBooksMenu(data)
         else
             label = book.title
         end
+        if data.mixed and type(book.series) == "string" and book.series ~= "" then
+            label = book.series .. " · " .. label
+        end
         if id_to_path[book.id] then
             label = label .. "  · on device"
         end
+        -- Status marker (build 33): only for the non-default states.
+        if book.status == "reading" or book.status == "read" then
+            label = label .. "  · " .. book.status
+        end
         table.insert(items, {{
             text     = label,
-            callback = function()
-                self:_downloadSeriesBooks(data.series_name, {{ book }}, nil, data.book_type)
-            end,
+            book     = book,
+            callback = function() self:_downloadListBooks(data, book) end,
         }})
     end
 
-    local menu = Menu:new{{
-        title       = display,
+    local menu
+    menu = Menu:new{{
+        title       = data.title,
         item_table  = items,
         width       = Device.screen:getWidth() - 20,
         height      = Device.screen:getHeight() - 20,
         show_parent = self.ui or UIManager,
     }}
+    -- Hold a book row to set its read status (write-back to Tome).
+    menu.onMenuHold = function(_, item)
+        if item.book then
+            self:_statusDialog(item.book, function()
+                UIManager:close(menu)
+                if data.reload then data.reload() end
+            end)
+        end
+        return true
+    end
     UIManager:show(menu)
+end
+
+-- Route one book (or the whole list) into the download machinery with the
+-- right filing identity: a book with its own series files under that series;
+-- a standalone files like the No Series bucket (book-type/author folders).
+function TomeSync:_downloadListBooks(data, book)
+    local function seriesOf(b)
+        if type(b.series) == "string" and b.series ~= "" then return b.series end
+        return data.series_name or "__unserialized__"
+    end
+    if book then
+        self:_downloadSeriesBooks(seriesOf(book), {{ book }}, nil,
+                                  book.book_type or data.book_type)
+        return
+    end
+    if data.series_name then
+        -- Homogeneous list (one series / the No Series bucket): one batch.
+        self:_downloadSeriesBooks(data.series_name, data.books, nil, data.book_type)
+        return
+    end
+    -- Mixed list (author / search): file each book by its own identity, then
+    -- roll the counts up into one summary.
+    local downloaded, skipped, failed = 0, 0, 0
+    for _, b in ipairs(data.books) do
+        local r = self:_downloadSeriesBooks(seriesOf(b), {{ b }}, nil, b.book_type, true)
+        downloaded = downloaded + (r.downloaded or 0)
+        skipped    = skipped + (r.skipped or 0)
+        failed     = failed + (r.failed or 0)
+    end
+    UIManager:show(InfoMessage:new{{
+        text = string.format("%s\\n\\nDownloaded: %d\\nSkipped: %d\\nFailed: %d",
+                             data.title or "Download", downloaded, skipped, failed),
+        timeout = 6,
+    }})
+end
+
+-- Hold-a-row dialog: set unread/reading/read on the server (deliberate user
+-- action — unlike telemetry, which only suggests status).
+function TomeSync:_statusDialog(book, on_done)
+    local dialog
+    local function setStatus(status)
+        UIManager:close(dialog)
+        whenConnected(function()
+            local ok, resp, code = pcall(apiRequest, "PUT", "/tome-sync/status/" .. book.id,
+                                         {{ status = status }})
+            if ok and type(code) == "number" and code < 300 then
+                book.status = status
+                UIManager:show(Notification:new{{
+                    text = string.format('"%s" marked %s.', book.title or "Book", status),
+                    timeout = 2,
+                }})
+                if on_done then on_done() end
+            else
+                UIManager:show(InfoMessage:new{{
+                    text = "Could not update status (" .. tostring(code) .. ").",
+                    timeout = 4,
+                }})
+            end
+        end)
+    end
+    dialog = ButtonDialog:new{{
+        title = (book.title or "Book") .. "\\nSet read status",
+        buttons = {{
+            {{ {{ text = "Unread",  callback = function() setStatus("unread") end }} }},
+            {{ {{ text = "Reading", callback = function() setStatus("reading") end }} }},
+            {{ {{ text = "Read",    callback = function() setStatus("read") end }} }},
+        }},
+    }}
+    UIManager:show(dialog)
+end
+
+-- Adapter kept for the series flow (name/shape unchanged for its callers).
+function TomeSync:_seriesBooksMenu(data)
+    local display = data.series_name
+    if display == "__unserialized__" then display = "No Series" end
+    self:_bookListMenu{{
+        title       = display,
+        books       = data.books,
+        series_name = data.series_name,
+        book_type   = data.book_type,
+        reload      = function()
+            if #data.books > 0 then self:_openSeriesBooks(data.books[1].id) end
+        end,
+    }}
+end
+
+-- ── Author browse axis (build 33) ────────────────────────────────────────────
+
+function TomeSync:_authorsMenu()
+    whenConnected(function() self:_authorsMenuImpl() end)
+end
+
+function TomeSync:_authorsMenuImpl()
+    local ok, authors, code = pcall(apiRequest, "GET", "/tome-sync/authors")
+    if not ok or type(authors) ~= "table" or (type(code) == "number" and code >= 300) then
+        UIManager:show(ConfirmBox:new{{
+            text = "Failed to load authors.",
+            ok_text = "Retry",
+            cancel_text = "Close",
+            ok_callback = function() self:_authorsMenuImpl() end,
+        }})
+        return
+    end
+    local items = {{}}
+    for _, a in ipairs(authors) do
+        local name = a.name
+        if name == "__unknown__" then name = "Unknown author" end
+        table.insert(items, {{
+            text = name .. " (" .. a.book_count .. ")",
+            callback = function() self:_openAuthorBooks(a.name) end,
+        }})
+    end
+    UIManager:show(Menu:new{{
+        title = "Authors",
+        item_table = items,
+        width = Device.screen:getWidth() - 20,
+        height = Device.screen:getHeight() - 20,
+        show_parent = self.ui or UIManager,
+    }})
+end
+
+function TomeSync:_openAuthorBooks(author)
+    local ok, data, code = pcall(apiRequest, "GET",
+        "/tome-sync/author-books?author=" .. urlEncode(author))
+    if ok and type(data) == "table" and data.books then
+        local display = author
+        if display == "__unknown__" then display = "Unknown author" end
+        self:_bookListMenu{{
+            title  = display,
+            books  = data.books,
+            mixed  = true,
+            reload = function() self:_openAuthorBooks(author) end,
+        }}
+    else
+        UIManager:show(ConfirmBox:new{{
+            text = "Failed to load author's books.",
+            ok_text = "Retry",
+            cancel_text = "Close",
+            ok_callback = function() self:_openAuthorBooks(author) end,
+        }})
+    end
+    local _ = code
+end
+
+-- ── Search from the device (build 33) ────────────────────────────────────────
+
+function TomeSync:_recentSearches()
+    return self.state:readSetting("tomesync_recent_searches") or {{}}
+end
+
+function TomeSync:_rememberSearch(q)
+    local recents = self:_recentSearches()
+    for i = #recents, 1, -1 do
+        if recents[i] == q then table.remove(recents, i) end
+    end
+    table.insert(recents, 1, q)
+    while #recents > 8 do table.remove(recents) end
+    self:_saveState("tomesync_recent_searches", recents)
+end
+
+function TomeSync:_searchMenu()
+    -- Submit-based input (the right call on e-ink), with recent searches one
+    -- tap away underneath.
+    local dialog
+    dialog = InputDialog:new{{
+        title = "Search library",
+        input_hint = "title, author, or series",
+        buttons = {{{{
+            {{ text = "Cancel", id = "close",
+              callback = function() UIManager:close(dialog) end }},
+            {{ text = "Search", is_enter_default = true,
+              callback = function()
+                  local q = dialog:getInputText()
+                  if q and q:match("%S") then
+                      UIManager:close(dialog)
+                      self:_runSearch(q)
+                  end
+              end }},
+        }}}},
+    }}
+    local recents = self:_recentSearches()
+    if #recents > 0 then
+        -- A second row of up to 3 recent queries; the full list lives in the
+        -- results menu title history anyway, and 3 covers the muscle-memory case.
+        local row = {{}}
+        for i = 1, math.min(3, #recents) do
+            local q = recents[i]
+            table.insert(row, {{ text = q, callback = function()
+                UIManager:close(dialog)
+                self:_runSearch(q)
+            end }})
+        end
+        table.insert(dialog.buttons, 1, row)
+    end
+    UIManager:show(dialog)
+    dialog:onShowKeyboard()
+end
+
+function TomeSync:_runSearch(q)
+    whenConnected(function()
+        local ok, data, code = pcall(apiRequest, "GET",
+            "/tome-sync/search?q=" .. urlEncode(q))
+        if not ok or type(data) ~= "table" or not data.books
+                or (type(code) == "number" and code >= 300) then
+            UIManager:show(ConfirmBox:new{{
+                text = "Search failed.",
+                ok_text = "Retry",
+                cancel_text = "Close",
+                ok_callback = function() self:_runSearch(q) end,
+            }})
+            return
+        end
+        self:_rememberSearch(q)
+        if #data.books == 0 then
+            UIManager:show(InfoMessage:new{{
+                text = 'No results for "' .. q .. '".',
+                timeout = 3,
+            }})
+            return
+        end
+        local title = string.format('Search: %s (%d)', q, data.total or #data.books)
+        if (data.total or 0) > #data.books then
+            title = string.format('Search: %s (%d of %d)', q, #data.books, data.total)
+        end
+        self:_bookListMenu{{
+            title  = title,
+            books  = data.books,
+            mixed  = true,
+            reload = function() self:_runSearch(q) end,
+        }}
+    end)
 end
 
 function TomeSync:_browseSeriesMenu()
@@ -3257,6 +3647,17 @@ function TomeSync:_browseSeriesMenuImpl()
     end
 
     local items = {{}}
+    -- Cross-axis entry points (build 33): search and the author axis live at
+    -- the top of the browser, so standalones aren't stuck behind "No Series".
+    table.insert(items, {{
+        text     = "Search library…",
+        callback = function() self:_searchMenu() end,
+    }})
+    table.insert(items, {{
+        text      = "Browse by author",
+        separator = true,
+        callback  = function() self:_authorsMenu() end,
+    }})
     for _, s in ipairs(series_list) do
         local name = s.name
         if name == "__unserialized__" then name = "No Series" end

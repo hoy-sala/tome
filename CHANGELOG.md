@@ -7,6 +7,20 @@ All notable changes to Tome are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **Search your library from the device (KOReader plugin, build 33).** The
+  series browser gains a "Search library…" entry: submit-based free-text search
+  over title, author, and series, with your last searches one tap away. Results
+  open the same drill-down list as a series — tap to download, hold to set read
+  status.
+- **Browse by author on the device (build 33).** A new author axis in the
+  series browser — the natural way into standalone books, which previously all
+  hid behind the single "No Series" bucket. Downloads file each book by its own
+  series/author identity, exactly like the web.
+- **Set read status from the device browser (build 33).** Hold any book row in
+  a series, author, or search list to mark it unread / reading / read on the
+  server — no need to open the book. The lists also show each book's current
+  status alongside the existing "on device" marker.
+
 - **Position pull strategy (KOReader plugin, build 32).** What happens on book
   open when the server position differs from the device is now configurable,
   like stock KOSync: "Server position is ahead" and "Server position is
@@ -33,6 +47,9 @@ All notable changes to Tome are documented here. Format loosely follows
   KOReader at every boot — moved into a dedicated `tomesync_state.lua`,
   migrated automatically and crash-safely on first launch. State for books no
   longer on the device is pruned; pending queues are never pruned.
+- **The plugin's series list no longer runs one query per series.** Loading the
+  series browser was an N+1 that scaled with the library; it's now a single
+  query with the same response.
 
 ## [1.8.0] — 2026-07-05 — "Spine"
 
