@@ -41,6 +41,7 @@ interface BinderyItem {
   series: string | null
   series_index: number | null
   title: string
+  author: string | null
   folder: string | null
 }
 
@@ -89,7 +90,7 @@ function itemToForm(item: BinderyItem, bookTypes: BookType[]): ItemForm {
     : ''
   return {
     title: item.title ?? '',
-    author: '',
+    author: item.author ?? '',
     series: item.series ?? '',
     series_index: item.series_index != null ? String(item.series_index) : '',
     content_type: item.content_type ?? 'volume',
@@ -844,10 +845,13 @@ export function BinderyPage() {
       )
       setCandidates(result.candidates)
       setSearchQuery(result.query_used)
-      // Auto-apply the best candidate on initial fetch (not manual re-search,
-      // and not when retargeting to a row the user may have hand-edited)
-      if (autoApply && !queryOverride && result.candidates.length > 0) {
-        applyCandidate(result.candidates[0], itemPath)
+      // Embedded metadata (calibre:series etc.) beats the filename guess —
+      // same precedence as auto-import. Candidate apply still wins on top.
+      if (autoApply && !queryOverride) {
+        applyEmbedded(result.file_metadata, itemPath)
+        if (result.candidates.length > 0) {
+          applyCandidate(result.candidates[0], itemPath)
+        }
       }
     } catch {
       // Non-fatal
@@ -867,10 +871,11 @@ export function BinderyPage() {
         const item = reviewItems[i]
         setMatchingAll(i + 1)
         try {
-          const result = await api.post<{ candidates: MetadataCandidate[] }>(
+          const result = await api.post<{ file_metadata: Record<string, unknown>; candidates: MetadataCandidate[] }>(
             '/bindery/preview',
             { path: item.path }
           )
+          applyEmbedded(result.file_metadata, item.path)
           if (result.candidates.length > 0) {
             applyCandidate(result.candidates[0], item.path)
             matched++
@@ -900,6 +905,45 @@ export function BinderyPage() {
   // ---------------------------------------------------------------------------
   // Candidate selection
   // ---------------------------------------------------------------------------
+
+  // Merge metadata embedded in the file itself (calibre:series, OPF dc:*)
+  // into a form row. Embedded values win over the filename parse — the
+  // filename is a guess, the file is ground truth. Candidates applied
+  // afterwards still override (unchanged semantics).
+  function applyEmbedded(meta: Record<string, unknown>, targetPath: string) {
+    if (!meta) return
+    const str = (k: string): string | null => {
+      const v = meta[k]
+      return typeof v === 'string' && v.trim() ? v : null
+    }
+    const num = (k: string): number | null => {
+      const v = meta[k]
+      return typeof v === 'number' && Number.isFinite(v) ? v : null
+    }
+    setFormData(prev => {
+      const existing = prev[targetPath]
+      if (!existing) return prev
+      return {
+        ...prev,
+        [targetPath]: {
+          ...existing,
+          title: str('title') || existing.title,
+          author: str('author') || existing.author,
+          series: str('series') || existing.series,
+          series_index: num('series_index') != null ? String(num('series_index')) : existing.series_index,
+          description: str('description') || existing.description,
+          publisher: str('publisher') || existing.publisher,
+          year: num('year') != null ? String(num('year')) : existing.year,
+          isbn: str('isbn') || existing.isbn,
+          language: str('language') || existing.language,
+        },
+      }
+    })
+    const embeddedSeries = str('series')
+    if (embeddedSeries) setBatchSeries(prev => prev || embeddedSeries)
+    const embeddedAuthor = str('author')
+    if (embeddedAuthor) setBatchAuthor(prev => prev || embeddedAuthor)
+  }
 
   function applyCandidate(c: MetadataCandidate, targetPath?: string) {
     setFormData(prev => {

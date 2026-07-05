@@ -196,3 +196,103 @@ class TestEdgeCases:
         assert r.series is None
         assert r.series_index is None
         assert r.content_type == "volume"
+
+
+# ---------------------------------------------------------------------------
+# Series parenthetical — "(Series Book N)" Amazon/Calibre convention
+# ---------------------------------------------------------------------------
+
+class TestSeriesParenthetical:
+    def test_series_book_n(self) -> None:
+        # The exact prod filename shape behind the original Bindery series bug
+        r = _parse("Trick Of The Night A LitRPGGameLit Adventure (The Bad Guys Book 8) - Eric Ugland (2022).epub")
+        assert r.series == "The Bad Guys"
+        assert r.series_index == 8.0
+        assert r.title == "Trick Of The Night A LitRPGGameLit Adventure"
+        assert r.author == "Eric Ugland"
+        assert r.content_type == "volume"
+
+    def test_series_comma_book_n(self) -> None:
+        r = _parse("Unsouled (Cradle, Book 1).epub")
+        assert r.series == "Cradle"
+        assert r.series_index == 1.0
+
+    def test_series_hash_n(self) -> None:
+        r = _parse("The Wandering Inn (The Wandering Inn #7).epub")
+        assert r.series == "The Wandering Inn"
+        assert r.series_index == 7.0
+
+    def test_plain_year_paren_is_not_series(self) -> None:
+        r = _parse("Don Quixote v01 (2024) (Digital).cbz")
+        assert r.series == "Don Quixote"
+        assert r.series_index == 1.0
+
+
+# ---------------------------------------------------------------------------
+# Structured "NN. Title - Author (Year)" layout (organizer/import convention)
+# ---------------------------------------------------------------------------
+
+class TestStructuredLayout:
+    def test_index_title_author_year(self) -> None:
+        r = _parse("07. Back to One - Eric Ugland (2021).epub")
+        assert r.title == "Back to One"
+        assert r.author == "Eric Ugland"
+        assert r.series_index == 7.0
+        assert r.series is None
+        assert r.content_type == "volume"
+
+    def test_title_author_year_no_index(self) -> None:
+        r = _parse("Dukes and Ladders - Eric Ugland (2021).epub")
+        assert r.title == "Dukes and Ladders"
+        assert r.author == "Eric Ugland"
+        assert r.series is None
+        assert r.series_index is None
+
+    def test_index_title_author_no_year(self) -> None:
+        r = _parse("01. Scamps & Scoundrels - Eric Ugland.epub")
+        assert r.title == "Scamps & Scoundrels"
+        assert r.author == "Eric Ugland"
+        assert r.series_index == 1.0
+
+    def test_structured_with_inner_volume_marker(self) -> None:
+        r = _parse("05. Omniscient Reader v05 - Sing Shong (2021).epub")
+        assert r.series == "Omniscient Reader"
+        assert r.series_index == 5.0
+        assert r.author == "Sing Shong"
+
+    def test_dash_title_without_year_stays_ambiguous(self) -> None:
+        # No (Year) anchor and no leading index — can't tell author from title
+        r = _parse("The Castle - Bram Stoker.epub")
+        assert r.author is None
+        assert r.series is None
+
+
+# ---------------------------------------------------------------------------
+# Bare trailing number on prose ebooks must NOT fabricate a series
+# (the original Bindery bug: series became the book's own title)
+# ---------------------------------------------------------------------------
+
+class TestBareNumberEbook:
+    def test_epub_bare_number_no_series(self) -> None:
+        r = _parse("Dukes and Ladders 5.epub")
+        assert r.series is None
+        assert r.series_index == 5.0
+        assert r.title == "Dukes and Ladders 5"
+        assert r.content_type == "volume"
+
+    def test_pdf_bare_number_no_series(self) -> None:
+        r = _parse("Design Patterns 2.pdf")
+        assert r.series is None
+        assert r.content_type == "volume"
+
+    def test_cbz_bare_number_still_chapter(self) -> None:
+        # Comics keep the manga-chapter convention
+        r = _parse("One Piece 1050.cbz")
+        assert r.series == "One Piece"
+        assert r.series_index == 1050.0
+        assert r.content_type == "chapter"
+
+    def test_epub_bare_number_in_chapters_dir(self) -> None:
+        r = _parse("Some Webnovel 42.epub", in_chapters_dir=True)
+        assert r.content_type == "chapter"
+        assert r.series_index == 42.0
