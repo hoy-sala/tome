@@ -170,7 +170,8 @@ def create_annotation(
     if len(text_) > 20_000:
         raise HTTPException(status_code=422, detail="highlighted_text too long")
 
-    now = (payload.datetime or "").strip()[:19] or func_now_str()
+    client_dt = (payload.datetime or "").strip()[:19]
+    now = client_dt or func_now_str()
     row = Annotation(
         user_id=current_user.id,
         book_id=payload.book_id,
@@ -182,6 +183,9 @@ def create_annotation(
         color=(payload.color or None),
         koreader_datetime=now,
         koreader_datetime_updated=now,
+        # Stamp origin: only a server-clock fallback is "server-minted" —
+        # plugin syncs shift such stamps into the device's clock frame.
+        server_minted=not client_dt,
     )
     db.add(row)
     db.commit()
@@ -219,14 +223,20 @@ def edit_annotation(
     # The edit must be STRICTLY newer than the current mtime to win LWW on
     # devices; guard against a server clock at/behind the device's wall-clock.
     new_mtime = func_now_str()
+    minted = True
     if new_mtime <= (row.effective_mtime or ""):
         from datetime import datetime as _dt, timedelta as _td
         try:
             base = _dt.strptime(row.effective_mtime, "%Y-%m-%d %H:%M:%S")
             new_mtime = (base + _td(seconds=1)).strftime("%Y-%m-%d %H:%M:%S")
+            # Bumped off the row's existing mtime, so the new stamp lives in
+            # whatever frame that stamp was in (device unless it was itself
+            # server-minted) — inherit, don't assume server frame.
+            minted = row.server_minted
         except ValueError:
             pass
     row.koreader_datetime_updated = new_mtime
+    row.server_minted = minted
     db.commit()
     db.refresh(row)
     return _annotation_out(row)
@@ -263,7 +273,12 @@ def delete_annotation(
     # drop copies with mtime <= tombstone — so maxing with effective_mtime guarantees
     # the delete holds against the exact copy that was deleted, while a genuinely
     # newer re-add (strictly greater mtime) still wins and clears the tombstone.
-    now = max(func_now_str(), annotation.effective_mtime)
+    server_now = func_now_str()
+    now = max(server_now, annotation.effective_mtime)
+    # The stamp is only "server-minted" (shifted into device frames on plugin
+    # sync) when the server clock actually won the max — if the highlight's own
+    # device mtime won, the stamp is already in that device's frame.
+    minted = now == server_now and now != annotation.effective_mtime
 
     db.delete(annotation)
 
@@ -280,10 +295,11 @@ def delete_annotation(
         # Keep the latest deletion time so a stale re-add can't slip under it.
         if now > (tomb.client_deleted_at or ""):
             tomb.client_deleted_at = now
+            tomb.server_minted = minted
     else:
         db.add(AnnotationTombstone(
             user_id=current_user.id, book_id=book_id, anchor=anchor,
-            client_deleted_at=now,
+            client_deleted_at=now, server_minted=minted,
         ))
 
     db.commit()

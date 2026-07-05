@@ -47,13 +47,20 @@ def test_goto_guards_against_non_crengine_xpointers():
     # The web reader stores a foliate epubcfi in TomeSyncPosition.progress;
     # crengine xpointers always start with "/". Anything else must fall back
     # to a percentage jump instead of onGotoXPointer (which lands on page 1).
-    body = _init_session_body(_impl())
+    # The jump lives in the shared _gotoServerPosition helper (build 32: both
+    # the silent pull and the prompt callback route through it).
+    lua = _impl()
+    start = lua.find("function TomeSync:_gotoServerPosition")
+    assert start != -1, "missing _gotoServerPosition helper"
+    body = lua[start:lua.find("\nfunction ", start + 1)]
     guard = body.find('pos.progress:sub(1, 1) == "/"')
     goto_xp = body.find("onGotoXPointer")
     goto_pct = body.find("onGotoPercent")
     assert guard != -1, "missing xpointer-shape guard"
     assert goto_xp != -1 and guard < goto_xp, "goto must be behind the guard"
     assert goto_pct != -1, "missing percentage fallback for web positions"
+    # And _initSession must actually route through the helper.
+    assert "self:_gotoServerPosition(pos, server_pct)" in _init_session_body(lua)
 
 
 def test_session_init_is_deduped_per_open():

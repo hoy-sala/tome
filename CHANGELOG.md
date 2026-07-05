@@ -6,6 +6,34 @@ All notable changes to Tome are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- **Position pull strategy (KOReader plugin, build 32).** What happens on book
+  open when the server position differs from the device is now configurable,
+  like stock KOSync: "Server position is ahead" and "Server position is
+  behind" each offer *Ask before jumping / Jump automatically / Do nothing*
+  (TomeSync settings). Defaults keep the historic behavior — forward jumps
+  happen silently, backward jumps never — and the ask-dialog is deferred a
+  moment after open so it can never swallow a "on book opening" profile the
+  way the old layout-reset bug did.
+
+### Fixed
+- **A fast server clock can no longer silently swallow highlights (build 32).**
+  Highlight edits and deletes made in the web reader are stamped with the
+  server's clock; on a device whose clock runs behind (UTC container vs local
+  device time), those stamps landed in the device's future and outranked every
+  later local change — a re-highlight after a web delete just vanished until
+  the clocks crossed. The plugin now stamps its wall-clock on every highlight
+  sync and the server shifts the stamps it minted itself into that device's
+  clock frame, both when comparing and in what it returns; the plugin
+  additionally refuses to store any stamp from the future. Older plugins keep
+  the previous behavior.
+- **The TomeSync plugin no longer bloats KOReader's global settings file
+  (build 32).** Its data tables (book map, pending sessions and ratings, sync
+  baselines, repair aliases) — which grow with your library and were parsed by
+  KOReader at every boot — moved into a dedicated `tomesync_state.lua`,
+  migrated automatically and crash-safely on first launch. State for books no
+  longer on the device is pruned; pending queues are never pruned.
+
 ## [1.8.0] — 2026-07-05 — "Spine"
 
 ### Added

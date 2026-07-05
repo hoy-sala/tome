@@ -85,7 +85,8 @@ def test_failed_rating_push_is_queued_and_flushed():
     # lost — the per-book close trigger never fires again for a book you rate and
     # never reopen (e.g. a finished book). It rides a pending queue, like sessions.
     lua = _impl()
-    assert 'G_reader_settings:readSetting("tomesync_pending_ratings")' in lua
+    # Build 32: data tables live in the dedicated state file, not G_reader_settings.
+    assert 'self.state:readSetting("tomesync_pending_ratings")' in lua
     # On a failed push, _pushRating stows the value for retry.
     push = _body(lua, "_pushRating")
     assert "self.pending_ratings[key] = { rating = rating, review = review }" in push
@@ -104,8 +105,9 @@ def test_json_null_is_normalized_to_nil_on_read():
 
 def test_baseline_is_persisted():
     lua = _impl()
-    assert 'G_reader_settings:readSetting("tomesync_rating_baseline")' in lua
-    assert 'G_reader_settings:saveSetting("tomesync_rating_baseline"' in lua
+    # Build 32: data tables live in the dedicated state file, not G_reader_settings.
+    assert 'self.state:readSetting("tomesync_rating_baseline")' in lua
+    assert 'self:_saveState("tomesync_rating_baseline"' in lua
 
 
 def test_open_and_leave_hooks_are_wired():

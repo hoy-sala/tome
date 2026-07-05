@@ -3,7 +3,7 @@ import secrets
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.core.database import Base
@@ -128,6 +128,12 @@ class Annotation(Base):
     koreader_datetime: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     # KOReader's last-modification time — the last-write-wins key for edit conflicts.
     koreader_datetime_updated: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    # True when the LWW stamp above was minted by the SERVER's clock (web create/edit)
+    # rather than a device's. Server-minted stamps are shifted into the requesting
+    # device's clock frame during plugin sync, so a server clock ahead of a device
+    # can't make web actions permanently outrank the user's next local edit.
+    # Cleared as soon as a device upsert wins the row (the stamp is then device time).
+    server_minted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
@@ -164,4 +170,7 @@ class AnnotationTombstone(Base):
     )
     anchor: Mapped[str] = mapped_column(String(512), nullable=False)
     client_deleted_at: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    # See Annotation.server_minted — True when client_deleted_at came from the
+    # server's clock (web delete), so plugin syncs shift it into the device frame.
+    server_minted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

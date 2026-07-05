@@ -205,6 +205,16 @@ async def lifespan(app: FastAPI):
         if an_cols and "cfi" not in an_cols:
             conn.execute(text("ALTER TABLE annotations ADD COLUMN cfi TEXT"))
             conn.commit()
+        # Clock-offset guard: marks LWW stamps minted by the server's clock (web
+        # create/edit/delete) so plugin syncs can shift them into the device frame.
+        # Pre-existing rows default 0 (device-minted) — the safe assumption.
+        if an_cols and "server_minted" not in an_cols:
+            conn.execute(text("ALTER TABLE annotations ADD COLUMN server_minted BOOLEAN NOT NULL DEFAULT 0"))
+            conn.commit()
+        at_tomb_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(annotation_tombstones)")).fetchall()}
+        if at_tomb_cols and "server_minted" not in at_tomb_cols:
+            conn.execute(text("ALTER TABLE annotation_tombstones ADD COLUMN server_minted BOOLEAN NOT NULL DEFAULT 0"))
+            conn.commit()
         # Release detection stores the tracker's latest volume title + date on
         # follows (wishes table pre-exists on upgraded installs).
         wi_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(wishes)")).fetchall()}
