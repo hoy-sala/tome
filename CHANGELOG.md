@@ -7,6 +7,14 @@ All notable changes to Tome are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **Highlights page polish.** The deferred cluster from the original
+  commonplace-book release: an **only-notes filter** (show just the highlights
+  carrying your own notes — composes with search and on-this-day), a real
+  **file export** (download all matching highlights as a Markdown file, next to
+  the existing copy-to-clipboard), **keyboard shortcuts** (`/` search, `Esc`
+  clear, `c` collapse all, `n` only-notes, `e` export — listed in the `?`
+  help), and a **shuffle button** on the Home tab's highlight spotlight that
+  re-rolls to a different quote.
 - **Time per chapter.** Book pages now show where your reading time went
   chapter by chapter: the book's table of contents is extracted at ingest into
   device-independent chapter boundaries, and KOReader per-page reading data is
@@ -21,6 +29,10 @@ All notable changes to Tome are documented here. Format loosely follows
   pagination is not a property of the book). Backfilled by the same admin job.
 
 ### Fixed
+- **The Highlights "copy all as Markdown" export never worked.** It requested
+  more highlights than the API's page cap allowed, got a 422, and failed
+  without any feedback. The cap is raised, the export stays under it, and a
+  failure now shows an error toast instead of silently doing nothing.
 - **Bindery no longer invents a series from the filename.** Prose ebooks named
   `Title 5.epub` used to come out of review with their series set to their own
   title (the bare-number manga-chapter heuristic misfiring on novels); the

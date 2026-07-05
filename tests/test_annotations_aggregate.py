@@ -120,3 +120,50 @@ def test_only_own_highlights(client, db, admin_user, make_book):
     data = client.get("/api/annotations", headers=_hdr(user)).json()
     assert data["total"] == 1
     assert data["items"][0]["highlighted_text"] == "mine"
+
+
+def test_only_notes_filter(client, db, admin_user, make_book):
+    user, _ = admin_user
+    b = make_book(title="Noted")
+    _anno(db, user, b, "plain highlight", "n1")
+    _anno(db, user, b, "annotated highlight", "n2", note="my thought")
+    _anno(db, user, b, "empty-string note", "n3", note="")
+    db.commit()
+
+    r = client.get("/api/annotations", params={"only_notes": "1"}, headers=_hdr(user)).json()
+    assert r["total"] == 1
+    assert r["items"][0]["note"] == "my thought"
+    # composes with search
+    r = client.get("/api/annotations", params={"only_notes": "1", "q": "thought"},
+                   headers=_hdr(user)).json()
+    assert r["total"] == 1
+    r = client.get("/api/annotations", params={"only_notes": "1", "q": "plain"},
+                   headers=_hdr(user)).json()
+    assert r["total"] == 0
+
+
+def test_spotlight_exclude_rerolls_to_a_different_highlight(client, db, admin_user, make_book):
+    user, _ = admin_user
+    b = make_book(title="Spot")
+    _anno(db, user, b, "first", "s1")
+    _anno(db, user, b, "second", "s2")
+    db.commit()
+
+    first = client.get("/api/annotations/spotlight", headers=_hdr(user)).json()["highlight"]
+    for _ in range(5):
+        other = client.get("/api/annotations/spotlight",
+                           params={"exclude": first["id"]}, headers=_hdr(user)).json()["highlight"]
+        assert other["id"] != first["id"]
+
+
+def test_spotlight_exclude_with_single_highlight_returns_it_again(client, db, admin_user, make_book):
+    user, _ = admin_user
+    b = make_book(title="Solo")
+    _anno(db, user, b, "the only one", "s1")
+    db.commit()
+
+    got = client.get("/api/annotations/spotlight", headers=_hdr(user)).json()["highlight"]
+    again = client.get("/api/annotations/spotlight",
+                       params={"exclude": got["id"]}, headers=_hdr(user)).json()["highlight"]
+    # Better the same highlight than an empty card.
+    assert again is not None and again["id"] == got["id"]

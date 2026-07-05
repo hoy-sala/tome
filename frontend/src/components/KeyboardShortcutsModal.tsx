@@ -43,6 +43,16 @@ const SECTIONS: ShortcutSection[] = [
       { keys: ['ArrowRight', 'ArrowDown'], description: 'Next page' },
     ],
   },
+  {
+    title: 'Highlights',
+    rows: [
+      { keys: ['/'], description: 'Focus search' },
+      { keys: ['Escape'], description: 'Clear search' },
+      { keys: ['c'], description: 'Collapse / expand all books' },
+      { keys: ['n'], description: 'Toggle only-notes filter' },
+      { keys: ['e'], description: 'Download Markdown export' },
+    ],
+  },
 ]
 
 function KeyBadge({ label }: { label: string }) {

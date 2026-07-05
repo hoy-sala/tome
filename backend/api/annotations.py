@@ -69,7 +69,10 @@ def _month_day(dt: Optional[str]) -> Optional[str]:
 def list_annotations(
     q: Optional[str] = Query(None, description="case-insensitive text search"),
     on_this_day: bool = Query(False),
-    limit: int = Query(200, ge=1, le=1000),
+    only_notes: bool = Query(False, description="only highlights carrying a note"),
+    # 10k ceiling: the export paths ask for everything at once, and a request
+    # over the cap is a 422, not a truncation — see the Markdown export.
+    limit: int = Query(200, ge=1, le=10_000),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -95,6 +98,9 @@ def list_annotations(
                 Book.title.ilike(like),
             )
         )
+
+    if only_notes:
+        query = query.filter(Annotation.note.isnot(None), Annotation.note != "")
 
     # Newest highlights first (KOReader's own timestamp, falling back to id).
     rows = (
@@ -291,12 +297,17 @@ def delete_annotation(
 
 @router.get("/annotations/spotlight")
 def annotation_spotlight(
+    exclude: Optional[int] = Query(None, description="annotation id to re-roll away from"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """One highlight for the Home tab: a random highlight made on this calendar
     day in a past year, falling back to any random highlight so the card is never
     empty. `on_this_day` tells the UI which case it got.
+
+    `exclude` powers the shuffle button: pass the current highlight's id and the
+    re-roll returns a different one whenever more than one candidate exists (the
+    on-this-day preference is kept — only its current pick is excluded).
     """
     base = (
         db.query(Annotation, Book)
@@ -309,6 +320,8 @@ def annotation_spotlight(
             book_visibility_filter(db, current_user),
         )
     )
+    if exclude is not None:
+        base = base.filter(Annotation.id != exclude)
 
     today_md = _month_day(func_now_str())
     on_day_row = None
@@ -323,6 +336,10 @@ def annotation_spotlight(
         )
 
     row = on_day_row or base.order_by(func.random()).first()
+    if not row and exclude is not None:
+        # The excluded highlight was the only one — better the same again
+        # than an empty card.
+        return annotation_spotlight(exclude=None, db=db, current_user=current_user)
     if not row:
         return {"highlight": None, "on_this_day": False}
     a, b = row

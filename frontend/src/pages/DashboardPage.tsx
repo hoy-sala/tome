@@ -5,7 +5,7 @@ import {
   LayoutGrid, List,
   ChevronUp, ChevronDown, SlidersHorizontal, Loader2,
   Library as LibraryIcon, CheckSquare, XSquare, Download, Pencil,
-  Flame, BookCheck, Clock, BookOpenCheck, Play, CheckCheck, Trash2, Settings2, Layers, Star, Quote, Moon,
+  Flame, BookCheck, Clock, BookOpenCheck, Play, CheckCheck, Trash2, Settings2, Layers, Star, Quote, Moon, Shuffle,
 } from 'lucide-react'
 import { AppHeader, HeaderSearch } from '@/components/AppHeader'
 import { useAuth, isMember, isAdmin } from '@/contexts/AuthContext'
@@ -103,6 +103,7 @@ interface ForgottenBook {
 interface HighlightSpotlight {
   on_this_day: boolean
   highlight: {
+    id: number
     book_id: number
     book_title: string
     book_author: string | null
@@ -1406,9 +1407,24 @@ export function DashboardPage() {
                         <Quote className="w-4 h-4 text-primary/60" />
                         {spotlight.on_this_day ? 'On this day' : 'From your highlights'}
                       </h2>
-                      <a href="/highlights" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
-                        All →
-                      </a>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            const cur = spotlight.highlight?.id
+                            api.get<HighlightSpotlight>(
+                              `/annotations/spotlight${cur ? `?exclude=${cur}` : ''}`
+                            ).then(setSpotlight).catch(() => {})
+                          }}
+                          title="Show another highlight"
+                          aria-label="Show another highlight"
+                          className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          <Shuffle className="w-3.5 h-3.5" />
+                        </button>
+                        <a href="/highlights" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+                          All →
+                        </a>
+                      </div>
                     </header>
                     <a href={`/books/${spotlight.highlight.book_id}`} className="block group">
                       <p className="text-sm text-foreground leading-relaxed border-l-2 border-primary/40 pl-3 italic line-clamp-4">

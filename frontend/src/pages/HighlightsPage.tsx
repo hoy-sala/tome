@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Search, Quote, StickyNote, Loader2, BookOpen,
   CalendarHeart, Copy, X, ChevronDown, Info, ChevronsDownUp, ChevronsUpDown, Trash2,
+  Download,
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useToast } from '@/contexts/ToastContext'
@@ -186,7 +187,9 @@ export function HighlightsPage() {
   const [search, setSearch] = useState('')
   const [debounced, setDebounced] = useState('')
   const [onThisDay, setOnThisDay] = useState(false)
+  const [onlyNotes, setOnlyNotes] = useState(false)
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set())
+  const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search.trim()), 250)
@@ -197,10 +200,11 @@ export function HighlightsPage() {
     const p = new URLSearchParams()
     if (debounced) p.set('q', debounced)
     if (onThisDay) p.set('on_this_day', '1')
+    if (onlyNotes) p.set('only_notes', '1')
     p.set('limit', String(PAGE_SIZE))
     p.set('offset', String(offset))
     return p
-  }, [debounced, onThisDay])
+  }, [debounced, onThisDay, onlyNotes])
 
   // Reset + first page whenever the query/filter changes.
   useEffect(() => {
@@ -250,16 +254,47 @@ export function HighlightsPage() {
     setCollapsed(allCollapsed ? new Set() : new Set(groups.map(g => g.book_id)))
   }
 
-  async function copyAll() {
-    // Export everything that matches, not just the loaded pages.
+  // Export everything that matches the current filters, not just loaded pages.
+  // 10000 matches the server's limit cap — anything above it is a 422, which
+  // is how the old limit=2000 silently broke this export against the previous
+  // le=1000 cap.
+  async function fetchAllMatching(): Promise<HighlightsResponse> {
     const p = new URLSearchParams()
     if (debounced) p.set('q', debounced)
     if (onThisDay) p.set('on_this_day', '1')
-    p.set('limit', '2000')
-    const d = await api.get<HighlightsResponse>(`/annotations?${p.toString()}`)
-    const md = groupByBook(d.items).map(groupToMarkdown).join('\n\n')
-    await navigator.clipboard.writeText(md)
-    toast.success(`Copied ${d.items.length} highlights as Markdown`)
+    if (onlyNotes) p.set('only_notes', '1')
+    p.set('limit', '10000')
+    return api.get<HighlightsResponse>(`/annotations?${p.toString()}`)
+  }
+
+  async function copyAll() {
+    try {
+      const d = await fetchAllMatching()
+      const md = groupByBook(d.items).map(groupToMarkdown).join('\n\n')
+      await navigator.clipboard.writeText(md)
+      toast.success(`Copied ${d.items.length} highlights as Markdown`)
+    } catch (e) {
+      toast.error((e as Error).message ?? 'Export failed')
+    }
+  }
+
+  async function downloadAll() {
+    try {
+      const d = await fetchAllMatching()
+      const md = groupByBook(d.items).map(groupToMarkdown).join('\n\n') + '\n'
+      const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `tome-highlights-${new Date().toISOString().slice(0, 10)}.md`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      toast.success(`Downloaded ${d.items.length} highlights`)
+    } catch (e) {
+      toast.error((e as Error).message ?? 'Export failed')
+    }
   }
 
   async function copyGroup(g: BookGroup) {
@@ -294,20 +329,58 @@ export function HighlightsPage() {
     }
   }
 
+  // Keyboard shortcuts: "/" focuses search, Esc clears it, "c" toggles
+  // collapse-all, "n" only-notes, "e" downloads the export. Plain keys are
+  // ignored while typing (Esc still works, matching the other pages).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const el = e.target as HTMLElement
+      const typing = el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable
+      if (e.key === 'Escape' && typing) {
+        setSearch('')
+        searchRef.current?.blur()
+        return
+      }
+      if (typing || e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key === '/') {
+        e.preventDefault()
+        searchRef.current?.focus()
+      } else if (e.key === 'c') {
+        toggleAll()
+      } else if (e.key === 'n') {
+        setOnlyNotes(v => !v)
+      } else if (e.key === 'e') {
+        void downloadAll()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
   const isEmpty = !loading && !error && groups.length === 0
-  const neverSynced = isEmpty && !debounced && !onThisDay
+  const neverSynced = isEmpty && !debounced && !onThisDay && !onlyNotes
 
   return (
     <AppShell
       actions={groups.length > 0 ? (
-        <button
-          onClick={copyAll}
-          title="Copy all as Markdown"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border hover:bg-muted transition-all"
-        >
-          <Copy className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Export</span>
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={copyAll}
+            title="Copy all as Markdown"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border hover:bg-muted transition-all"
+          >
+            <Copy className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Copy</span>
+          </button>
+          <button
+            onClick={downloadAll}
+            title="Download as Markdown file"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border hover:bg-muted transition-all"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Export</span>
+          </button>
+        </div>
       ) : undefined}
     >
       <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
@@ -324,6 +397,7 @@ export function HighlightsPage() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
             <input
+              ref={searchRef}
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search your highlights…"
@@ -350,6 +424,19 @@ export function HighlightsPage() {
           >
             <CalendarHeart className="w-3.5 h-3.5" />
             On this day
+          </button>
+          <button
+            onClick={() => setOnlyNotes(v => !v)}
+            title="Only highlights that carry one of your notes"
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-all whitespace-nowrap',
+              onlyNotes
+                ? 'bg-primary/10 border-primary/30 text-primary'
+                : 'border-border text-muted-foreground hover:bg-muted'
+            )}
+          >
+            <StickyNote className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Only notes</span>
           </button>
           {groups.length > 0 && !searching && (
             <button
