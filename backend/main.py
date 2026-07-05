@@ -139,6 +139,12 @@ async def lifespan(app: FastAPI):
         if "scope" not in at_cols:
             conn.execute(text("ALTER TABLE api_tokens ADD COLUMN scope VARCHAR(16) NOT NULL DEFAULT 'full'"))
             conn.commit()
+        # Quick Connect poll capability. Pre-existing rows keep NULL — they can
+        # never be polled again, which is fine: codes live for five minutes.
+        qc_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(quick_connect_codes)")).fetchall()}
+        if qc_cols and "poll_token" not in qc_cols:
+            conn.execute(text("ALTER TABLE quick_connect_codes ADD COLUMN poll_token VARCHAR(64)"))
+            conn.commit()
         # Per-user ratings/reviews on user_book_status (nullable — existing rows stay unrated).
         ubs_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(user_book_status)")).fetchall()}
         if ubs_cols and "rating" not in ubs_cols:

@@ -1,4 +1,12 @@
-"""Quick Connect — sign in on a new device using a short code."""
+"""Quick Connect — sign in on a new device using a short code.
+
+The short code is only ever typed on the ALREADY-authenticated device
+(authorize). The new device keeps a long random poll_token from initiate and
+must present it to poll — so the 6-character code space cannot be brute-forced
+into a login JWT.
+"""
+import hmac
+import secrets
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -17,11 +25,17 @@ CODE_TTL_MINUTES = 5
 
 class InitiateResponse(BaseModel):
     code: str
+    poll_token: str
     expires_at: datetime
 
 
 class AuthorizeRequest(BaseModel):
     code: str
+
+
+class PollRequest(BaseModel):
+    code: str
+    poll_token: str
 
 
 @router.post("/initiate", response_model=InitiateResponse)
@@ -38,11 +52,16 @@ def initiate(db: Session = Depends(get_db)):
     while db.query(QuickConnectCode).filter(QuickConnectCode.code == code).first():
         code = generate_code()
 
-    entry = QuickConnectCode(code=code, created_at=now, expires_at=expires)
+    entry = QuickConnectCode(
+        code=code,
+        poll_token=secrets.token_urlsafe(32),
+        created_at=now,
+        expires_at=expires,
+    )
     db.add(entry)
     db.commit()
     db.refresh(entry)
-    return InitiateResponse(code=entry.code, expires_at=entry.expires_at)
+    return InitiateResponse(code=entry.code, poll_token=entry.poll_token, expires_at=entry.expires_at)
 
 
 @router.post("/authorize", status_code=200)
@@ -75,11 +94,15 @@ def authorize(
     return {"status": "authorized"}
 
 
-@router.get("/poll/{code}")
-def poll(code: str, request: Request, db: Session = Depends(get_db)):
-    """Poll for code authorization status. Returns JWT once authorized."""
-    entry = db.query(QuickConnectCode).filter(QuickConnectCode.code == code.upper().strip()).first()
-    if not entry:
+@router.post("/poll")
+def poll(body: PollRequest, request: Request, db: Session = Depends(get_db)):
+    """Poll for code authorization status. Returns JWT once authorized.
+
+    Requires the poll_token issued by initiate — a guessed code alone gets the
+    same 410 as an unknown one, so there is no oracle and nothing to steal.
+    """
+    entry = db.query(QuickConnectCode).filter(QuickConnectCode.code == body.code.upper().strip()).first()
+    if not entry or not entry.poll_token or not hmac.compare_digest(entry.poll_token, body.poll_token):
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="Code not found or expired")
     if entry.expires_at < datetime.utcnow():
         db.delete(entry)

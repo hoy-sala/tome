@@ -22,6 +22,9 @@ class QuickConnectCode(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     code: Mapped[str] = mapped_column(String(8), unique=True, nullable=False, index=True)
+    # Capability held by the device that initiated the code: polling requires it,
+    # so guessing the short display code is never enough to steal the login JWT.
+    poll_token: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     user_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
     )

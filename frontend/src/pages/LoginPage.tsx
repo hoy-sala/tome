@@ -93,7 +93,7 @@ export function LoginPage() {
     setQcError(null)
     setQcLoading(true)
     try {
-      const data = await apiFetch<{ code: string; expires_at: string }>('/auth/quick-connect/initiate', {
+      const data = await apiFetch<{ code: string; poll_token: string; expires_at: string }>('/auth/quick-connect/initiate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
@@ -116,7 +116,12 @@ export function LoginPage() {
       pollRef.current = setInterval(async () => {
         try {
           const res = await apiFetch<{ status: string; access_token?: string; token_type?: string }>(
-            `/auth/quick-connect/poll/${data.code}`
+            '/auth/quick-connect/poll',
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ code: data.code, poll_token: data.poll_token }),
+            }
           )
           if (res.status === 'authorized' && res.access_token) {
             if (pollRef.current) clearInterval(pollRef.current)

@@ -31,6 +31,23 @@ All notable changes to Tome are documented here. Format loosely follows
   progress bar shows a font-size-agnostic "p. 142 of 384" from the print
   edition's page count alongside the percentage.
 
+### Security
+- **Quick Connect codes can no longer be brute-forced into a login.** Polling
+  a code used to require nothing but the code itself — six characters, guessed
+  fast enough, handed out a full login token once the code was authorized. The
+  device that requests a code now also receives a long random poll secret, and
+  only that pairing can collect the login; a guessed code gets the same "not
+  found" as a nonexistent one. The short code is still all you type on the
+  already-signed-in device — nothing changes in the flow you see.
+- **A KOReader sync registration can no longer claim your account.** The KOSync
+  registration endpoint (which KOReader's "Register" button calls without any
+  authentication) used to attach the new sync credential to whatever Tome
+  account had the same username — so anyone who knew a username could register
+  it first and have their reading activity land on that account. Device-side
+  registrations now start unlinked; connecting sync to your account is done
+  signed-in via Settings → KOReader Sync, which also reclaims a squatted name
+  by overwriting its key.
+
 ### Fixed
 - **Reorganize is crash-safe and works across filesystems.** Library Health's
   one-click reorganise used to move every file first and write the database

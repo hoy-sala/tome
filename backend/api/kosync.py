@@ -58,13 +58,16 @@ def create_kosync_user(body: dict[str, Any], db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=402, detail="User already exists")
 
-    # Auto-link to Tome user with the same username if one exists
-    tome_user = db.query(User).filter(User.username == username).first()
-
+    # This endpoint is unauthenticated (KOReader's register button), so it must
+    # never attach the credential to a Tome account — matching by username would
+    # let anyone claim an account's sync identity just by knowing the username.
+    # Linking happens through the authenticated path (Settings → KOReader Sync,
+    # POST /api/auth/me/kosync), which also reclaims a squatted name by
+    # overwriting its key.
     kosync_user = KOSyncUser(
         username=username,
         userkey=password,
-        user_id=tome_user.id if tome_user else None,
+        user_id=None,
     )
     db.add(kosync_user)
     db.commit()
