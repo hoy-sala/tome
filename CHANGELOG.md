@@ -6,6 +6,8 @@ All notable changes to Tome are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [1.8.0] — 2026-07-05 — "Spine"
+
 ### Added
 - **Hardcover sync.** Link your personal Hardcover account in Settings and Tome
   pushes your ratings and reading progress to it — one-way, opt-in, and nothing
