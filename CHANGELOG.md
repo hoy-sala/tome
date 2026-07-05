@@ -6,6 +6,20 @@ All notable changes to Tome are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Fixed
+- **Bindery no longer invents a series from the filename.** Prose ebooks named
+  `Title 5.epub` used to come out of review with their series set to their own
+  title (the bare-number manga-chapter heuristic misfiring on novels); the
+  real series name in `(Series Book N)` parentheticals — the common
+  Amazon/Calibre naming — was stripped as noise; and the metadata embedded in
+  the file itself (`calibre:series` etc.) was extracted but never reached the
+  review form. All three are fixed: the filename parser now understands
+  `(Series Book N)` / `(Series #N)` markers and the `NN. Title - Author (Year)`
+  layout (filling the author field too), bare trailing numbers on EPUB/PDF no
+  longer fabricate a series, and the review form pre-fills from embedded
+  metadata with the same "file beats filename" precedence auto-import has
+  always used.
+
 ## [1.8.0] — 2026-07-05 — "Spine"
 
 ### Added

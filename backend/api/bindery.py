@@ -106,6 +106,7 @@ class BinderyItem(BaseModel):
     series: str | None
     series_index: float | None
     title: str
+    author: str | None
     folder: str | None
 
 
@@ -208,6 +209,7 @@ def bindery_list(
                 series=parsed.series,
                 series_index=parsed.series_index,
                 title=parsed.title,
+                author=parsed.author,
                 folder=folder,
             )
         )

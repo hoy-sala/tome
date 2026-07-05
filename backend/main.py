@@ -428,7 +428,7 @@ async def _run_auto_import() -> None:
             meta_series_index = meta.get("series_index")
             book = Book(
                 title=meta.get("title") or parsed.title or dest.stem,
-                author=meta.get("author"),
+                author=meta.get("author") or parsed.author,
                 series=meta.get("series") or parsed.series,
                 series_index=meta_series_index if meta_series_index is not None else parsed.series_index,
                 isbn=meta.get("isbn"),
