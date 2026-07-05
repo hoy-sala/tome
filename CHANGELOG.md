@@ -32,6 +32,33 @@ All notable changes to Tome are documented here. Format loosely follows
   edition's page count alongside the percentage.
 
 ### Fixed
+- **Reorganize is crash-safe and works across filesystems.** Library Health's
+  one-click reorganise used to move every file first and write the database
+  once at the end — a crash mid-batch left every already-moved file
+  unfindable (and unhealable, since the repair tool starts from the stale
+  database path). Each move is now committed individually, so an
+  interruption loses nothing. Moves also switched to a copy-safe primitive,
+  so a library spanning mounts (mergerfs, NFS, a series folder symlinked to
+  another disk) no longer fails per-file. And when a file's canonical slot is
+  already occupied by a different file, reorganise reports a conflict instead
+  of silently renaming to "Title (2).epub" — a suffix the next health check
+  would flag again, renaming it to (3), (4)… forever.
+- **Deleting a book can no longer leave a permanent ghost row.** Files were
+  removed from disk before the database delete committed; a crash in between
+  kept the book in the library with nothing behind it — every download 404ed
+  and no scan could heal it. The order is now inverted: the row goes first,
+  and files are removed after (if that half is interrupted, the next scan
+  simply re-imports the orphaned files).
+- **"Purge empty folders" no longer eats Syncthing markers.** A folder whose
+  contents were all hidden was treated as junk and emptied — which deleted
+  `.stfolder` (halting the whole Syncthing share with "folder marker
+  missing") and could delete versioned user files in `.stversions`. The purge
+  now only removes recognised OS droppings (`.DS_Store`, `._*` AppleDouble
+  files, `Thumbs.db`, `desktop.ini`); anything else — including any hidden
+  directory, which previously crashed the endpoint mid-walk — means the
+  folder is kept. The same whitelist governs the folder cleanup after a
+  reorganise, which also no longer errors out after the moves have already
+  succeeded.
 - **Hardcover sync could pin a translation's or the audiobook's edition.**
   Publishers reuse one catalogue across translations and audio, so a stored
   ISBN sometimes names the German edition (or the audiobook) of the right

@@ -1,6 +1,7 @@
 import csv
 import difflib
 import io
+import os
 import re
 import json
 import logging
@@ -762,32 +763,42 @@ class ReorganizeRequest(PydanticBaseModel):
     dry_run: bool = False
 
 
+# OS metadata droppings that are safe to delete when emptying a folder.
+# Anything else — .stfolder/.stversions (Syncthing), .git, unknown dotfiles —
+# means the folder is not junk and must be left alone.
+_JUNK_FILENAMES = {".ds_store", "thumbs.db", "desktop.ini"}
+
+
+def _is_junk_file(p: Path) -> bool:
+    return p.is_file() and (
+        p.name.lower() in _JUNK_FILENAMES or p.name.startswith("._")
+    )
+
+
 @router.post("/purge-empty-dirs")
 def purge_empty_dirs(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Walk library_dir bottom-up and remove dirs that contain only hidden files. Admin only."""
+    """Walk library_dir bottom-up and remove dirs that contain only OS junk files. Admin only."""
     require_role(current_user, "admin")
 
     removed: list[str] = []
     # Walk bottom-up so child dirs are processed before parents
-    for dirpath, dirnames, filenames in __import__('os').walk(settings.library_dir, topdown=False):
+    for dirpath, dirnames, filenames in os.walk(settings.library_dir, topdown=False):
         current = Path(dirpath)
         if current == settings.library_dir:
             continue
-        entries = list(current.iterdir())
-        non_hidden = [e for e in entries if not e.name.startswith('.')]
-        if non_hidden:
-            continue
-        # Only hidden files (e.g. .DS_Store) — delete them then remove the dir
-        for e in entries:
-            e.unlink(missing_ok=True)
         try:
+            entries = list(current.iterdir())
+            if not all(_is_junk_file(e) for e in entries):
+                continue  # real content, a subdir, or an unrecognised dotfile — keep
+            for e in entries:
+                e.unlink(missing_ok=True)
             current.rmdir()
             removed.append(str(current.relative_to(settings.library_dir)))
         except OSError:
-            pass  # not empty after all, skip
+            continue  # changed underneath us or not deletable — skip, never fail the purge
 
     if removed:
         audit(db, "purge_empty_dirs",
@@ -799,16 +810,23 @@ def purge_empty_dirs(
 
 
 def _cleanup_empty_dirs(start: Path, stop_at: Path, removed: list[str]) -> None:
-    """Remove empty dirs from start up to (but not including) stop_at."""
+    """Remove dirs containing nothing but OS junk, from start up to (but not including) stop_at."""
     current = start
     while current != stop_at and current.is_relative_to(stop_at):
-        if current.is_dir() and not any(f for f in current.iterdir() if not f.name.startswith('.')):
+        try:
+            if not current.is_dir():
+                break
+            entries = list(current.iterdir())
+            if not all(_is_junk_file(e) for e in entries):
+                break
+            for e in entries:
+                e.unlink(missing_ok=True)
             rel = str(current.relative_to(stop_at))
             current.rmdir()
             removed.append(rel)
             current = current.parent
-        else:
-            break
+        except OSError:
+            break  # cleanup is best-effort; the moves already succeeded
 
 
 @router.get("/library-health")
@@ -890,13 +908,22 @@ def reorganize_files(
         }
         actual = Path(bf.file_path)
         expected_rel = get_library_path(meta, actual.name)
-        expected_abs = resolve_unique_path(settings.library_dir, expected_rel)
+        expected_abs = settings.library_dir / expected_rel
 
-        if actual.resolve() == (settings.library_dir / expected_rel).resolve():
+        if actual.resolve() == expected_abs.resolve():
             continue  # already correct
 
         from_rel = str(actual.relative_to(settings.library_dir)) if actual.is_relative_to(settings.library_dir) else str(actual)
-        to_rel = str(expected_abs.relative_to(settings.library_dir)) if expected_abs.is_relative_to(settings.library_dir) else str(expected_abs)
+        to_rel = str(expected_rel)
+
+        # Canonical slot held by a different file: report a conflict instead of
+        # suffixing — a "Title (2).epub" fails the next health check and would
+        # ratchet to (3), (4)… on every subsequent reorganize.
+        if expected_abs.exists() and not (
+            actual.exists() and os.path.samefile(actual, expected_abs)
+        ):
+            errors.append({"file_id": bf.id, "error": f"target already occupied by another file: {to_rel}"})
+            continue
 
         if req.dry_run:
             moved.append({"file_id": bf.id, "from": from_rel, "to": to_rel})
@@ -904,16 +931,19 @@ def reorganize_files(
 
         try:
             expected_abs.parent.mkdir(parents=True, exist_ok=True)
-            actual.rename(expected_abs)
+            shutil.move(str(actual), str(expected_abs))
             affected_dirs.add(actual.parent)
             bf.file_path = str(expected_abs)
+            # Commit per file: a crash mid-batch must never leave moved files
+            # pointing at DB rows that still hold the old path.
+            db.commit()
             moved.append({"file_id": bf.id, "from": from_rel, "to": to_rel})
         except Exception as e:
+            db.rollback()
             errors.append({"file_id": bf.id, "error": str(e)})
 
     folders_removed: list[str] = []
     if not req.dry_run:
-        db.commit()
         for d in affected_dirs:
             _cleanup_empty_dirs(d, settings.library_dir, folders_removed)
         if moved:
@@ -1965,32 +1995,40 @@ def delete_book(
     if not _is_admin(current_user) and book.added_by != current_user.id:
         raise HTTPException(status_code=403, detail="You can only delete books you uploaded")
 
-    # Remove book files from disk
-    for bf in book.files:
-        fp = Path(bf.file_path)
-        if fp.exists():
-            fp.unlink(missing_ok=True)
-            # Remove parent directory if now empty
-            try:
-                fp.parent.rmdir()
-            except OSError:
-                pass
+    # Delete the row first, remove files after. A crash between the two leaves
+    # orphaned files that the next scan re-imports; the reverse order leaves a
+    # permanent ghost row (files gone, nothing on disk to heal it from).
+    deleted_id, deleted_title = book.id, book.title
+    file_paths = [Path(bf.file_path) for bf in book.files]
+    cover_file = settings.covers_dir / book.cover_path if book.cover_path else None
 
-    # Remove cover file if it exists
-    if book.cover_path:
-        cover_file = settings.covers_dir / book.cover_path
-        if cover_file.exists():
-            cover_file.unlink(missing_ok=True)
-
-    from backend.services.metadata_embed import purge_book_cache
-    purge_book_cache(book.id)
-
-    audit(db, "books.deleted", user_id=current_user.id, username=current_user.username,
-          resource_type="book", resource_id=book.id, resource_title=book.title)
     from backend.services.fts import unindex_book
     unindex_book(db, book.id)
     db.delete(book)
     db.commit()
+
+    audit(db, "books.deleted", user_id=current_user.id, username=current_user.username,
+          resource_type="book", resource_id=deleted_id, resource_title=deleted_title)
+
+    from backend.services.metadata_embed import purge_book_cache
+    purge_book_cache(deleted_id)
+
+    for fp in file_paths:
+        try:
+            fp.unlink(missing_ok=True)
+        except OSError:
+            logger.warning("delete_book: could not remove file %s", fp)
+            continue
+        try:
+            fp.parent.rmdir()  # remove parent directory if now empty
+        except OSError:
+            pass
+
+    if cover_file is not None:
+        try:
+            cover_file.unlink(missing_ok=True)
+        except OSError:
+            logger.warning("delete_book: could not remove cover %s", cover_file)
 
 
 
