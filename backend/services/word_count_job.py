@@ -32,7 +32,7 @@ from typing import Optional
 from sqlalchemy import func
 
 from backend.core.database import SessionLocal
-from backend.models.book import Book, BookChapter, BookFile
+from backend.models.book import Book, BookFile
 from backend.services.chapters import replace_book_chapters
 from backend.services.metadata import (
     count_pages_fixed_layout,
@@ -58,13 +58,18 @@ class WordCountAlreadyRunning(Exception):
 
 def _epub_books() -> dict[int, tuple[Optional[int], int, str, bool]]:
     """One row per book that has an EPUB file:
-    book_id → (word_count, size, path, has_chapters).
-    If a book has several EPUB files we keep the first."""
+    book_id → (word_count, size, path, chapters_checked).
+    If a book has several EPUB files we keep the first.
+
+    chapters_checked comes from the attempt marker, NOT from having chapter
+    rows — a TOC-less EPUB never gains rows and would otherwise re-queue on
+    every run forever."""
     with SessionLocal() as db:
         rows = (
             db.query(
                 Book.id,
                 Book.word_count,
+                Book.chapters_extracted_at,
                 BookFile.file_size,
                 BookFile.file_path,
             )
@@ -72,13 +77,10 @@ def _epub_books() -> dict[int, tuple[Optional[int], int, str, bool]]:
             .filter(func.lower(BookFile.format) == "epub")
             .all()
         )
-        chaptered = {
-            r[0] for r in db.query(BookChapter.book_id).distinct().all()
-        }
     out: dict[int, tuple[Optional[int], int, str, bool]] = {}
-    for book_id, wc, size, path in rows:
+    for book_id, wc, checked_at, size, path in rows:
         if book_id not in out:
-            out[book_id] = (wc, size or 0, path, book_id in chaptered)
+            out[book_id] = (wc, size or 0, path, checked_at is not None)
     return out
 
 

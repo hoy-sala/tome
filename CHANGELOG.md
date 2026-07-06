@@ -6,6 +6,17 @@ All notable changes to Tome are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Fixed
+- **Chapter maps now extract from EPUB2 books.** Older EPUBs keep their table
+  of contents in an NCX file rather than an EPUB3 nav document; chapter
+  extraction ignored the NCX, so classics and older rips silently produced no
+  Time-per-chapter data. Extraction now falls back to the NCX whenever the nav
+  yields nothing — re-run Admin → Word Counts to pick up the affected books.
+- **TOC-less EPUBs no longer re-queue in the Word Counts backfill forever.**
+  Books whose files genuinely have no usable table of contents were re-parsed
+  on every run because "done" was inferred from having chapter rows; a
+  dedicated attempt marker now records "tried, nothing there" once.
+
 ### Added
 - **Sync closed books (KOReader plugin, build 34).** A new TomeSync menu
   action walks the device for books the plugin has never synced — read before

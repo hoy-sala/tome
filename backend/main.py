@@ -73,6 +73,18 @@ async def lifespan(app: FastAPI):
         if "page_count" not in cols:
             conn.execute(text("ALTER TABLE books ADD COLUMN page_count INTEGER"))
             conn.commit()
+        # Chapter-extraction attempt marker (see Book.chapters_extracted_at).
+        # Distinguishes "never tried" from "tried, no usable TOC" so TOC-less
+        # EPUBs stop re-queuing in the backfill. Books that already have
+        # chapter rows are marked done, so upgraded installs don't re-extract
+        # their whole library once.
+        if "chapters_extracted_at" not in cols:
+            conn.execute(text("ALTER TABLE books ADD COLUMN chapters_extracted_at DATETIME"))
+            conn.execute(text(
+                "UPDATE books SET chapters_extracted_at = CURRENT_TIMESTAMP "
+                "WHERE id IN (SELECT DISTINCT book_id FROM book_chapters)"
+            ))
+            conn.commit()
         user_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()}
         if "role" not in user_cols:
             conn.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR(16) NOT NULL DEFAULT 'guest'"))

@@ -213,3 +213,113 @@ class TestChapterTimes:
         assert r.status_code == 200, r.text
         chapters = r.json()["chapters"]
         assert chapters[0]["seconds"] == 120 and chapters[1]["seconds"] == 0
+
+
+# ── EPUB2 / NCX-only fallback + the re-queue marker ──────────────────────────
+
+def _make_epub2_ncx_only(path: Path, chapters: list[tuple[str, str]]) -> None:
+    """A hand-built EPUB2: TOC lives ONLY in the NCX (no EPUB3 nav document) —
+    the Tolkien-shaped case the nav-only extraction missed."""
+    manifest_items, spine_refs, navpoints, files = [], [], [], []
+    for i, (title, txt) in enumerate(chapters):
+        fn = f"c{i}.xhtml"
+        manifest_items.append(f'<item id="c{i}" href="{fn}" media-type="application/xhtml+xml"/>')
+        spine_refs.append(f'<itemref idref="c{i}"/>')
+        navpoints.append(
+            f'<navPoint id="n{i}" playOrder="{i+1}"><navLabel><text>{title}</text></navLabel>'
+            f'<content src="{fn}"/></navPoint>'
+        )
+        files.append((f"OEBPS/{fn}",
+                      f'<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml">'
+                      f'<head><title>{title}</title></head><body><h1>{title}</h1><p>{txt}</p></body></html>'))
+    opf = f'''<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="uid" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="uid">epub2-ncx-test</dc:identifier>
+    <dc:title>NCX Only</dc:title><dc:language>en</dc:language>
+  </metadata>
+  <manifest>{''.join(manifest_items)}
+    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+  </manifest>
+  <spine toc="ncx">{''.join(spine_refs)}</spine>
+</package>'''
+    ncx = f'''<?xml version="1.0"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+  <head><meta name="dtb:uid" content="epub2-ncx-test"/></head>
+  <docTitle><text>NCX Only</text></docTitle>
+  <navMap>{''.join(navpoints)}</navMap>
+</ncx>'''
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
+        z.writestr("META-INF/container.xml",
+                   '<?xml version="1.0"?><container version="1.0" '
+                   'xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles>'
+                   '<rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>'
+                   '</rootfiles></container>')
+        z.writestr("OEBPS/content.opf", opf)
+        z.writestr("OEBPS/toc.ncx", ncx)
+        for name, content in files:
+            z.writestr(name, content)
+
+
+class TestNcxFallback:
+    def test_epub2_ncx_only_toc_extracts(self, tmp_path):
+        path = tmp_path / "epub2.epub"
+        _make_epub2_ncx_only(path, [("Chapter I", "alpha " * 100), ("Chapter II", "beta " * 100)])
+        chapters = extract_chapters_epub(path)
+        assert [c["title"] for c in chapters] == ["Chapter I", "Chapter II"]
+        assert chapters[0]["start_fraction"] == 0.0
+        assert chapters[-1]["end_fraction"] == 1.0
+
+    def test_ingest_meta_carries_empty_list_for_toc_less_epub(self, tmp_path):
+        # A single-chapter book has no usable structure — the meta must still
+        # say "tried" ([]), not stay silent (absent key), or the backfill
+        # re-queues it forever.
+        path = tmp_path / "b.epub"
+        _make_epub(path, [("Only", "some words here")])
+        meta = extract_metadata(path, tmp_path)
+        assert meta["_chapters"] == []
+
+
+class TestExtractionMarker:
+    def test_replace_semantics(self, db, make_book):
+        from backend.services.chapters import replace_book_chapters
+        book = make_book(title="Marked")
+
+        # None → untouched (non-EPUB caller)
+        replace_book_chapters(db, book.id, None)
+        db.flush()
+        assert book.chapters_extracted_at is None
+
+        # [] → attempt stamped, no rows
+        replace_book_chapters(db, book.id, [])
+        db.flush()
+        assert book.chapters_extracted_at is not None
+        assert db.query(BookChapter).filter_by(book_id=book.id).count() == 0
+
+        # [...] → rows written; a later [] keeps them (stale-TOC protection)
+        replace_book_chapters(db, book.id, [
+            {"idx": 0, "title": "One", "start_fraction": 0.0, "end_fraction": 1.0},
+        ])
+        db.flush()
+        assert db.query(BookChapter).filter_by(book_id=book.id).count() == 1
+        replace_book_chapters(db, book.id, [])
+        db.flush()
+        assert db.query(BookChapter).filter_by(book_id=book.id).count() == 1
+
+    def test_backfill_pending_predicate(self, db, make_book):
+        from backend.services.chapters import replace_book_chapters
+        # The job pends a book iff words are missing OR it was never
+        # chapter-checked — a checked TOC-less book must NOT pend again.
+        checked = make_book(title="NoTocChecked", file_format="epub")
+        checked.word_count = 1000
+        replace_book_chapters(db, checked.id, [])
+        fresh = make_book(title="FreshEpub", file_format="epub")
+        fresh.word_count = 1000
+        db.commit()
+
+        def pending(b):
+            return b.word_count is None or b.chapters_extracted_at is None
+
+        assert pending(checked) is False
+        assert pending(fresh) is True

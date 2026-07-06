@@ -33,6 +33,11 @@ class Book(Base):
     # and must never be stored as a book property (KOReader page-stats carry
     # their own total_pages per row for that).
     page_count: Mapped[Optional[int]] = mapped_column(Integer)
+    # When chapter extraction last RAN for this book (found chapters or not).
+    # Distinguishes "never tried" from "tried, no usable TOC" — without it, a
+    # TOC-less EPUB re-queues in the backfill forever, since pending can't be
+    # inferred from BookChapter rows it will never have.
+    chapters_extracted_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     # Hardcover identity — book-level because a title's Hardcover book/edition is
     # user-independent. Matched lazily by the sync worker (ISBN first, strict
     # title+author search as fallback). match_method "none" + matched_at set =

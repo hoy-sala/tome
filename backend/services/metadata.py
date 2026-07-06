@@ -103,42 +103,32 @@ def count_words_epub(path: Path) -> Optional[int]:
     return _count_words_from_zip(path)
 
 
-def _extract_epub_chapters(book) -> list[dict]:
-    """TOC → device-independent chapter boundaries as fraction-of-book.
+def _build_chapter_map(
+    doc_names: list[str],
+    counts: list[int],
+    toc_entries: list[tuple[str, str]],
+) -> list[dict]:
+    """Shared fraction math: ordered spine document names + their word counts +
+    TOC entries as (title, href) → chapter boundaries as fraction-of-book.
 
-    Fractions come from cumulative word offsets of spine items: a chapter whose
-    TOC entry points into spine item k starts at words(items 0..k-1) / total.
-    Fragment anchors inside a file are ignored — top-level TOC entries almost
-    always sit at a file boundary, and per-file granularity is what the
-    time-per-chapter stat needs. Returns [] when there's no usable structure
-    (no TOC, unresolvable hrefs, or fewer than two distinct chapters).
+    A chapter whose TOC entry points into spine item k starts at
+    words(items 0..k-1) / total. Fragment anchors are ignored — top-level TOC
+    entries almost always sit at a file boundary, and per-file granularity is
+    what the time-per-chapter stat needs. Returns [] when there's no usable
+    structure (no TOC, unresolvable hrefs, fewer than two distinct chapters).
     """
-    import ebooklib
+    from urllib.parse import unquote
 
-    id_to_item = {item.get_id(): item for item in book.get_items_of_type(ebooklib.ITEM_DOCUMENT)}
-    spine_ids = [sid for sid, _linear in book.spine if sid in id_to_item]
-    if not spine_ids:
-        return []
-
-    counts: list[int] = []
-    href_to_idx: dict[str, int] = {}
-    for i, sid in enumerate(spine_ids):
-        item = id_to_item[sid]
-        href_to_idx[item.get_name()] = i
-        try:
-            raw = item.get_content()
-            counts.append(count_words_text(_html_to_text(raw.decode("utf-8", "ignore"))))
-        except Exception:  # noqa: BLE001 — unreadable spine item contributes no words
-            counts.append(0)
     total = sum(counts)
     if total <= 0:
         return []
     cum = [0]
     for c in counts:
         cum.append(cum[-1] + c)
+    href_to_idx = {name: i for i, name in enumerate(doc_names)}
 
     def resolve(href: str) -> Optional[int]:
-        href = href.split("#", 1)[0]
+        href = unquote(href.split("#", 1)[0])
         if href in href_to_idx:
             return href_to_idx[href]
         # Tolerate OPF-dir path differences by unique basename.
@@ -147,24 +137,12 @@ def _extract_epub_chapters(book) -> list[dict]:
         return hits[0] if len(hits) == 1 else None
 
     chapters: list[dict] = []
-    for node in book.toc or []:
-        # Entries are Link or (Section, [children]); a Section may carry its own
-        # href, otherwise its first child anchors it. Only the top level counts —
-        # nested subsections are noise for a per-chapter time split.
-        head = node[0] if isinstance(node, tuple) else node
-        href = getattr(head, "href", None)
-        if not href and isinstance(node, tuple) and node[1]:
-            first = node[1][0]
-            first = first[0] if isinstance(first, tuple) else first
-            href = getattr(first, "href", None)
-        if not href:
-            continue
+    for title, href in toc_entries:
         idx = resolve(href)
         if idx is None:
             continue
-        title = (getattr(head, "title", None) or "").strip()
         chapters.append({
-            "title": title or f"Chapter {len(chapters) + 1}",
+            "title": (title or "").strip() or f"Chapter {len(chapters) + 1}",
             "start_fraction": cum[idx] / total,
         })
 
@@ -185,6 +163,176 @@ def _extract_epub_chapters(book) -> list[dict]:
         c["idx"] = i
         c["end_fraction"] = out[i + 1]["start_fraction"] if i + 1 < len(out) else 1.0
     return out
+
+
+def _flatten_ebooklib_toc(raw) -> list[tuple[str, str]]:
+    """Normalize ebooklib's book.toc into (title, href) top-level entries.
+
+    Real-world shapes seen: a proper list of Link/(Section, children) nodes; a
+    BARE Link (single-entry nav); a single (Section, children) tuple; and a
+    lone wrapping Section whose children are the actual chapters — unwrap that
+    one level, or every such book collapses to "one chapter" and is dropped.
+    """
+    def is_node_tuple(n) -> bool:
+        return isinstance(n, tuple) and len(n) >= 2 and isinstance(n[1], (list, tuple))
+
+    if raw is None:
+        nodes = []
+    elif isinstance(raw, list):
+        nodes = raw
+    elif is_node_tuple(raw):
+        nodes = [raw]
+    elif isinstance(raw, tuple):
+        nodes = list(raw)
+    else:
+        nodes = [raw]   # bare Link
+
+    # Unwrap a single all-enclosing Section (or a single href-less entry with
+    # children): its children are the real chapter list.
+    while len(nodes) == 1 and is_node_tuple(nodes[0]):
+        nodes = list(nodes[0][1])
+
+    entries: list[tuple[str, str]] = []
+    for node in nodes:
+        # Entries are Link or (Section, [children]); a Section may carry its
+        # own href, otherwise its first child anchors it. Only the top level
+        # counts — nested subsections are noise for a per-chapter time split.
+        head = node[0] if isinstance(node, tuple) else node
+        href = getattr(head, "href", None)
+        if not href and is_node_tuple(node) and node[1]:
+            first = node[1][0]
+            first = first[0] if isinstance(first, tuple) else first
+            href = getattr(first, "href", None)
+        if href:
+            entries.append((getattr(head, "title", None) or "", href))
+    return entries
+
+
+def _extract_epub_chapters(book) -> list[dict]:
+    """TOC → chapter boundaries, from an already-open ebooklib book."""
+    import ebooklib
+
+    id_to_item = {item.get_id(): item for item in book.get_items_of_type(ebooklib.ITEM_DOCUMENT)}
+    spine_ids = [sid for sid, _linear in book.spine if sid in id_to_item]
+    if not spine_ids:
+        return []
+
+    doc_names: list[str] = []
+    counts: list[int] = []
+    for sid in spine_ids:
+        item = id_to_item[sid]
+        doc_names.append(item.get_name())
+        try:
+            raw = item.get_content()
+            counts.append(count_words_text(_html_to_text(raw.decode("utf-8", "ignore"))))
+        except Exception:  # noqa: BLE001 — unreadable spine item contributes no words
+            counts.append(0)
+
+    return _build_chapter_map(doc_names, counts, _flatten_ebooklib_toc(book.toc))
+
+
+def _chapters_from_zip(path: Path) -> list[dict]:
+    """Chapter extraction straight from the EPUB zip, for the files ebooklib
+    mangles or refuses outright (observed live: an EPUB3 nav without an <ol>
+    crashes read_epub; another file's empty nav shadows a perfectly good NCX).
+
+    Parses container.xml → OPF → spine order + word counts per document, then
+    takes TOC entries from the NCX (navPoints) or, failing that, the EPUB3 nav
+    document's toc list. Same fraction math as the ebooklib path.
+    """
+    import posixpath
+    import xml.etree.ElementTree as ET
+
+    NS = {
+        "cnt": "urn:oasis:names:tc:opendocument:xmlns:container",
+        "opf": "http://www.idpf.org/2007/opf",
+        "ncx": "http://www.daisy.org/z3986/2005/ncx/",
+        "xhtml": "http://www.w3.org/1999/xhtml",
+        "ops": "http://www.idpf.org/2007/ops",
+    }
+    try:
+        with zipfile.ZipFile(path) as zf:
+            container = ET.fromstring(zf.read("META-INF/container.xml"))
+            rootfile = container.find(".//cnt:rootfile", NS)
+            if rootfile is None:
+                return []
+            opf_path = rootfile.get("full-path", "")
+            opf_dir = posixpath.dirname(opf_path)
+            opf = ET.fromstring(zf.read(opf_path))
+
+            def from_opf_dir(href: str) -> str:
+                return posixpath.normpath(posixpath.join(opf_dir, href)) if opf_dir else href
+
+            manifest: dict[str, tuple[str, str]] = {}   # id -> (href, media-type)
+            for item in opf.findall(".//opf:manifest/opf:item", NS):
+                manifest[item.get("id", "")] = (item.get("href", ""), item.get("media-type", ""))
+
+            spine = opf.find(".//opf:spine", NS)
+            if spine is None:
+                return []
+            doc_names: list[str] = []
+            counts: list[int] = []
+            for ref in spine.findall("opf:itemref", NS):
+                href, media = manifest.get(ref.get("idref", ""), ("", ""))
+                if not href or "xml" not in media and "html" not in media:
+                    continue
+                member = from_opf_dir(href)
+                doc_names.append(href)   # TOC hrefs are OPF-relative, like these
+                try:
+                    counts.append(count_words_text(
+                        _html_to_text(zf.read(member).decode("utf-8", "ignore"))))
+                except Exception:  # noqa: BLE001
+                    counts.append(0)
+
+            # TOC source 1: the NCX (spine@toc, or any manifest ncx item)
+            toc_entries: list[tuple[str, str]] = []
+            ncx_id = spine.get("toc")
+            ncx_href = None
+            if ncx_id and ncx_id in manifest:
+                ncx_href = manifest[ncx_id][0]
+            else:
+                for href, media in manifest.values():
+                    if media == "application/x-dtbncx+xml":
+                        ncx_href = href
+                        break
+            if ncx_href:
+                try:
+                    ncx = ET.fromstring(zf.read(from_opf_dir(ncx_href)))
+                    for np in ncx.findall("./ncx:navMap/ncx:navPoint", NS):
+                        label = np.find("./ncx:navLabel/ncx:text", NS)
+                        content = np.find("./ncx:content", NS)
+                        if content is not None and content.get("src"):
+                            toc_entries.append((
+                                (label.text or "") if label is not None else "",
+                                content.get("src", ""),
+                            ))
+                except Exception:  # noqa: BLE001 — fall through to the nav
+                    toc_entries = []
+
+            # TOC source 2: the EPUB3 nav document
+            if not toc_entries:
+                nav_href = None
+                for item in opf.findall(".//opf:manifest/opf:item", NS):
+                    if "nav" in (item.get("properties") or "").split():
+                        nav_href = item.get("href")
+                        break
+                if nav_href:
+                    try:
+                        nav = ET.fromstring(zf.read(from_opf_dir(nav_href)))
+                        nav_dir = posixpath.dirname(nav_href)
+                        for a in nav.findall(".//xhtml:nav//xhtml:li/xhtml:a", NS):
+                            href = a.get("href")
+                            if href:
+                                # nav hrefs are nav-relative; rebase to OPF-relative
+                                rebased = posixpath.normpath(posixpath.join(nav_dir, href)) if nav_dir else href
+                                toc_entries.append(("".join(a.itertext()), rebased))
+                    except Exception:  # noqa: BLE001
+                        toc_entries = []
+
+            return _build_chapter_map(doc_names, counts, toc_entries)
+    except Exception as e:  # noqa: BLE001 — no chapters is always a valid outcome
+        logger.info("zip-level chapter extraction failed for %s: %s", path, e)
+        return []
 
 
 def count_pages_fixed_layout(path: Path) -> Optional[int]:
@@ -216,15 +364,24 @@ def count_pages_fixed_layout(path: Path) -> Optional[int]:
 
 def extract_chapters_epub(path: Path) -> list[dict]:
     """Open an EPUB from disk and extract its chapter map. Used by the backfill
-    job; ingest reuses the already-open book via _extract_epub_chapters."""
+    job and as the ingest fallback.
+
+    ebooklib first (fast, and consistent with the rest of this module); when
+    it yields nothing — or refuses the file entirely — the zip-level parser
+    takes over. That second path is what rescues EPUB2 books whose TOC lives
+    only in the NCX, files whose empty nav shadows a good NCX, and the
+    malformed-nav EPUBs read_epub crashes on."""
+    chapters: list[dict] = []
     try:
         from ebooklib import epub
 
         book = epub.read_epub(str(path), options={"ignore_ncx": True})
-        return _extract_epub_chapters(book)
-    except Exception as e:  # noqa: BLE001 — no chapters is always a valid outcome
-        logger.info("chapter extraction failed for %s: %s", path, e)
-        return []
+        chapters = _extract_epub_chapters(book)
+    except Exception as e:  # noqa: BLE001 — the zip path gets its turn
+        logger.info("ebooklib chapter extraction failed for %s: %s", path, e)
+    if chapters:
+        return chapters
+    return _chapters_from_zip(path)
 
 
 def _opf_meta_by_name(book, name: str) -> Optional[str]:
@@ -386,8 +543,14 @@ def extract_epub(path: Path, covers_dir: Path) -> dict:
         # key: creation sites persist it as BookChapter rows; API previews
         # strip underscore keys.
         chapters = _extract_epub_chapters(book)
-        if chapters:
-            meta["_chapters"] = chapters
+        if not chapters:
+            # The already-open book gave nothing — let the zip-level parser
+            # have a go (NCX-only EPUB2, empty/malformed nav — see
+            # extract_chapters_epub).
+            chapters = _chapters_from_zip(path)
+        # Always set for EPUBs (possibly []) — the empty list records "tried,
+        # no usable TOC" downstream so the backfill stops re-queuing the book.
+        meta["_chapters"] = chapters
 
         # Cover extraction
         cover_id = None
