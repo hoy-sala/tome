@@ -7,7 +7,7 @@
 services:
   tome:
     build: .
-    container_name: tome
+    container_name: app-tome
     ports:
       - "8080:8080"
     volumes:
