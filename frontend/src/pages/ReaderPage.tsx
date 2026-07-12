@@ -509,6 +509,8 @@ const PdfReader = forwardRef<PdfReaderHandle, PdfReaderProps>(function PdfReader
     }
   }, [displayW])
 
+  const renderPageRef = useRef(renderPage)
+  renderPageRef.current = renderPage
   const clearPage = useCallback((i: number) => {
     const task = renderTasks.current.get(i)
     if (task) { try { task.cancel() } catch { /* ignore */ } renderTasks.current.delete(i) }
@@ -528,7 +530,7 @@ const PdfReader = forwardRef<PdfReaderHandle, PdfReaderProps>(function PdfReader
         const i = Number((entry.target as HTMLElement).dataset.page)
         if (entry.isIntersecting) {
           visiblePages.current.add(i)
-          renderPage(i)
+          renderPageRef.current(i)
         } else {
           visiblePages.current.delete(i)
           clearPage(i)
