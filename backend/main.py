@@ -95,60 +95,41 @@ async def lifespan(app: FastAPI):
             conn.execute(text("ALTER TABLE users ADD COLUMN oidc_issuer VARCHAR(255)"))
             conn.commit()
         # Migrate api_keys.key (plaintext) → key_hash (sha256) + key_prefix (display)
-        # so a DB leak doesn't compromise any KOReader plugin install. One-way: existing
-        # installed plugins keep working because they send the plaintext, we hash on lookup.
-        #
-        # Idempotent: handles partial-prior-attempt states (e.g. container restart mid
-        # migration) by re-backfilling any rows that are missing key_hash.
+        # Only runs if the legacy api_keys table exists.
         import hashlib as _hashlib
-        ak_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(api_keys)")).fetchall()}
-        if "key_hash" not in ak_cols:
-            conn.execute(text("ALTER TABLE api_keys ADD COLUMN key_hash VARCHAR(64)"))
-            ak_cols.add("key_hash")
-        if "key_prefix" not in ak_cols:
-            conn.execute(text("ALTER TABLE api_keys ADD COLUMN key_prefix VARCHAR(16)"))
-            ak_cols.add("key_prefix")
-        # If the old plaintext column still exists, backfill any rows missing key_hash.
-        if "key" in ak_cols:
-            rows = conn.execute(
-                text("SELECT id, key FROM api_keys WHERE key_hash IS NULL OR key_hash = ''")
-            ).fetchall()
-            for row in rows:
-                key_id, plaintext = row[0], row[1]
-                if not plaintext:
-                    continue
-                conn.execute(
-                    text("UPDATE api_keys SET key_hash = :h, key_prefix = :p WHERE id = :i"),
-                    {
-                        "h": _hashlib.sha256(plaintext.encode()).hexdigest(),
-                        "p": plaintext[:11],
-                        "i": key_id,
-                    },
-                )
-            # Drop the old plaintext column. The legacy model had index=True on
-            # `key`, leaving behind ix_api_keys_key that blocks DROP COLUMN unless
-            # we kill it first. Same for the UNIQUE constraint's implicit index.
-            conn.execute(text("DROP INDEX IF EXISTS ix_api_keys_key"))
-            conn.execute(text("DROP INDEX IF EXISTS sqlite_autoindex_api_keys_1"))
-            conn.execute(text("ALTER TABLE api_keys DROP COLUMN key"))
-        # Safety: any rows still missing key_hash after this point are leftovers from a
-        # failed migration attempt (e.g. when the original `key` column was already dropped
-        # but the backfill didn't run). They can never authenticate — drop them so users
-        # can regenerate fresh keys via Settings → Download Plugin.
-        conn.execute(text("DELETE FROM api_keys WHERE key_hash IS NULL OR key_hash = ''"))
-        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_api_keys_key_hash ON api_keys (key_hash)"))
-        conn.commit()
+        existing = {r[0] for r in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()}
+        if "api_keys" in existing:
+            ak_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(api_keys)")).fetchall()}
+            if "key_hash" not in ak_cols:
+                conn.execute(text("ALTER TABLE api_keys ADD COLUMN key_hash VARCHAR(64)"))
+                ak_cols.add("key_hash")
+            if "key_prefix" not in ak_cols:
+                conn.execute(text("ALTER TABLE api_keys ADD COLUMN key_prefix VARCHAR(16)"))
+                ak_cols.add("key_prefix")
+            if "key" in ak_cols:
+                rows = conn.execute(
+                    text("SELECT id, key FROM api_keys WHERE key_hash IS NULL OR key_hash = ''")
+                ).fetchall()
+                for row in rows:
+                    key_id, plaintext = row[0], row[1]
+                    if not plaintext:
+                        continue
+                    conn.execute(
+                        text("UPDATE api_keys SET key_hash = :h, key_prefix = :p WHERE id = :i"),
+                        {"h": _hashlib.sha256(plaintext.encode()).hexdigest(), "p": plaintext[:11], "i": key_id},
+                    )
+                conn.execute(text("DROP INDEX IF EXISTS ix_api_keys_key"))
+                conn.execute(text("DROP INDEX IF EXISTS sqlite_autoindex_api_keys_1"))
+                conn.execute(text("ALTER TABLE api_keys DROP COLUMN key"))
+            conn.execute(text("DELETE FROM api_keys WHERE key_hash IS NULL OR key_hash = ''"))
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_api_keys_key_hash ON api_keys (key_hash)"))
+            conn.commit()
         # Add scope column to api_tokens
-        at_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(api_tokens)")).fetchall()}
-        if "scope" not in at_cols:
-            conn.execute(text("ALTER TABLE api_tokens ADD COLUMN scope VARCHAR(16) NOT NULL DEFAULT 'full'"))
-            conn.commit()
-        # Quick Connect poll capability. Pre-existing rows keep NULL — they can
-        # never be polled again, which is fine: codes live for five minutes.
-        qc_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(quick_connect_codes)")).fetchall()}
-        if qc_cols and "poll_token" not in qc_cols:
-            conn.execute(text("ALTER TABLE quick_connect_codes ADD COLUMN poll_token VARCHAR(64)"))
-            conn.commit()
+        if "api_tokens" in existing:
+            at_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(api_tokens)")).fetchall()}
+            if "scope" not in at_cols:
+                conn.execute(text("ALTER TABLE api_tokens ADD COLUMN scope VARCHAR(16) NOT NULL DEFAULT 'full'"))
+                conn.commit()
 
         # Per-user ratings/reviews on user_book_status (nullable — existing rows stay unrated).
         ubs_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(user_book_status)")).fetchall()}
