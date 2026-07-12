@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Navigate } from 'react-router-dom'
-import { BookOpen, UserPlus, Eye, EyeOff, AlertCircle, CheckCircle2, Smartphone, BarChart3 } from 'lucide-react'
+import { UserPlus, Eye, EyeOff, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { TomeMark } from '@/components/TomeMark'
@@ -210,25 +210,7 @@ export function SetupPage() {
           </form>
         </div>
 
-        {/* Feature highlights — setup page only */}
-        <div className="mt-5 flex items-center justify-center gap-6">
-          <div className="flex flex-col items-center gap-1.5">
-            <BookOpen className="w-3.5 h-3.5 text-muted-foreground/60" />
-            <span className="text-xs text-muted-foreground/60">Your Library</span>
-          </div>
-          <div className="w-px h-6 bg-border/60" />
-          <div className="flex flex-col items-center gap-1.5">
-            <Smartphone className="w-3.5 h-3.5 text-muted-foreground/60" />
-            <span className="text-xs text-muted-foreground/60">KOReader Sync</span>
-          </div>
-          <div className="w-px h-6 bg-border/60" />
-          <div className="flex flex-col items-center gap-1.5">
-            <BarChart3 className="w-3.5 h-3.5 text-muted-foreground/60" />
-            <span className="text-xs text-muted-foreground/60">Reading Stats</span>
-          </div>
-        </div>
-
-        <p className="text-center text-xs text-muted-foreground mt-4">
+        <p className="text-center text-xs text-muted-foreground mt-9">
           Tome · Your personal library
         </p>
       </div>

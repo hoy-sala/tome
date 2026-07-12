@@ -15,7 +15,8 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   }
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(error.detail ?? "Request failed")
+    const detail = Array.isArray(error.detail) ? error.detail.map(d => d.msg).join("; ") : error.detail
+    throw new Error(detail ?? "Request failed")
   }
   if (res.status === 204 || res.headers.get("content-length") === "0") {
     return undefined as T
@@ -41,7 +42,8 @@ async function requestWithHeaders<T>(
   }
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(error.detail ?? "Request failed")
+    const detail = Array.isArray(error.detail) ? error.detail.map(d => d.msg).join("; ") : error.detail
+    throw new Error(detail ?? "Request failed")
   }
   const data: T =
     res.status === 204 || res.headers.get("content-length") === "0"
@@ -68,7 +70,8 @@ export const api = {
     }).then(async res => {
       if (!res.ok) {
         const error = await res.json().catch(() => ({ detail: res.statusText }))
-        throw new Error(error.detail ?? "Upload failed")
+        const detail = Array.isArray(error.detail) ? error.detail.map(d => d.msg).join("; ") : error.detail
+        throw new Error(detail ?? "Upload failed")
       }
       return res.json() as Promise<T>
     })
