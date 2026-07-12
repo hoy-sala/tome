@@ -48,7 +48,7 @@ def _make_non_admin(
         can_download=True,
         can_view_stats=True,
         can_use_opds=True,
-        can_use_kosync=True,
+
         can_approve_bindery=can_approve_bindery,
     )
     db.add(perms)

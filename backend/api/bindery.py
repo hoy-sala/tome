@@ -28,7 +28,7 @@ from backend.core.permissions import require_role, is_admin
 from backend.models.book import Book, BookFile, BookTag
 from backend.models.user import User
 from backend.services.audit import audit
-from backend.services.ko_hash import ko_partial_md5, record_ko_hash
+
 from backend.services.book_types import assign_book_to_type_library
 from backend.services.filename_parser import parse_filename
 from backend.services.metadata import extract_metadata, sha256_file
@@ -358,8 +358,6 @@ def bindery_accept(
                 file_size=dest.stat().st_size,
                 content_hash=content_hash,
             ))
-            record_ko_hash(db, book.id, ko_partial_md5(dest), "raw")
-
             # Word count + chapter map (EPUB only) — parsed from the accepted
             # file on disk. Fixed-layout formats get an intrinsic page count.
             if suffix == "epub":
@@ -404,10 +402,6 @@ def bindery_accept(
                 db.commit()
 
             db.refresh(book)
-
-            # Wishlist matcher — flag open wishes for admin review (no auto-fulfil)
-            from backend.services.wish_matcher import match_on_book_created
-            match_on_book_created(db, book)
 
             # Audit
             audit(

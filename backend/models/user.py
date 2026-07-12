@@ -30,20 +30,6 @@ class User(Base):
     auth_source: Mapped[str] = mapped_column(String(16), nullable=False, default="local")
     oidc_sub: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     oidc_issuer: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    # Hardcover sync (opt-in, per-user). The token is the user's personal
-    # hardcover.app API token — it must be replayable against their GraphQL API,
-    # so it is stored Fernet-encrypted with a key derived from TOME_SECRET_KEY
-    # (see backend/core/crypto.py), never hashed. Independent of the server-wide
-    # read-only TOME_HARDCOVER_TOKEN used for metadata fetch. Hardcover tokens
-    # expire every January 1 — token_status flips to "expired" on a 401 and the
-    # user is notified to re-link.
-    hardcover_token: Mapped[str | None] = mapped_column(Text, nullable=True)
-    hardcover_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    hardcover_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    hardcover_token_status: Mapped[str | None] = mapped_column(String(16), nullable=True)  # ok | expired | invalid
-    hardcover_linked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    # Linking and syncing are separate opt-ins: a linked user can pause pushes.
-    hardcover_sync_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
@@ -92,7 +78,6 @@ class UserPermission(Base):
 
     # Feature access
     can_use_opds: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    can_use_kosync: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     can_share: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     can_bulk_operations: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 

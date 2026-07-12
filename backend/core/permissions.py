@@ -35,7 +35,7 @@ def is_member_or_above(user: User) -> bool:
 def book_visibility_filter(db: Session, user: User):
     """Return a SQLAlchemy filter expression restricting Book rows to those
     the user is allowed to see. This is the single source of truth for book
-    visibility — the books, downloads, stats, OPDS and TomeSync surfaces all
+    visibility — the books, downloads, stats, and OPDS surfaces all
     route through it (directly or via :func:`user_can_see_book`).
 
     Library membership is the gate: a book placed in a private library is

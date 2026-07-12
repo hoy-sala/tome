@@ -17,7 +17,7 @@ from starlette.testclient import TestClient
 from backend.core.security import create_access_token, hash_password
 from backend.models.book import Book
 from backend.models.notification import Notification
-from backend.models.tome_sync import ReadingSession
+from backend.models.reading import ReadingSession
 from backend.models.user import User, UserPermission
 
 

@@ -9,10 +9,9 @@ from backend.core.database import get_db
 from backend.core.permissions import book_visibility_filter
 from backend.core.security import get_current_user
 from backend.models.user import User
-from backend.models.tome_sync import ReadingSession, TomeSyncPosition
+from backend.models.reading import ReadingSession, TomeSyncPosition
 from backend.models.book import Book
 from backend.models.user_book_status import UserBookStatus
-from backend.services.streaks import reconciled_user_streaks
 
 router = APIRouter(prefix="/home", tags=["home"])
 
@@ -198,28 +197,11 @@ def get_home_stats(
         .count()
     )
 
-    # Reconciled so the home streak matches the stats page: imported KOReader
-    # page-stat days count alongside live sessions (no-op without imported stats).
-    current_streak_days, _ = reconciled_user_streaks(db, current_user.id, tz_offset)
-
     return {
-        "current_streak_days": current_streak_days,
         "books_finished_30d": books_finished_30d,
         "reading_seconds_30d": reading_seconds_30d,
         "pages_turned_30d": pages_turned_30d,
     }
-
-
-@router.get("/reading-dna")
-def get_home_reading_dna(
-    tz_offset: int = Query(0, description="Client timezone offset in minutes (JS getTimezoneOffset)"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> dict:
-    """Reading-personality summary for the Home rail (see services.reading_dna)."""
-    from backend.services.reading_dna import compute_reading_dna
-
-    return compute_reading_dna(db, current_user, tz_offset)
 
 
 @router.get("/activity")

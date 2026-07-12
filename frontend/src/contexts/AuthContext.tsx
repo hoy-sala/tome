@@ -13,7 +13,6 @@ interface Permissions {
   can_approve_bindery: boolean
   can_view_stats: boolean
   can_use_opds: boolean
-  can_use_kosync: boolean
   can_share: boolean
   can_bulk_operations: boolean
 }

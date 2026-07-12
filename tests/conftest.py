@@ -85,8 +85,7 @@ def _init_test_db():
     import backend.models.user_book_status  # noqa: F401
     import backend.models.audit_log  # noqa: F401
     import backend.models.duplicate_dismissal  # noqa: F401
-    import backend.models.kosync  # noqa: F401
-    import backend.models.tome_sync  # noqa: F401
+    import backend.models.reading  # noqa: F401
     import backend.models.opds_pin  # noqa: F401
     import backend.models.quick_connect  # noqa: F401
     import backend.models.api_token  # noqa: F401
@@ -94,8 +93,6 @@ def _init_test_db():
     import backend.models.wish  # noqa: F401
     import backend.models.notification  # noqa: F401
     import backend.models.send_queue  # noqa: F401
-    import backend.models.ko_stats  # noqa: F401
-
     Base.metadata.create_all(bind=test_engine)
 
     # Create the FTS virtual table (content-less FTS5 is a SQLite extension,
@@ -155,7 +152,6 @@ def admin_user(db: Session) -> tuple[User, str]:
         can_approve_bindery=True,
         can_view_stats=True,
         can_use_opds=True,
-        can_use_kosync=True,
         can_share=True,
         can_bulk_operations=True,
     )

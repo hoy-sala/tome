@@ -1,20 +1,16 @@
-"""Tests for KOReader annotation sync — bidirectional across devices via Tome.
+"""Tests for annotation sync — bidirectional across devices.
 
 Identity is the anchor (xPointer). Edit conflicts resolve last-write-wins by the
-KOReader modification time; deletes write tombstones so stale devices can't
-resurrect them. Plugin endpoints use a tk_ API key; the web read uses JWT.
+modification time; deletes write tombstones so stale devices can't
+resurrect them.
 """
-from backend.models.tome_sync import ApiKey, Annotation, AnnotationTombstone
+from backend.models.reading import Annotation, AnnotationTombstone
 from backend.models.user import User
-from backend.core.security import hash_password
+from backend.core.security import create_access_token, hash_password
 
 
-def _api_key_for(db, user_id: int) -> str:
-    plaintext = ApiKey.generate()
-    db.add(ApiKey(user_id=user_id, key_hash=ApiKey.hash_key(plaintext),
-                  key_prefix=plaintext[:11], label="test"))
-    db.flush()
-    return plaintext
+def _jwt_for(user_id: int) -> str:
+    return create_access_token(subject=user_id)
 
 
 def _hl(anchor, text="t", note=None, chapter="C1", color="yellow",
@@ -35,7 +31,7 @@ A2 = "/body/DocFragment[4]/p[9]/text().12"
 def test_sync_creates_and_get_returns(client, db, admin_user, make_book):
     user, _ = admin_user
     book = make_book()
-    hdr = {"Authorization": f"Bearer {_api_key_for(db, user.id)}"}
+    hdr = {"Authorization": f"Bearer {_jwt_for(user.id)}"}
 
     r = _sync(client, hdr, book.id, upserts=[_hl(A1, "hello"), _hl(A2, "world")])
     assert r.status_code == 200, r.text
@@ -50,8 +46,8 @@ def test_union_across_devices(client, db, admin_user, make_book):
     """Two devices, different anchors -> union, neither clobbers the other."""
     user, _ = admin_user
     book = make_book()
-    devA = {"Authorization": f"Bearer {_api_key_for(db, user.id)}"}
-    devB = {"Authorization": f"Bearer {_api_key_for(db, user.id)}"}
+    devA = {"Authorization": f"Bearer {_jwt_for(user.id)}"}
+    devB = {"Authorization": f"Bearer {_jwt_for(user.id)}"}
 
     _sync(client, devA, book.id, upserts=[_hl(A1, "from A")])
     _sync(client, devB, book.id, upserts=[_hl(A2, "from B")])   # B doesn't send A1
@@ -62,7 +58,7 @@ def test_union_across_devices(client, db, admin_user, make_book):
 def test_edit_lww_newer_wins_older_skipped(client, db, admin_user, make_book):
     user, _ = admin_user
     book = make_book()
-    hdr = {"Authorization": f"Bearer {_api_key_for(db, user.id)}"}
+    hdr = {"Authorization": f"Bearer {_jwt_for(user.id)}"}
 
     _sync(client, hdr, book.id, upserts=[_hl(A1, "v1", note="old", dtu="2026-06-03 10:00:00")])
     # newer edit wins
@@ -78,7 +74,7 @@ def test_edit_lww_newer_wins_older_skipped(client, db, admin_user, make_book):
 def test_delete_creates_tombstone_and_removes(client, db, admin_user, make_book):
     user, _ = admin_user
     book = make_book()
-    hdr = {"Authorization": f"Bearer {_api_key_for(db, user.id)}"}
+    hdr = {"Authorization": f"Bearer {_jwt_for(user.id)}"}
 
     _sync(client, hdr, book.id, upserts=[_hl(A1, dtu="2026-06-03 10:00:00")])
     r = _sync(client, hdr, book.id, deletes=[{"anchor": A1, "datetime": "2026-06-03 11:00:00"}])
@@ -93,7 +89,7 @@ def test_stale_device_cannot_resurrect_deleted(client, db, admin_user, make_book
     """Device B, unaware of the delete, re-uploads the old highlight -> stays gone."""
     user, _ = admin_user
     book = make_book()
-    hdr = {"Authorization": f"Bearer {_api_key_for(db, user.id)}"}
+    hdr = {"Authorization": f"Bearer {_jwt_for(user.id)}"}
 
     _sync(client, hdr, book.id, upserts=[_hl(A1, dtu="2026-06-03 10:00:00")])
     _sync(client, hdr, book.id, deletes=[{"anchor": A1, "datetime": "2026-06-03 11:00:00"}])
@@ -108,7 +104,7 @@ def test_rehighlight_after_delete_wins(client, db, admin_user, make_book):
     """Re-highlighting the same passage AFTER a delete (newer mtime) brings it back."""
     user, _ = admin_user
     book = make_book()
-    hdr = {"Authorization": f"Bearer {_api_key_for(db, user.id)}"}
+    hdr = {"Authorization": f"Bearer {_jwt_for(user.id)}"}
 
     _sync(client, hdr, book.id, upserts=[_hl(A1, dtu="2026-06-03 10:00:00")])
     _sync(client, hdr, book.id, deletes=[{"anchor": A1, "datetime": "2026-06-03 11:00:00"}])
@@ -122,7 +118,7 @@ def test_edit_newer_than_delete_wins(client, db, admin_user, make_book):
     """Concurrent: an edit newer than a delete keeps the highlight alive."""
     user, _ = admin_user
     book = make_book()
-    hdr = {"Authorization": f"Bearer {_api_key_for(db, user.id)}"}
+    hdr = {"Authorization": f"Bearer {_jwt_for(user.id)}"}
     _sync(client, hdr, book.id, upserts=[_hl(A1, "edited", dtu="2026-06-03 12:00:00")])
     # a delete that is OLDER than the edit must not win
     r = _sync(client, hdr, book.id, deletes=[{"anchor": A1, "datetime": "2026-06-03 11:00:00"}])
@@ -133,7 +129,7 @@ def test_edit_newer_than_delete_wins(client, db, admin_user, make_book):
 def test_web_get_shows_alive_only(client, db, admin_user, make_book):
     user, _ = admin_user
     book = make_book()
-    hdr = {"Authorization": f"Bearer {_api_key_for(db, user.id)}"}
+    hdr = {"Authorization": f"Bearer {_jwt_for(user.id)}"}
     _sync(client, hdr, book.id, upserts=[_hl(A1, "keep", dtu="2026-06-03 10:00:00"),
                                           _hl(A2, "drop", dtu="2026-06-03 10:00:00")])
     _sync(client, hdr, book.id, deletes=[{"anchor": A2, "datetime": "2026-06-03 11:00:00"}])
@@ -145,12 +141,12 @@ def test_web_get_shows_alive_only(client, db, admin_user, make_book):
 def test_isolation_between_users(client, db, admin_user, make_book):
     user, _ = admin_user
     book = make_book()
-    hdr1 = {"Authorization": f"Bearer {_api_key_for(db, user.id)}"}
+    hdr1 = {"Authorization": f"Bearer {_jwt_for(user.id)}"}
     _sync(client, hdr1, book.id, upserts=[_hl(A1)])
     other = User(username="other", email="o@x.com", hashed_password=hash_password("pw"),
                  is_active=True, is_admin=False, role="member")
     db.add(other); db.flush()
-    hdr2 = {"Authorization": f"Bearer {_api_key_for(db, other.id)}"}
+    hdr2 = {"Authorization": f"Bearer {_jwt_for(other.id)}"}
     g = client.get(f"/api/tome-sync/annotations/{book.id}", headers=hdr2).json()
     assert g["annotations"] == [] and g["tombstones"] == []
 
@@ -159,7 +155,7 @@ def test_empty_object_payload_coerced(client, db, admin_user, make_book):
     """KOReader's rapidjson sends empty tables as {} (object), not [] — must not 422."""
     user, _ = admin_user
     book = make_book()
-    hdr = {"Authorization": f"Bearer {_api_key_for(db, user.id)}"}
+    hdr = {"Authorization": f"Bearer {_jwt_for(user.id)}"}
     r = client.post(f"/api/tome-sync/annotations/{book.id}/sync", headers=hdr,
                     json={"upserts": {}, "deletes": {}})
     assert r.status_code == 200, r.text
@@ -171,7 +167,7 @@ def test_web_delete_removes_and_tombstones(client, db, admin_user, make_book):
     so the deletion can propagate back to KOReader like a device-side delete."""
     user, _ = admin_user
     book = make_book()
-    hdr = {"Authorization": f"Bearer {_api_key_for(db, user.id)}"}
+    hdr = {"Authorization": f"Bearer {_jwt_for(user.id)}"}
     _sync(client, hdr, book.id, upserts=[_hl(A1, "oops", dtu="2026-06-03 10:00:00")])
 
     aid = client.get(f"/api/books/{book.id}/annotations").json()[0]["id"]
@@ -189,7 +185,7 @@ def test_web_delete_propagates_and_holds_against_stale_device(client, db, admin_
     a stale device re-add (older mtime) cannot resurrect it."""
     user, _ = admin_user
     book = make_book()
-    hdr = {"Authorization": f"Bearer {_api_key_for(db, user.id)}"}
+    hdr = {"Authorization": f"Bearer {_jwt_for(user.id)}"}
     _sync(client, hdr, book.id, upserts=[_hl(A1, dtu="2026-06-03 10:00:00")])
     aid = client.get(f"/api/books/{book.id}/annotations").json()[0]["id"]
     client.delete(f"/api/annotations/{aid}")
@@ -210,7 +206,7 @@ def test_web_delete_holds_when_device_clock_ahead_of_server(client, db, admin_us
     race — while a strictly newer re-add still wins."""
     user, _ = admin_user
     book = make_book()
-    hdr = {"Authorization": f"Bearer {_api_key_for(db, user.id)}"}
+    hdr = {"Authorization": f"Bearer {_jwt_for(user.id)}"}
     future = "2099-01-01 00:00:00"  # device-local mtime far ahead of server now
     _sync(client, hdr, book.id, upserts=[_hl(A1, "fresh", dtu=future)])
     aid = client.get(f"/api/books/{book.id}/annotations").json()[0]["id"]
@@ -237,7 +233,7 @@ def test_web_delete_scoped_to_owner(client, db, admin_user, make_book):
     other = User(username="other2", email="o2@x.com", hashed_password=hash_password("pw"),
                  is_active=True, is_admin=False, role="member")
     db.add(other); db.flush()
-    hdr_other = {"Authorization": f"Bearer {_api_key_for(db, other.id)}"}
+    hdr_other = {"Authorization": f"Bearer {_jwt_for(other.id)}"}
     _sync(client, hdr_other, book.id, upserts=[_hl(A1, dtu="2026-06-03 10:00:00")])
     other_aid = db.query(Annotation).filter(Annotation.user_id == other.id).first().id
 
@@ -252,5 +248,5 @@ def test_auth_and_404(client, db, admin_user, make_book):
     user, _ = admin_user
     book = make_book()
     assert _sync(client, {"Authorization": "Bearer nope"}, book.id, upserts=[_hl(A1)]).status_code == 401
-    hdr = {"Authorization": f"Bearer {_api_key_for(db, user.id)}"}
+    hdr = {"Authorization": f"Bearer {_jwt_for(user.id)}"}
     assert _sync(client, hdr, 99999, upserts=[_hl(A1)]).status_code == 404

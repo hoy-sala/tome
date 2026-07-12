@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.core.database import get_db
-from backend.core.permissions import book_visibility_filter, is_admin as _is_admin
+from backend.core.permissions import book_visibility_filter, is_admin as _is_admin, require_role
 from backend.core.security import get_current_user
 from backend.models.book import Book
 from backend.models.user import User
@@ -26,6 +26,7 @@ def bulk_download(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    require_role(current_user, "member")
     if not body.book_ids:
         raise HTTPException(400, "No books selected")
     if len(body.book_ids) > 200:
@@ -38,9 +39,6 @@ def bulk_download(
     if not books:
         raise HTTPException(404, "No books found")
 
-    from backend.services.metadata_embed import get_baked_path
-    from backend.services.ko_hash import record_served_artifact
-
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for book in books:
@@ -51,12 +49,7 @@ def bulk_download(
                 raw = Path(f.file_path)
                 if not raw.exists():
                     continue
-                # Serve a copy with Tome's metadata baked in, like every other
-                # download path (single/OPDS/TomeSync). Falls back to the raw
-                # file if baking fails. Keep the original filename in the zip.
-                serve = get_baked_path(book, f)
-                record_served_artifact(db, book.id, f, serve)
-                zf.write(str(serve), f"{folder}/{raw.name}")
+                zf.write(str(raw), f"{folder}/{raw.name}")
 
     buf.seek(0)
     return StreamingResponse(

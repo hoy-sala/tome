@@ -12,7 +12,6 @@ from backend.core.security import hash_password, create_access_token
 from backend.models.book import Book, BookFile
 from backend.models.library import Library
 from backend.models.user import User, UserPermission
-from backend.models.tome_sync import ApiKey
 
 
 def _make_user(db: Session, username: str, role: str, is_admin: bool = False) -> tuple[User, str]:
@@ -213,63 +212,3 @@ def test_opds_download_blocks_invisible_books(app_client):
     assert r.status_code == 404
 
 
-# ── #7: ApiKey hashing — plaintext is not stored ─────────────────────────────
-
-def test_created_api_key_stores_hash_not_plaintext(app_client):
-    c, db = app_client
-    _, member_token = _make_user(db, "akmem", "member")
-
-    r = c.post(
-        "/api/plugin/api-keys",
-        json={"label": "My KO Plugin"},
-        headers={"Authorization": f"Bearer {member_token}"},
-    )
-    assert r.status_code == 201
-    plaintext = r.json()["key"]
-    assert plaintext.startswith("tk_")
-
-    # The DB row should NOT contain the plaintext anywhere
-    row = db.query(ApiKey).filter(ApiKey.label == "My KO Plugin").first()
-    assert row is not None
-    assert row.key_hash == ApiKey.hash_key(plaintext)
-    assert row.key_hash != plaintext
-    assert row.key_prefix == plaintext[:11]
-
-
-def test_api_key_auth_works_with_hashed_storage(app_client):
-    c, db = app_client
-    user, member_token = _make_user(db, "akmem2", "member")
-
-    # Provision a key
-    r = c.post(
-        "/api/plugin/api-keys",
-        json={"label": "Test Auth"},
-        headers={"Authorization": f"Bearer {member_token}"},
-    )
-    plaintext = r.json()["key"]
-
-    # Hit a TomeSync-protected endpoint with the plaintext — should succeed
-    r2 = c.get(
-        "/api/tome-sync/resolve",
-        params={"filename": "doesnt-matter.epub"},
-        headers={"Authorization": f"Bearer {plaintext}"},
-    )
-    # Either resolves (200/404) or fails business-logic-wise, but NOT 401
-    assert r2.status_code != 401, f"plaintext auth failed against hashed storage: {r2.status_code}"
-
-
-def test_api_key_rejects_wrong_plaintext(app_client):
-    c, db = app_client
-    _, member_token = _make_user(db, "akmem3", "member")
-    c.post(
-        "/api/plugin/api-keys",
-        json={"label": "Test Wrong"},
-        headers={"Authorization": f"Bearer {member_token}"},
-    )
-
-    r = c.get(
-        "/api/tome-sync/resolve",
-        params={"filename": "x.epub"},
-        headers={"Authorization": "Bearer tk_wrong000000000000000000000000000000000000"},
-    )
-    assert r.status_code == 401

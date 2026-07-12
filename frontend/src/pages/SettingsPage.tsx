@@ -3,11 +3,9 @@ import { Link } from 'react-router-dom'
 import {
   ArrowLeft, Eye, EyeOff, Download, Check, RefreshCw, Loader2,
   Copy, Trash2, Plus, Key, Smartphone, CheckCircle, Info, X, ChevronDown, ChevronUp,
-  AlertTriangle, ExternalLink, Send,
+  AlertTriangle, ExternalLink,
 } from 'lucide-react'
-import { DOCS, docsLink } from '@/lib/docs'
 import { ThemeToggle } from '@/components/ThemeToggle'
-import { HardcoverSync } from '@/components/HardcoverSync'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import {
@@ -19,14 +17,6 @@ import {
   type CustomTheme, loadCustomThemes, saveCustomTheme, deleteCustomTheme, parseThemeColors,
 } from '@/lib/theme'
 import { useAuth } from '@/contexts/AuthContext'
-
-interface ApiKey {
-  id: number
-  label: string
-  key_preview: string
-  created_at: string
-  last_used_at: string | null
-}
 
 interface OpdsPin {
   id: number
@@ -209,106 +199,6 @@ export function SettingsPage() {
     setCustomFormOpen(false)
   }
 
-  // ── KOSync ────────────────────────────────────────────────────────────────
-  interface KOSyncStatus {
-    linked: boolean
-    synced_documents?: number
-    last_sync?: number | null
-    last_device?: string | null
-  }
-  const [kosyncStatus, setKosyncStatus] = useState<KOSyncStatus | null>(null)
-  const [kosyncPassword, setKosyncPassword] = useState('')
-  const [kosyncSaving, setKosyncSaving] = useState(false)
-  const [kosyncError, setKosyncError] = useState<string | null>(null)
-  const [kosyncSuccess, setKosyncSuccess] = useState(false)
-
-  useEffect(() => {
-    api.get<KOSyncStatus>('/auth/me/kosync').then(setKosyncStatus).catch(() => {})
-  }, [])
-
-  async function handleKosyncRegister(e: React.FormEvent) {
-    e.preventDefault()
-    setKosyncError(null)
-    setKosyncSuccess(false)
-    setKosyncSaving(true)
-    try {
-      await api.post('/auth/me/kosync', { password: kosyncPassword })
-      setKosyncSuccess(true)
-      setKosyncPassword('')
-      const updated = await api.get<KOSyncStatus>('/auth/me/kosync')
-      setKosyncStatus(updated)
-    } catch (err) {
-      setKosyncError(err instanceof Error ? err.message : 'Failed to register')
-    } finally {
-      setKosyncSaving(false)
-    }
-  }
-
-  // ── API Keys ──────────────────────────────────────────────────────────────
-  const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
-  const [newKeyResult, setNewKeyResult] = useState<string | null>(null)
-  const [keyCreating, setKeyCreating] = useState(false)
-  const [keyRevoking, setKeyRevoking] = useState<number | null>(null)
-  const [pluginDownloading, setPluginDownloading] = useState(false)
-
-  useEffect(() => {
-    api.get<ApiKey[]>('/plugin/api-keys').then(setApiKeys).catch(() => {})
-  }, [])
-
-  async function handleCreateKey() {
-    setKeyCreating(true)
-    setNewKeyResult(null)
-    try {
-      const res = await api.post<{ id: number; label: string; key: string; created_at: string }>(
-        '/plugin/api-keys', { label: 'KOReader Plugin' }
-      )
-      setNewKeyResult(res.key)
-      setApiKeys(prev => [...prev, { id: res.id, label: res.label, key_preview: res.key.slice(0, 8) + '…', created_at: res.created_at, last_used_at: null }])
-    } catch (err) {
-      // ignore
-    } finally {
-      setKeyCreating(false)
-    }
-  }
-
-  async function handleRevokeKey(id: number) {
-    setKeyRevoking(id)
-    try {
-      await api.delete(`/plugin/api-keys/${id}`)
-      setApiKeys(prev => prev.filter(k => k.id !== id))
-      if (newKeyResult) setNewKeyResult(null)
-    } finally {
-      setKeyRevoking(null)
-    }
-  }
-
-  async function handleDownloadPlugin() {
-    setPluginDownloading(true)
-    try {
-      const token = localStorage.getItem('tome_token')
-      const backendOrigin = window.location.port === '5173'
-        ? window.location.origin.replace(':5173', ':8080')
-        : window.location.origin
-      const res = await fetch(`/api/plugin/koreader?server_url=${encodeURIComponent(backendOrigin)}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
-      if (!res.ok) throw new Error('Download failed')
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'tomesync.koplugin.zip'
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-      const keys = await api.get<ApiKey[]>('/plugin/api-keys')
-      setApiKeys(keys)
-    } finally {
-      setPluginDownloading(false)
-    }
-  }
-
   // ── OPDS PINs ─────────────────────────────────────────────────────────────
   const [opdsPins, setOpdsPins] = useState<OpdsPin[]>([])
   const [newPinResult, setNewPinResult] = useState<string | null>(null)
@@ -350,57 +240,6 @@ export function SettingsPage() {
       if (newPinResult) setNewPinResult(null)
     } finally {
       setPinRevoking(null)
-    }
-  }
-
-  // ── Send to Device ────────────────────────────────────────────────────────
-  interface UserDeviceItem { id: number; name: string; email: string; created_at: string }
-  const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null)
-  const [devices, setDevices] = useState<UserDeviceItem[]>([])
-  const [newDeviceName, setNewDeviceName] = useState('')
-  const [newDeviceEmail, setNewDeviceEmail] = useState('')
-  const [deviceAdding, setDeviceAdding] = useState(false)
-  const [deviceDeleting, setDeviceDeleting] = useState<number | null>(null)
-  const [deviceError, setDeviceError] = useState<string | null>(null)
-  const [setupGuideOpen, setSetupGuideOpen] = useState(false)
-  // Hardcover sync section hides itself when the server has the feature off
-  const [hardcoverAvailable, setHardcoverAvailable] = useState(true)
-
-  useEffect(() => {
-    api.get<{ configured: boolean }>('/smtp-status').then(r => {
-      setSmtpConfigured(r.configured)
-      if (r.configured) {
-        api.get<UserDeviceItem[]>('/devices').then(setDevices).catch(() => {})
-      }
-    }).catch(() => setSmtpConfigured(false))
-  }, [])
-
-  async function handleAddDevice(e: React.FormEvent) {
-    e.preventDefault()
-    setDeviceError(null)
-    const name = newDeviceName.trim()
-    const email = newDeviceEmail.trim()
-    if (!name || !email) return
-    setDeviceAdding(true)
-    try {
-      const d = await api.post<UserDeviceItem>('/devices', { name, email })
-      setDevices(prev => [...prev, d])
-      setNewDeviceName('')
-      setNewDeviceEmail('')
-    } catch (err) {
-      setDeviceError(err instanceof Error ? err.message : 'Failed to add device')
-    } finally {
-      setDeviceAdding(false)
-    }
-  }
-
-  async function handleDeleteDevice(id: number) {
-    setDeviceDeleting(id)
-    try {
-      await api.delete(`/devices/${id}`)
-      setDevices(prev => prev.filter(d => d.id !== id))
-    } finally {
-      setDeviceDeleting(null)
     }
   }
 
@@ -534,7 +373,6 @@ export function SettingsPage() {
 
   const origin = window.location.origin
   const opdsUrl = `${origin}/opds`
-  const kosyncUrl = `${origin}/api/v1`
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -905,23 +743,17 @@ export function SettingsPage() {
           </div>
         </section>
 
-        {/* ── KOReader ─────────────────────────────────────────────────── */}
+        {/* ── OPDS Catalog ──────────────────────────────────────────────── */}
         <section>
-          <SectionHeader title="KOReader" />
-          <div className="mt-4 rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
-
-            {/* OPDS Catalog */}
+          <SectionHeader title="OPDS Catalog" />
+          <div className="mt-4 rounded-xl border border-border bg-card overflow-hidden">
             <div className="p-6 space-y-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-0.5">OPDS Catalog</p>
                   <p className="text-xs text-muted-foreground">
                     Browse and download your library from KOReader or any OPDS client.
                   </p>
                 </div>
-                <a href={docsLink(DOCS.opds)} target="_blank" rel="noopener noreferrer" className="shrink-0 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors">
-                  Learn more <ExternalLink className="w-3 h-3" />
-                </a>
               </div>
               <ConnectBlock rows={[
                 { label: 'URL', value: opdsUrl, copy: true },
@@ -932,7 +764,7 @@ export function SettingsPage() {
                 In KOReader: Search &rarr; OPDS catalog &rarr; add catalog with the URL above.
               </p>
 
-              {/* OPDS PINs — nested under OPDS */}
+              {/* OPDS PINs */}
               <div className="space-y-2 pt-1">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
@@ -1001,287 +833,8 @@ export function SettingsPage() {
                 )}
               </div>
             </div>
-
-            {/* Progress Sync (KOSync) */}
-            <div className="p-6 space-y-4">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-0.5">Progress Sync</p>
-                  <p className="text-xs text-muted-foreground">
-                    Sync reading position between KOReader and Tome.
-                  </p>
-                </div>
-                {kosyncStatus?.linked && (
-                  <span className="flex items-center gap-1 text-xs text-success shrink-0 mt-0.5">
-                    <Check className="w-3 h-3" /> Linked
-                    {kosyncStatus.synced_documents != null && (
-                      <span className="text-muted-foreground ml-1">· {kosyncStatus.synced_documents} docs</span>
-                    )}
-                  </span>
-                )}
-              </div>
-
-              {kosyncStatus?.last_sync && (
-                <p className="text-xs text-muted-foreground">
-                  Last sync: {new Date(kosyncStatus.last_sync * 1000).toLocaleString()}
-                  {kosyncStatus.last_device && ` · ${kosyncStatus.last_device}`}
-                </p>
-              )}
-
-              <form onSubmit={handleKosyncRegister} className="flex items-end gap-2 max-w-xs">
-                <div className="flex-1">
-                  <label className="block text-xs font-medium text-muted-foreground mb-1">
-                    {kosyncStatus?.linked ? 'Update sync password' : 'Set sync password'}
-                  </label>
-                  <input
-                    type="password"
-                    value={kosyncPassword}
-                    onChange={e => setKosyncPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full h-9 rounded-md border border-border bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={kosyncSaving || !kosyncPassword}
-                  className="flex items-center gap-1.5 h-9 px-3 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 transition-all disabled:opacity-40 shrink-0"
-                >
-                  {kosyncSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  {kosyncSaving ? 'Saving...' : kosyncStatus?.linked ? 'Update' : 'Register'}
-                </button>
-              </form>
-              {kosyncError && <p className="text-xs text-destructive">{kosyncError}</p>}
-              {kosyncSuccess && <p className="text-xs text-success">KOSync registered successfully</p>}
-
-              <ConnectBlock rows={[
-                { label: 'URL', value: kosyncUrl, copy: true },
-                { label: 'Username', value: user?.username ?? '—', copy: true },
-                { label: 'Password', value: 'the sync password set above' },
-              ]} />
-              <p className="text-xs text-muted-foreground">
-                In KOReader: Tools &rarr; Progress sync &rarr; Custom sync server.
-              </p>
-            </div>
-
-            {/* TomeSync Plugin */}
-            <div className="p-6 space-y-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-0.5">TomeSync Plugin</p>
-                  <p className="text-xs text-muted-foreground">
-                    Native KOReader plugin — tracks reading sessions and syncs by book ID. More reliable than KOSync.
-                  </p>
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <a href={docsLink(DOCS.koreader)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors">
-                    Learn more <ExternalLink className="w-3 h-3" />
-                  </a>
-                  <PluginVersion />
-                </div>
-              </div>
-
-              <button
-                onClick={handleDownloadPlugin}
-                disabled={pluginDownloading}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 transition-all disabled:opacity-50"
-              >
-                {pluginDownloading
-                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  : <Download className="w-3.5 h-3.5" />
-                }
-                {pluginDownloading ? 'Preparing...' : 'Download plugin ZIP'}
-              </button>
-
-              <SetupGuide />
-
-              {/* API Keys */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                    <Key className="w-3 h-3" /> API Keys
-                  </p>
-                  <button
-                    onClick={handleCreateKey}
-                    disabled={keyCreating}
-                    className="flex items-center gap-1 text-xs text-primary hover:opacity-80 transition-opacity disabled:opacity-50"
-                  >
-                    {keyCreating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
-                    New key
-                  </button>
-                </div>
-
-                {newKeyResult && (
-                  <div className="rounded-lg bg-success/10 border border-success/20 p-3 space-y-1">
-                    <p className="text-xs text-success font-medium">Key created — copy it now, it won't be shown again.</p>
-                    <div className="flex items-center gap-2">
-                      <code className="text-xs font-mono text-foreground break-all flex-1">{newKeyResult}</code>
-                      <button onClick={() => navigator.clipboard.writeText(newKeyResult)}
-                        className="p-1 rounded hover:bg-accent transition-colors text-muted-foreground shrink-0">
-                        <Copy className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {apiKeys.length > 0 ? (
-                  <div className="rounded-lg border border-border overflow-hidden text-xs divide-y divide-border">
-                    {apiKeys.map(k => (
-                      <div key={k.id} className="flex items-center gap-3 px-3 py-2">
-                        <span className="font-mono text-muted-foreground flex-1">{k.key_preview}</span>
-                        <span className="text-muted-foreground hidden sm:block">
-                          {k.last_used_at ? `used ${new Date(k.last_used_at).toLocaleDateString()}` : 'never used'}
-                        </span>
-                        <button
-                          onClick={() => handleRevokeKey(k.id)}
-                          disabled={keyRevoking === k.id}
-                          className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                          title="Revoke"
-                        >
-                          {keyRevoking === k.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">No API keys. Download the plugin to auto-create one.</p>
-                )}
-              </div>
-            </div>
-
           </div>
         </section>
-
-        {/* ── Send to Device ──────────────────────────────────────────── */}
-        <section>
-          <SectionHeader title="Send to Device" />
-          <div className="mt-4 rounded-xl border border-border bg-card overflow-hidden">
-            <div className="p-5 space-y-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                  <div className="p-1.5 rounded-lg bg-primary/10 mt-0.5 shrink-0">
-                    <Send className="w-3.5 h-3.5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">E-Reader Devices</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Add your e-reader or personal email. Books are sent as attachments — works with Kindle, Kobo, or any email address.
-                    </p>
-                  </div>
-                </div>
-                <a href={docsLink(DOCS.sendToDevice)} target="_blank" rel="noopener noreferrer" className="shrink-0 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors">
-                  Learn more <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-
-              {smtpConfigured === false ? (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 rounded-lg bg-warning/10 border border-warning/20 px-3 py-2">
-                    <AlertTriangle className="w-3.5 h-3.5 text-warning dark:text-warning shrink-0" />
-                    <p className="text-xs text-warning font-medium">Email delivery is not set up yet.</p>
-                  </div>
-                  <div className="rounded-lg border border-border overflow-hidden text-xs">
-                    <button
-                      onClick={() => setSetupGuideOpen(v => !v)}
-                      className="w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-accent/50 transition-colors"
-                    >
-                      <span className="font-medium text-foreground">How to set it up</span>
-                      {setupGuideOpen ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
-                    </button>
-                    {setupGuideOpen && (
-                      <div className="border-t border-border px-3 py-3 space-y-3 text-xs text-muted-foreground">
-                        <p>Your server admin needs to set SMTP environment variables:</p>
-                        <div className="space-y-2">
-                          <p className="font-medium text-foreground">Gmail</p>
-                          <code className="block bg-muted rounded px-2 py-1.5 text-[11px] font-mono whitespace-pre-wrap">TOME_SMTP_HOST=smtp.gmail.com{'\n'}TOME_SMTP_PORT=587{'\n'}TOME_SMTP_USER=you@gmail.com{'\n'}TOME_SMTP_PASSWORD=your-app-password</code>
-                          <p>Use a <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Google App Password</a>, not your regular password.</p>
-                        </div>
-                        <div className="space-y-2">
-                          <p className="font-medium text-foreground">Fastmail</p>
-                          <code className="block bg-muted rounded px-2 py-1.5 text-[11px] font-mono whitespace-pre-wrap">TOME_SMTP_HOST=smtp.fastmail.com{'\n'}TOME_SMTP_PORT=587{'\n'}TOME_SMTP_USER=you@fastmail.com{'\n'}TOME_SMTP_PASSWORD=your-app-password</code>
-                        </div>
-                        <div className="space-y-2">
-                          <p className="font-medium text-foreground">Other providers</p>
-                          <p>Set <code className="text-foreground">TOME_SMTP_HOST</code>, <code className="text-foreground">TOME_SMTP_PORT</code>, <code className="text-foreground">TOME_SMTP_USER</code>, and <code className="text-foreground">TOME_SMTP_PASSWORD</code>.</p>
-                        </div>
-                        <div className="rounded-lg bg-muted/60 border border-border p-2.5">
-                          <p className="font-medium text-foreground mb-1">Kindle users</p>
-                          <p>Add your SMTP sender address to Amazon's <a href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Approved Personal Document E-mail List</a>, or emails will be silently dropped.</p>
-                        </div>
-                        <p className="text-muted-foreground/70">Ask your server admin if you don't manage the Tome installation yourself.</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : smtpConfigured ? (
-                <div className="space-y-3">
-                  {/* Add device form */}
-                  <form onSubmit={handleAddDevice} className="flex items-end gap-2">
-                    <div className="flex-1">
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">Device name</label>
-                      <input
-                        type="text"
-                        value={newDeviceName}
-                        onChange={e => setNewDeviceName(e.target.value)}
-                        placeholder="My Kindle"
-                        className="w-full h-9 rounded-md border border-border bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">Email address</label>
-                      <input
-                        type="email"
-                        value={newDeviceEmail}
-                        onChange={e => setNewDeviceEmail(e.target.value)}
-                        placeholder="user_abc@kindle.com"
-                        className="w-full h-9 rounded-md border border-border bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={deviceAdding || !newDeviceName.trim() || !newDeviceEmail.trim()}
-                      className="flex items-center gap-1.5 h-9 px-3 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 transition-all disabled:opacity-40 shrink-0"
-                    >
-                      {deviceAdding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                      Add
-                    </button>
-                  </form>
-                  {deviceError && <p className="text-xs text-destructive">{deviceError}</p>}
-
-                  {/* Device list */}
-                  {devices.length > 0 ? (
-                    <div className="rounded-lg border border-border overflow-hidden text-xs divide-y divide-border">
-                      {devices.map(d => (
-                        <div key={d.id} className="flex items-center gap-3 px-3 py-2">
-                          <Send className="w-3 h-3 text-muted-foreground shrink-0" />
-                          <span className="text-foreground font-medium flex-1 truncate">{d.name}</span>
-                          <span className="text-muted-foreground hidden sm:block truncate max-w-48">{d.email}</span>
-                          <button
-                            onClick={() => handleDeleteDevice(d.id)}
-                            disabled={deviceDeleting === d.id}
-                            className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                            title="Remove device"
-                          >
-                            {deviceDeleting === d.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">No devices yet. Add one to start sending books.</p>
-                  )}
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </section>
-
-        {/* ── Hardcover ────────────────────────────────────────────────── */}
-        {hardcoverAvailable && (
-          <section>
-            <SectionHeader title="Hardcover" />
-            <HardcoverSync onAvailable={setHardcoverAvailable} />
-          </section>
-        )}
 
         {/* ── API Tokens ───────────────────────────────────────────────── */}
         <section>
@@ -1291,10 +844,7 @@ export function SettingsPage() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs text-muted-foreground">
-                    Long-lived tokens for scripts and tools (e.g. Scribe). Each token is shown once on creation.{' '}
-                    <a href={docsLink(DOCS.apiTokens)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-foreground/80 hover:text-primary transition-colors">
-                      Learn more <ExternalLink className="w-3 h-3" />
-                    </a>
+                    Long-lived tokens for scripts and tools (e.g. Scribe). Each token is shown once on creation.
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -1632,83 +1182,6 @@ function PasswordField({
           </button>
         )}
       </div>
-    </div>
-  )
-}
-
-function PluginVersion() {
-  const [label, setLabel] = useState<string | null>(null)
-  useEffect(() => {
-    api.get<{ version: string; build?: number; semver?: string }>('/plugin/version')
-      .then(r => setLabel(r.semver ? `v${r.semver} (build ${r.build ?? r.version})` : `v${r.version}`))
-      .catch(() => {})
-  }, [])
-  if (!label) return null
-  return (
-    <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
-      {label}
-    </span>
-  )
-}
-
-const SETUP_STEPS: { title: string; body: string; mono?: string }[] = [
-  {
-    title: 'Download the plugin',
-    body: 'Click "Download plugin ZIP" above. An API key is automatically created and baked into the plugin — no manual configuration needed.',
-  },
-  {
-    title: 'Copy to KOReader',
-    body: "Unzip the file and copy via SSH (or USB). Remove the old plugin first to ensure a clean install.",
-    mono: 'ssh root@<kindle-ip> "rm -rf /mnt/us/koreader/plugins/tomesync.koplugin" && scp -r tomesync.koplugin root@<kindle-ip>:/mnt/us/koreader/plugins/',
-  },
-  {
-    title: 'Restart KOReader',
-    body: 'In KOReader: Settings > Device > Restart KOReader. The plugin loads automatically.',
-  },
-  {
-    title: 'Open a book downloaded via OPDS',
-    body: 'Books downloaded through the OPDS catalog are automatically mapped to their Tome book ID. Open one and TomeSync will start tracking your session immediately.',
-  },
-  {
-    title: "Verify it's working",
-    body: 'In KOReader: main menu -> TomeSync -> "Test connection" to confirm the plugin can reach your Tome server.',
-  },
-  {
-    title: 'Note on KOSync coexistence',
-    body: 'TomeSync and KOSync can both be active. TomeSync tracks full reading sessions; KOSync only stores your last position.',
-  },
-]
-
-function SetupGuide() {
-  const [open, setOpen] = useState(false)
-
-  return (
-    <div className="rounded-lg border border-border overflow-hidden text-xs">
-      <button
-        onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-accent/50 transition-colors"
-      >
-        <span className="font-medium text-foreground">Setup instructions</span>
-        <span className="text-muted-foreground text-[10px]">{open ? '▲' : '▼'}</span>
-      </button>
-      {open && (
-        <ol className="divide-y divide-border border-t border-border">
-          {SETUP_STEPS.map((step, i) => (
-            <li key={i} className="flex gap-3 px-3 py-3">
-              <span className="w-5 h-5 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center shrink-0 text-[10px] mt-0.5">
-                {i + 1}
-              </span>
-              <div className="space-y-1">
-                <p className="font-medium text-foreground">{step.title}</p>
-                <p className="text-muted-foreground leading-relaxed">{step.body}</p>
-                {step.mono && (
-                  <p className="font-mono text-muted-foreground/70">{step.mono}</p>
-                )}
-              </div>
-            </li>
-          ))}
-        </ol>
-      )}
     </div>
   )
 }

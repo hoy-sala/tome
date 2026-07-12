@@ -325,7 +325,7 @@
   .book-anim.is-playing .ba-shadow { animation: none !important; }
 }
 
-/* Header logo — gentle lift-and-settle on hover (matches the website). */
+/* Header logo — gentle lift-and-settle on hover. */
 @keyframes logo-bob {
   0%   { transform: translateY(0); }
   45%  { transform: translateY(-5px); }

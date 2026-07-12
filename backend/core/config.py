@@ -17,7 +17,6 @@ class Settings(BaseSettings):
     # incoming_dir: the Bindery — files here await triage before entering the library
     incoming_dir: Path = Path("./bindery")
     port: int = 8080
-    hardcover_token: str | None = None
     # Canonical public origin (env TOME_PUBLIC_URL), e.g. "https://tome.example.org".
     # When set, it is baked verbatim into the KOReader plugin's SERVER_URL — the
     # authoritative way to pin the scheme/host behind a reverse proxy. When unset,
@@ -29,16 +28,6 @@ class Settings(BaseSettings):
     # the shared anonymous pool — fixes 429/quota failures, which hit hardest for
     # non-English (e.g. zh-TW) catalogues that lean on Google as the fallback.
     google_books_key: str | None = None
-
-    # SMTP (send-to-device)
-    smtp_host: str | None = None
-    smtp_port: int = 587
-    smtp_user: str | None = None
-    smtp_password: str | None = None
-    smtp_from: str | None = None
-    smtp_use_tls: bool = True
-    smtp_use_ssl: bool = False
-    smtp_daily_limit: int = 50
 
     # Auto-import settings
     auto_import: bool = False
@@ -52,28 +41,6 @@ class Settings(BaseSettings):
     # on boxes with RAM to spare — each worker adds roughly 60-80 MB. DB writes
     # stay single-process regardless (SQLite is single-writer).
     scan_workers: int = 1
-
-    # Wishlist feature
-    wishlist_enabled: bool = True   # env TOME_WISHLIST_ENABLED — kill switch, defaults on
-    wishlist_max_open_per_user: int = 100  # env TOME_WISHLIST_MAX — soft cap per user
-
-    # Release detection (follow a series → "vol N is out" alerts). Off by
-    # default: it polls Hardcover on a schedule and needs TOME_HARDCOVER_TOKEN.
-    release_detection: bool = False        # env TOME_RELEASE_DETECTION
-    release_check_interval: int = 86400    # env TOME_RELEASE_CHECK_INTERVAL, seconds
-
-    # Hardcover sync (one-way Tome → Hardcover, ratings + reading progress).
-    # Kill switch only: the feature is inert until a user links their PERSONAL
-    # Hardcover API token in Settings (TOME_HARDCOVER_TOKEN above stays
-    # metadata-fetch-only and is never used for sync).
-    hardcover_sync_enabled: bool = True    # env TOME_HARDCOVER_SYNC_ENABLED
-    hardcover_sync_interval: int = 1800    # env TOME_HARDCOVER_SYNC_INTERVAL, seconds between reconcile cycles
-
-    # Send-to-KOReader inbox (env TOME_SEND_TO_KOREADER). On by default since
-    # v1.7.0 ("Signature") after real-hardware validation; the web UI queues a
-    # book to be pulled onto KOReader by the TomeSync plugin's inbox (no
-    # email/Amazon). Set to false to disable — the flag remains the kill switch.
-    send_to_koreader: bool = True
 
     # JWT settings
     jwt_algorithm: str = "HS256"
@@ -111,14 +78,6 @@ class Settings(BaseSettings):
             and self.oidc_client_id
             and self.oidc_client_secret
         )
-
-    @property
-    def smtp_configured(self) -> bool:
-        return bool(self.smtp_host and self.smtp_user and self.smtp_password)
-
-    @property
-    def smtp_from_address(self) -> str:
-        return self.smtp_from or self.smtp_user or ""
 
     @property
     def db_path(self) -> Path:

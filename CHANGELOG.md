@@ -946,7 +946,7 @@ All notable changes to Tome are documented here. Format loosely follows
   books arrive the next time KOReader checks in. Per-user — every connected
   KOReader shares one inbox. Off by default; enable with
   `TOME_SEND_TO_KOREADER=true`. See the
-  [KOReader docs](https://tome.bndct.sh/docs/koreader#send-to-koreader).
+  [KOReader docs](docs/koreader.md#send-to-koreader).
 - **Download a single book from KOReader.** The TomeSync plugin's series browser
   now drills into a per-volume list when you tap a series — pick one title to
   download on its own, or use the "Download all" row for the whole series as

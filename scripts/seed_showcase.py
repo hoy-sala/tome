@@ -55,15 +55,12 @@ from backend.models.user import User  # noqa: E402
 from backend.models.book import Book, BookFile, BookTag  # noqa: E402
 from backend.models.library import BookType, Library, SavedFilter  # noqa: E402
 from backend.models.user_book_status import UserBookStatus  # noqa: E402
-from backend.models.tome_sync import ReadingSession, TomeSyncPosition  # noqa: E402
-from backend.models.series_meta import Arc, SeriesMeta  # noqa: E402
+from backend.models.reading import ReadingSession, TomeSyncPosition  # noqa: E402
+from backend.models.series_meta import SeriesMeta  # noqa: E402
 
 # Import remaining models so create_all picks them up
 import backend.models.audit_log  # noqa: E402,F401
-import backend.models.duplicate_dismissal  # noqa: E402,F401
-import backend.models.kosync  # noqa: E402,F401
 import backend.models.opds_pin  # noqa: E402,F401
-import backend.models.quick_connect  # noqa: E402,F401
 import backend.models.api_token  # noqa: E402,F401
 
 
@@ -181,12 +178,6 @@ SERIES_STATUS = {
     "The Good Guys":                 "ongoing",
     "The Bad Guys":                  "ongoing",
 }
-
-# Berserk arcs covering the seeded volumes 1-10
-ARCS = [
-    ("Berserk", "Black Swordsman", 1.0, 3.0, "A scarred mercenary hunts apostles across a plague-ridden land, driven by a branded mark that draws evil spirits nightly."),
-    ("Berserk", "Golden Age",      3.0, 14.0, "Flashback to young Guts joining Griffith's Band of the Hawk, their rise through a hundred-year war, and the catastrophic Eclipse betrayal."),
-]
 
 USER = {
     "username": "benedict",
@@ -577,12 +568,10 @@ def main():
                     type_lib.books.append(book)
         db.commit()
 
-        # 4. Series metadata + arcs
-        print(f"Inserting {len(SERIES_STATUS)} series-meta rows + {len(ARCS)} arcs")
+        # 4. Series metadata
+        print(f"Inserting {len(SERIES_STATUS)} series-meta rows")
         for series_name, status in SERIES_STATUS.items():
             db.add(SeriesMeta(series_name=series_name, status=status))
-        for series_name, name, start, end, desc in ARCS:
-            db.add(Arc(series_name=series_name, name=name, start_index=start, end_index=end, description=desc))
         db.commit()
 
         # 5. Reading sessions, statuses, positions
@@ -613,7 +602,7 @@ def main():
         print(f"  Books:    {db.query(Book).count()}")
         print(f"  Sessions: {db.query(ReadingSession).count()}")
         print(f"  Status:   {db.query(UserBookStatus).count()}  (reading={db.query(UserBookStatus).filter_by(status='reading').count()}, read={db.query(UserBookStatus).filter_by(status='read').count()})")
-        print(f"  Series:   {db.query(SeriesMeta).count()}  Arcs: {db.query(Arc).count()}")
+        print(f"  Series:   {db.query(SeriesMeta).count()}")
         print(f"  Shelves:  {db.query(SavedFilter).count()}")
         print()
         print(f"Done. DB at {SHOWCASE_DIR/'tome.db'}")

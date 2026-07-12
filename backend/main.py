@@ -17,36 +17,22 @@ from backend.api import users  # noqa: F401
 from backend.api import downloads
 from backend.api import opds
 from backend.api import opds_pins
-from backend.api import kosync
-from backend.api import tome_sync
-from backend.api import stats
-from backend.api import quick_connect
-from backend.api import admin_duplicates
+
 from backend.api import word_count as word_count_api
 from backend.api import home
 from backend.api import bindery
 from backend.api import api_tokens
 from backend.api import series as series_api
-from backend.api import send_to_device
-from backend.api import wishlist as wishlist_api
 from backend.api import notifications as notifications_api
 from backend.api import oidc as oidc_api
-from backend.api import goals as goals_api
 from backend.api import annotations as annotations_api
-from backend.api import hardcover as hardcover_api
-from backend.models.kosync import KOSyncUser, KOSyncProgress, OPDSPendingLink, ReadingHistory  # noqa: F401
 from backend.models.opds_pin import OpdsPin  # noqa: F401
-from backend.models.tome_sync import ApiKey, ReadingSession, TomeSyncPosition  # noqa: F401
+from backend.models.reading import ReadingSession, TomeSyncPosition  # noqa: F401
 from backend.models.user_book_status import UserBookStatus  # noqa: F401
 from backend.models.audit_log import AuditLog  # noqa: F401
-from backend.models.quick_connect import QuickConnectCode  # noqa: F401
-from backend.models.duplicate_dismissal import DuplicateDismissal  # noqa: F401
 from backend.models.api_token import ApiToken  # noqa: F401
-from backend.models.series_meta import Arc, SeriesMeta  # noqa: F401
-from backend.models.user_device import UserDevice  # noqa: F401
-from backend.models.wish import Wish  # noqa: F401
+from backend.models.series_meta import SeriesMeta  # noqa: F401
 from backend.models.notification import Notification  # noqa: F401
-from backend.models.reading_goal import ReadingGoal  # noqa: F401
 from backend.models.book import BookChapter  # noqa: F401
 
 
@@ -163,30 +149,7 @@ async def lifespan(app: FastAPI):
         if qc_cols and "poll_token" not in qc_cols:
             conn.execute(text("ALTER TABLE quick_connect_codes ADD COLUMN poll_token VARCHAR(64)"))
             conn.commit()
-        # Enforce one reading-position row per (user, book). Concurrent device
-        # and web first-writes could previously both INSERT, leaving duplicate
-        # rows that made position reads flap and double-counted stats joins.
-        # Dedupe (keep the freshest) before adding the constraint so it can't
-        # fail on legacy data.
-        tsp_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(tome_sync_positions)")).fetchall()}
-        if tsp_cols:
-            conn.execute(text("""
-                DELETE FROM tome_sync_positions
-                WHERE id NOT IN (
-                    SELECT keep_id FROM (
-                        SELECT id AS keep_id, ROW_NUMBER() OVER (
-                            PARTITION BY user_id, book_id
-                            ORDER BY updated_at DESC, id DESC
-                        ) AS rn
-                        FROM tome_sync_positions
-                    ) WHERE rn = 1
-                )
-            """))
-            conn.execute(text(
-                "CREATE UNIQUE INDEX IF NOT EXISTS uq_tspos_user_book "
-                "ON tome_sync_positions (user_id, book_id)"
-            ))
-            conn.commit()
+
         # Per-user ratings/reviews on user_book_status (nullable — existing rows stay unrated).
         ubs_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(user_book_status)")).fetchall()}
         if ubs_cols and "rating" not in ubs_cols:
@@ -233,13 +196,6 @@ async def lifespan(app: FastAPI):
         if at_tomb_cols and "server_minted" not in at_tomb_cols:
             conn.execute(text("ALTER TABLE annotation_tombstones ADD COLUMN server_minted BOOLEAN NOT NULL DEFAULT 0"))
             conn.commit()
-        # Release detection stores the tracker's latest volume title + date on
-        # follows (wishes table pre-exists on upgraded installs).
-        wi_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(wishes)")).fetchall()}
-        if wi_cols and "latest_known_title" not in wi_cols:
-            conn.execute(text("ALTER TABLE wishes ADD COLUMN latest_known_title VARCHAR(512)"))
-            conn.execute(text("ALTER TABLE wishes ADD COLUMN latest_release_date VARCHAR(10)"))
-            conn.commit()
         # Hardcover sync — per-user credentials (users), book-level match
         # identity (books), and per-user-per-book push state (user_book_status).
         # All nullable, so existing rows are untouched. Note ratings themselves
@@ -274,7 +230,6 @@ async def lifespan(app: FastAPI):
             conn.execute(text("ALTER TABLE user_book_status ADD COLUMN hardcover_error VARCHAR(255)"))
             conn.execute(text("ALTER TABLE user_book_status ADD COLUMN hardcover_fail_count INTEGER NOT NULL DEFAULT 0"))
             conn.commit()
-    ReadingGoal.__table__.create(bind=engine, checkfirst=True)
     init_fts(engine)
     backfill_fts(engine)
     settings.ensure_dirs()
@@ -296,35 +251,15 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("Auto-import disabled (set TOME_AUTO_IMPORT=true to enable)")
 
-    # One-shot backfill of KOReader partial-MD5s for pre-existing library
-    # files (new files are hashed at ingest/serve time). No-op once done.
-    import threading
-    from backend.services.ko_hash import backfill_missing_raw_hashes
-    threading.Thread(target=backfill_missing_raw_hashes, daemon=True,
-                     name="ko-hash-backfill").start()
-
-    release_task: asyncio.Task | None = None
-    if settings.release_detection:
-        logger.info("Release detection enabled — checking follows every %d seconds",
-                    settings.release_check_interval)
-        release_task = asyncio.create_task(_release_check_loop())
-
-    # Hardcover sync worker (inert until a user links a personal token).
-    hardcover_task: asyncio.Task | None = None
-    if settings.hardcover_sync_enabled:
-        from backend.services.hardcover_sync import hardcover_sync_loop
-        hardcover_task = asyncio.create_task(hardcover_sync_loop())
-
     yield
 
     # Shutdown: cancel the background tasks cleanly
-    for task in (auto_import_task, release_task, hardcover_task):
-        if task is not None:
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+    if auto_import_task is not None:
+        auto_import_task.cancel()
+        try:
+            await auto_import_task
+        except asyncio.CancelledError:
+            pass
 
 
 async def _auto_import_loop() -> None:
@@ -337,28 +272,6 @@ async def _auto_import_loop() -> None:
             raise
         except Exception:
             logger.exception("Unhandled error in auto-import loop")
-
-
-async def _release_check_loop() -> None:
-    """Background task: poll Hardcover for new volumes of followed series.
-
-    The per-follow due check lives in check_follows (last_checked_at vs the
-    configured interval); this loop just wakes hourly to see if anything is due,
-    so a long interval doesn't need a long sleep to survive restarts.
-    """
-    from backend.core.database import SessionLocal
-    from backend.services.release_detection import check_follows
-    while True:
-        try:
-            await asyncio.sleep(min(3600, settings.release_check_interval))
-            with SessionLocal() as db:
-                result = await check_follows(db)
-            if result.get("notified"):
-                logger.info("Release detection: %s", result)
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logger.exception("Unhandled error in release-check loop")
 
 
 async def _run_auto_import() -> None:
@@ -518,10 +431,6 @@ async def _run_auto_import() -> None:
                     assign_book_to_type_library(db, book, bt)
 
             db.refresh(book)
-
-            # Wishlist matcher — flag open wishes for admin review (no auto-fulfil)
-            from backend.services.wish_matcher import match_on_book_created
-            match_on_book_created(db, book)
 
             audit(
                 db,
@@ -717,22 +626,13 @@ def create_app() -> FastAPI:
     app.include_router(downloads.router, prefix="/api")
     app.include_router(opds.router)  # mounted at /opds, not /api
     app.include_router(opds_pins.router, prefix="/api")
-    app.include_router(kosync.router, prefix="/api")  # mounted at /api/v1/
-    app.include_router(tome_sync.router, prefix="/api")
-    app.include_router(stats.router, prefix="/api")
-    app.include_router(quick_connect.router, prefix="/api")
-    app.include_router(admin_duplicates.router, prefix="/api")
+
     app.include_router(word_count_api.router, prefix="/api")
     app.include_router(bindery.router, prefix="/api/bindery", tags=["bindery"])
     app.include_router(api_tokens.router, prefix="/api")
     app.include_router(series_api.router, prefix="/api")
-    app.include_router(hardcover_api.router, prefix="/api")
-    app.include_router(send_to_device.router, prefix="/api")
-    # Wishlist + notifications — static paths registered before /{id} routes
-    app.include_router(wishlist_api.router, prefix="/api")
     app.include_router(notifications_api.router, prefix="/api")
     app.include_router(oidc_api.router, prefix="/api")
-    app.include_router(goals_api.router, prefix="/api")
     app.include_router(annotations_api.router, prefix="/api")
 
     # Serve frontend static files in production (SPA fallback)

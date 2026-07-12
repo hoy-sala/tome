@@ -11,11 +11,10 @@ from backend.core.database import get_db
 from backend.core.ratings import validate_rating
 from backend.core.security import get_current_user
 from backend.core.permissions import require_role
-from backend.services.hardcover_sync import nudge as hardcover_nudge
 from backend.services.book_progress import upsert_position, clear_position
 from backend.models.user import User, UserPermission
 from backend.models.user_book_status import UserBookStatus
-from backend.models.tome_sync import ReadingSession, TomeSyncPosition
+from backend.models.reading import ReadingSession, TomeSyncPosition
 from backend.services.audit import audit
 
 router = APIRouter()
@@ -101,8 +100,6 @@ def set_book_rating(
         row.review = (body.review or None)
     db.commit()
     db.refresh(row)
-    if rating_changed:
-        hardcover_nudge()
     return _status_out(row)
 
 
@@ -128,7 +125,6 @@ def set_book_status(
         # the user un-finishes the book.
         if body.status == "read" and row.status != "read":
             row.finished_at = datetime.utcnow()
-            hardcover_nudge()
         elif body.status != "read":
             row.finished_at = None
         row.status = body.status
@@ -267,142 +263,6 @@ def _track_web_reading_session(
             db.commit()
 
 
-# ── KOSync progress linking ──────────────────────────────────────────────────
-
-class KOSyncProgressOut(BaseModel):
-    document: str
-    percentage: float
-    device: Optional[str]
-    timestamp: int
-
-
-class KOSyncStatusOut(BaseModel):
-    linked: bool
-    percentage: Optional[float] = None
-    device: Optional[str] = None
-    timestamp: Optional[int] = None
-    unlinked_documents: list[KOSyncProgressOut] = []
-
-
-@router.get("/books/{book_id}/kosync-progress", response_model=KOSyncStatusOut)
-def get_book_kosync_progress(
-    book_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    from backend.models.kosync import KOSyncUser, KOSyncProgress, KOSyncDocumentMap
-
-    kosync_user = db.query(KOSyncUser).filter(KOSyncUser.username == current_user.username).first()
-    if not kosync_user:
-        return KOSyncStatusOut(linked=False)
-
-    # Check if this book is already linked to a document
-    doc_map = db.query(KOSyncDocumentMap).filter(
-        KOSyncDocumentMap.tome_user_id == current_user.id,
-        KOSyncDocumentMap.book_id == book_id,
-    ).first()
-
-    if doc_map:
-        progress = db.query(KOSyncProgress).filter(
-            KOSyncProgress.user_id == kosync_user.id,
-            KOSyncProgress.document == doc_map.document,
-        ).first()
-        if progress:
-            return KOSyncStatusOut(
-                linked=True,
-                percentage=progress.percentage,
-                device=progress.device,
-                timestamp=progress.timestamp,
-            )
-        # Linked but no matching progress — fall through to show unlinked docs
-
-    # Return all unlinked documents (not mapped to any book for this user)
-    all_progress = db.query(KOSyncProgress).filter(
-        KOSyncProgress.user_id == kosync_user.id,
-    ).all()
-
-    mapped_docs = {
-        m.document for m in db.query(KOSyncDocumentMap).filter(
-            KOSyncDocumentMap.tome_user_id == current_user.id,
-        ).all()
-    }
-
-    unlinked = [
-        KOSyncProgressOut(
-            document=p.document,
-            percentage=p.percentage,
-            device=p.device,
-            timestamp=p.timestamp,
-        )
-        for p in all_progress
-        if p.document not in mapped_docs
-    ]
-
-    return KOSyncStatusOut(linked=False, unlinked_documents=unlinked)
-
-
-class LinkKOSyncBody(BaseModel):
-    document: str
-
-
-@router.post("/books/{book_id}/link-kosync", status_code=200)
-def link_kosync_document(
-    book_id: int,
-    body: LinkKOSyncBody,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    from backend.models.book import Book
-    from backend.models.kosync import KOSyncUser, KOSyncProgress, KOSyncDocumentMap
-
-    book = db.get(Book, book_id)
-    if not book:
-        raise HTTPException(404, "Book not found")
-
-    kosync_user = db.query(KOSyncUser).filter(KOSyncUser.username == current_user.username).first()
-    if not kosync_user:
-        raise HTTPException(400, "No KOSync account linked")
-
-    progress = db.query(KOSyncProgress).filter(
-        KOSyncProgress.user_id == kosync_user.id,
-        KOSyncProgress.document == body.document,
-    ).first()
-    if not progress:
-        raise HTTPException(404, "Document not found in sync history")
-
-    # Upsert document map
-    existing = db.query(KOSyncDocumentMap).filter(
-        KOSyncDocumentMap.tome_user_id == current_user.id,
-        KOSyncDocumentMap.document == body.document,
-    ).first()
-    if existing:
-        existing.book_id = book_id
-    else:
-        db.add(KOSyncDocumentMap(
-            tome_user_id=current_user.id,
-            document=body.document,
-            book_id=book_id,
-        ))
-
-    # Update UserBookStatus
-    pct = progress.percentage
-    new_status = "read" if pct >= 0.95 else "reading"
-    ubs = db.query(UserBookStatus).filter_by(user_id=current_user.id, book_id=book_id).first()
-    if ubs:
-        ubs.progress_pct = pct
-        ubs.status = new_status
-    else:
-        db.add(UserBookStatus(
-            user_id=current_user.id,
-            book_id=book_id,
-            status=new_status,
-            progress_pct=pct,
-        ))
-
-    db.commit()
-    return {"ok": True}
-
-
 # ── User management (admin only) ────────────────────────────────────────────
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
@@ -422,7 +282,6 @@ class PermissionsSchema(BaseModel):
     can_approve_bindery: bool = False
     can_view_stats: bool = True
     can_use_opds: bool = True
-    can_use_kosync: bool = True
     can_share: bool = False
     can_bulk_operations: bool = False
 
@@ -696,7 +555,7 @@ def get_sync_status(
 ) -> list:
     require_role(current_user, "admin")
     from backend.models.book import Book
-    from backend.models.tome_sync import TomeSyncPosition
+    from backend.models.reading import TomeSyncPosition
     from sqlalchemy import or_
 
     # Fetch all UserBookStatus rows that are not "unread"
@@ -759,34 +618,6 @@ def get_sync_status(
 
     result.sort(key=lambda x: x["last_synced"] or "", reverse=True)
     return result
-
-
-@router.delete("/admin/sync-status/{user_id}/{book_id}", status_code=204)
-def delete_sync_record(
-    user_id: int,
-    book_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    require_role(current_user, "admin")
-    from backend.models.tome_sync import TomeSyncPosition, ReadingSession
-
-    tsp = db.query(TomeSyncPosition).filter(
-        TomeSyncPosition.user_id == user_id, TomeSyncPosition.book_id == book_id
-    ).first()
-    if tsp:
-        db.query(ReadingSession).filter(
-            ReadingSession.user_id == user_id, ReadingSession.book_id == book_id
-        ).delete()
-        db.delete(tsp)
-
-    ubs = db.query(UserBookStatus).filter(
-        UserBookStatus.user_id == user_id, UserBookStatus.book_id == book_id
-    ).first()
-    if ubs:
-        db.delete(ubs)
-
-    db.commit()
 
 
 @router.get("/admin/audit-logs")

@@ -30,7 +30,7 @@ from backend.core.database import get_db
 from backend.core.security import get_current_user
 from backend.core.permissions import book_visibility_filter, user_can_see_book
 from backend.models.book import Book
-from backend.models.tome_sync import Annotation, AnnotationTombstone
+from backend.models.reading import Annotation, AnnotationTombstone
 from backend.models.user import User
 
 router = APIRouter(tags=["annotations"])

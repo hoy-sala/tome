@@ -10,8 +10,6 @@ build/
 
 # Data (never commit your library or DB)
 data/
-# …but the website's committed data dir (benchmark report snapshots) is not runtime data.
-!website/src/data/
 books/
 bindery/
 # Top-level ebook library only — docs/seed/library/ is the showcase seed and IS committed.

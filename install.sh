@@ -2,7 +2,7 @@
 #
 # Tome easy installer - gets Tome running via Docker with zero Docker knowledge.
 #
-#   curl -fsSL https://tome.bndct.sh/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/bndct-devops/tome/main/scripts/install.sh | bash
 #
 # What it does:
 #   1. Checks Docker is installed and running (with friendly help if not).

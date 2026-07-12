@@ -58,7 +58,6 @@ def setup(body: SetupRequest, db: Session = Depends(get_db)):
         can_approve_bindery=True,
         can_view_stats=True,
         can_use_opds=True,
-        can_use_kosync=True,
         can_share=True,
         can_bulk_operations=True,
     )
@@ -150,93 +149,6 @@ def change_password(
     return Response(status_code=204)
 
 
-@router.get("/me/kosync")
-def my_kosync_status(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Latest KOReader sync info for the current user, considering both
-    TomeSync (in-house plugin) and legacy KOSync clients.
-    """
-    from datetime import datetime
-    from backend.models.kosync import KOSyncUser, KOSyncProgress
-    from backend.models.tome_sync import ReadingSession, TomeSyncPosition
-
-    # TomeSync side: most recent non-web reading session = last KOReader push
-    ts_latest = (
-        db.query(ReadingSession)
-        .filter(ReadingSession.user_id == current_user.id)
-        .filter((ReadingSession.device != "web") | (ReadingSession.device.is_(None)))
-        .order_by(ReadingSession.started_at.desc())
-        .first()
-    )
-    ts_count = (
-        db.query(TomeSyncPosition)
-        .filter(TomeSyncPosition.user_id == current_user.id)
-        .count()
-    )
-
-    # Legacy KOSync side
-    kosync_latest = None
-    kosync_count = 0
-    kosync_user = db.query(KOSyncUser).filter(KOSyncUser.username == current_user.username).first()
-    if kosync_user:
-        kosync_latest = (
-            db.query(KOSyncProgress)
-            .filter(KOSyncProgress.user_id == kosync_user.id)
-            .order_by(KOSyncProgress.timestamp.desc())
-            .first()
-        )
-        kosync_count = db.query(KOSyncProgress).filter(KOSyncProgress.user_id == kosync_user.id).count()
-
-    # TomeSync is the primary source; legacy KOSync is supported but secondary,
-    # so TomeSync wins outright whenever it has any history and KOSync is used
-    # only as a fallback. (This also sidesteps a type clash: ReadingSession
-    # timestamps are datetimes while KOSyncProgress.timestamp is an int epoch —
-    # comparing the two raised TypeError and 500'd the endpoint.)
-    if ts_latest:
-        last_sync, last_device = ts_latest.started_at, ts_latest.device
-    elif kosync_latest:
-        # Normalise the int epoch to a naive UTC datetime so the ISO output below
-        # is uniform with the TomeSync path.
-        last_sync = datetime.utcfromtimestamp(kosync_latest.timestamp)
-        last_device = kosync_latest.device
-    else:
-        return {"linked": False}
-    return {
-        "linked": True,
-        "synced_documents": max(ts_count, kosync_count),
-        # Explicit UTC marker — naive ISO strings get parsed as local time
-        # by JS, which would offset the relative-time display by the local TZ.
-        "last_sync": last_sync.isoformat() + "Z" if last_sync else None,
-        "last_device": last_device,
-    }
-
-
-@router.post("/me/kosync", status_code=201)
-def register_kosync(
-    body: dict,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Register or re-link a KOSync user from the web UI."""
-    import hashlib
-    from backend.models.kosync import KOSyncUser
-    password = str(body.get("password", "")).strip()
-    if not password:
-        raise HTTPException(status_code=400, detail="Password required")
-    userkey = hashlib.md5(password.encode()).hexdigest()
-
-    existing = db.query(KOSyncUser).filter(KOSyncUser.username == current_user.username).first()
-    if existing:
-        existing.userkey = userkey
-        existing.user_id = current_user.id
-    else:
-        db.add(KOSyncUser(username=current_user.username, userkey=userkey, user_id=current_user.id))
-    db.commit()
-    return {"username": current_user.username}
-
-
 @router.get("/me/stats")
 def my_stats(
     db: Session = Depends(get_db),
@@ -265,9 +177,9 @@ def export_my_data(
     """Export all of the current user's data as a JSON download.
 
     Includes: profile, reading status, reading sessions, sync positions,
-    shelves, and legacy KOSync progress/history. Excludes: API tokens,
-    KOReader plugin keys, OPDS PINs, KOSync userkey (anything credential-
-    bearing). Book content itself is not included — Tome only references
+    shelves, and sync positions. Excludes: API tokens,
+    OPDS PINs (anything credential-bearing). Book content itself is not
+    included — Tome only references
     the files on disk.
 
     Each book reference includes title, author, and content_hash so the
@@ -280,14 +192,8 @@ def export_my_data(
     from backend import __version__
     from backend.models.book import Book, BookFile
     from backend.models.user_book_status import UserBookStatus
-    from backend.models.tome_sync import ReadingSession, TomeSyncPosition
+    from backend.models.reading import ReadingSession, TomeSyncPosition
     from backend.models.library import SavedFilter
-    from backend.models.kosync import (
-        KOSyncUser,
-        KOSyncProgress,
-        KOSyncDocumentMap,
-        ReadingHistory,
-    )
 
     # Pre-load book metadata for every book the user has touched, so we can
     # decorate references with title/author/content_hash without N+1.
@@ -334,27 +240,6 @@ def export_my_data(
         db.query(SavedFilter)
         .filter(SavedFilter.owner_id == current_user.id)
         .order_by(SavedFilter.sort_order, SavedFilter.id)
-        .all()
-    )
-
-    # Legacy KOSync (if the user ever linked the upstream KOSync client)
-    kosync_user = (
-        db.query(KOSyncUser).filter(KOSyncUser.username == current_user.username).first()
-    )
-    kosync_progress_rows: list[KOSyncProgress] = []
-    if kosync_user:
-        kosync_progress_rows = (
-            db.query(KOSyncProgress).filter(KOSyncProgress.user_id == kosync_user.id).all()
-        )
-    kosync_doc_map = (
-        db.query(KOSyncDocumentMap)
-        .filter(KOSyncDocumentMap.tome_user_id == current_user.id)
-        .all()
-    )
-    reading_history = (
-        db.query(ReadingHistory)
-        .filter(ReadingHistory.user_id == current_user.id)
-        .order_by(ReadingHistory.synced_at)
         .all()
     )
 
@@ -414,34 +299,6 @@ def export_my_data(
             }
             for sh in shelves
         ],
-        "kosync_legacy": {
-            "linked": kosync_user is not None,
-            "progress": [
-                {
-                    "document": p.document,
-                    "progress": p.progress,
-                    "percentage": p.percentage,
-                    "device": p.device,
-                    "device_id": p.device_id,
-                    "timestamp": p.timestamp,
-                }
-                for p in kosync_progress_rows
-            ],
-            "document_map": [
-                {"document": m.document, **book_ref(m.book_id)}
-                for m in kosync_doc_map
-            ],
-            "history": [
-                {
-                    **book_ref(h.book_id),
-                    "document": h.document,
-                    "percentage": h.percentage,
-                    "device": h.device,
-                    "synced_at": h.synced_at.isoformat() if h.synced_at else None,
-                }
-                for h in reading_history
-            ],
-        },
     }
 
     date_str = _dt.utcnow().strftime("%Y-%m-%d")

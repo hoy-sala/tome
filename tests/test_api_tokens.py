@@ -32,7 +32,6 @@ def _make_member(db: Session, username: str = "member1") -> tuple[User, str]:
         can_download=True,
         can_view_stats=True,
         can_use_opds=True,
-        can_use_kosync=True,
     )
     db.add(perms)
     db.flush()

@@ -1,13 +1,12 @@
-# Run Tome from the published container image. Works on any host
-# (Linux / macOS / Windows) for amd64 and arm64.
+# Build and run Tome from the local repo.
 #
-#   docker compose pull && docker compose up -d
+#   docker compose up -d
 #
 # Customise the volume paths below if your library and data live elsewhere.
 # See docs/examples/ for setups specific to Unraid, etc.
 services:
   tome:
-    image: ghcr.io/bndct-devops/tome:latest
+    build: .
     container_name: tome
     ports:
       - "8080:8080"

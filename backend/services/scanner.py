@@ -23,7 +23,6 @@ from sqlalchemy.orm import Session
 from backend.core.config import settings
 from backend.models.book import Book, BookFile
 from backend.services.metadata import SUPPORTED_FORMATS, extract_metadata, get_format, sha256_file
-from backend.services.ko_hash import ko_partial_md5, record_ko_hash
 from backend.services.organizer import get_library_path, resolve_unique_path
 
 # Below this many new files, the serial path wins (process-pool startup isn't
@@ -255,7 +254,6 @@ def _handle_duplicate(
                 file_size=file_size,
                 content_hash=content_hash,
             ))
-            record_ko_hash(db, existing_book.id, ko_partial_md5(file_path), "raw")
             logger.info("Alternate format %s linked to book %d", fmt, existing_book.id)
         result.skipped += 1
         return True
@@ -315,7 +313,6 @@ def _create_book_entry(
         file_size=file_size,
         content_hash=content_hash,
     ))
-    record_ko_hash(db, book.id, ko_partial_md5(file_path), "raw")
 
     # Auto-assign book type based on metadata
     if not book.book_type_id:
@@ -347,12 +344,6 @@ def _create_book_entry(
     # above, so no extra flush is needed here).
     from backend.services.fts import index_book
     index_book(db, book, tags=genres)
-
-    # Wishlist matcher — flag any open wishes that match this new book.
-    # Scan has no admin in the loop, so we never auto-fulfil; we only populate
-    # suggested_book_ids so the admin panel can surface the match.
-    from backend.services.wish_matcher import match_on_book_created
-    match_on_book_created(db, book)
 
     return book
 

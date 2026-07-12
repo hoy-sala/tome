@@ -12,7 +12,6 @@ import { useToast } from '@/contexts/ToastContext'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { MetadataFetchModal } from '@/components/MetadataFetchModal'
 import { CoverPickerModal } from '@/components/CoverPickerModal'
-import { SendButton } from '@/components/SendButton'
 import { BookAnimation } from '@/components/BookAnimation'
 import { StarRating } from '@/components/StarRating'
 import { CoverImage } from '@/components/CoverImage'
@@ -175,7 +174,6 @@ export function BookDetailPage() {
   const [review, setReview] = useState('')       // saved review text
   const [reviewDraft, setReviewDraft] = useState('')  // in-progress edit
   const [editingReview, setEditingReview] = useState(false)
-  const [kosyncDevice, setKosyncDevice] = useState<string | null>(null)
   const [annotations, setAnnotations] = useState<Annotation[]>([])
   const [confirmingHighlight, setConfirmingHighlight] = useState<number | null>(null)
   const [highlightsOpen, setHighlightsOpen] = useState(true)
@@ -259,9 +257,6 @@ export function BookDetailPage() {
     api.get<LibraryType[]>('/libraries').then(setLibraries).catch(() => toast.error('Failed to load libraries'))
     api.get<BookStatus>(`/books/${id}/status`).then(s => { setBookStatus(s.status); setProgressPct(s.progress_pct); setCfi(s.cfi ?? null); setProgressAnimated(false); setRating(s.rating ?? null); setReview(s.review ?? ''); setEditingReview(false) }).catch(() => {})
     api.get<typeof adjacent>(`/books/${id}/adjacent`).then(setAdjacent).catch(() => {})
-    api.get<{ linked: boolean; device?: string }>(`/books/${id}/kosync-progress`)
-      .then(r => { if (r.linked && r.device) setKosyncDevice(r.device) })
-      .catch(() => {})  // KOSync is optional — silent fail is fine
     api.get<Annotation[]>(`/books/${id}/annotations`).then(setAnnotations).catch(() => {})
     api.get<ReadingStatsResponse>(`/books/${id}/reading-stats?tz_offset=${new Date().getTimezoneOffset()}`).then(setReadingStats).catch(() => {})
   }, [id])
@@ -518,20 +513,12 @@ export function BookDetailPage() {
     </div>
   ) : null
 
-  const sendToDeviceButton = isMember(user) && book.files.length > 0 ? (
-    <SendButton
-      books={[{ id: book.id, title: book.title, files: book.files }]}
-      variant="rail"
-    />
-  ) : null
-
-  // Left rail actions: cover + Read + Download + Send
+  // Left rail actions: cover + Read + Download
   const leftRailActions = (
     <>
       {coverBlock}
       {readButton}
       {downloadButtons}
-      {sendToDeviceButton}
     </>
   )
 
@@ -671,16 +658,7 @@ export function BookDetailPage() {
           </div>
           <span className="text-xs text-muted-foreground tabular-nums shrink-0">
             {Math.round(progressPct * 100)}%
-            {book?.hardcover_pages != null && book.hardcover_pages > 0 && (
-              // Print-edition pagination (from the matched Hardcover edition) —
-              // font-size agnostic, unlike the device's reflowed page count.
-              <span className="ml-1 opacity-60">
-                · p. {Math.max(1, Math.round(progressPct * book.hardcover_pages))} of {book.hardcover_pages}
-              </span>
-            )}
-            {kosyncDevice && (
-              <span className="ml-1 opacity-60">· {kosyncDevice}</span>
-            )}
+
           </span>
         </div>
       )}
@@ -770,14 +748,10 @@ export function BookDetailPage() {
             )}
           </div>
         ) : (
-          // No history yet — the manual-tracking entry point (paper / un-synced device).
           <div className="rounded-xl border border-border bg-card px-5 py-4">
             <p className="text-sm text-muted-foreground">
-              No reading logged yet. Track time by hand — handy for a paper copy or a device that isn&apos;t synced.
+              No reading logged yet.
             </p>
-            <div className="mt-3">
-              <ManualLogControls bookId={Number(id)} onChange={refreshStats} />
-            </div>
           </div>
         )
       )}
@@ -863,22 +837,6 @@ export function BookDetailPage() {
         <MetaField icon={<AlignLeft className="w-3.5 h-3.5" />} label="Words"
           value={book.word_count != null ? `${book.word_count.toLocaleString()} words` : ''}
           editing={false} onChange={() => {}} />
-        {/* Hardcover match — only when the sync matcher has linked this book */}
-        {!editing && book.hardcover_slug && (
-          <div className="flex items-start gap-2">
-            <span className="text-muted-foreground mt-0.5 shrink-0"><BookMarked className="w-3.5 h-3.5" /></span>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-muted-foreground/70 mb-0.5">Hardcover</p>
-              <a
-                href={`https://hardcover.app/books/${book.hardcover_slug}`}
-                target="_blank" rel="noopener noreferrer"
-                className="text-sm text-primary hover:underline truncate block"
-              >
-                {book.hardcover_slug}
-              </a>
-            </div>
-          </div>
-        )}
         {/* Book Type */}
         <div className="flex items-start gap-2">
           <span className="text-muted-foreground mt-0.5 shrink-0"><TagIcon className="w-3.5 h-3.5" /></span>
@@ -1575,118 +1533,6 @@ function ChapterLineChart({ chapters }: { chapters: ChapterTime[] }) {
 
 // ── Hero layout: large time-read headline + activity chart, bottom-pinned date/span stats ─────
 
-// Manual reading-log entry point: log a session by hand (paper / un-synced
-// device) and export the log. Used both in the stats hero and on books with no
-// reading history yet, so manual trackers always have a way in.
-function ManualLogControls({ bookId, onChange, exportRows }: {
-  bookId: number
-  onChange: () => void
-  exportRows?: { date: string; seconds: number; pages: number; progress_pct: number | null }[]
-}) {
-  const { toast } = useToast()
-  const [logging, setLogging] = useState(false)
-  const [minutes, setMinutes] = useState('')
-  const [pct, setPct] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  const submitLog = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const mins = parseFloat(minutes)
-    if (!mins || mins <= 0) return
-    setSaving(true)
-    try {
-      const body: { duration_minutes: number; end_progress?: number } = { duration_minutes: mins }
-      if (pct.trim() !== '') {
-        const p = parseFloat(pct)
-        if (!Number.isNaN(p)) body.end_progress = Math.min(Math.max(p / 100, 0), 1)
-      }
-      await api.post(`/books/${bookId}/sessions?tz_offset=${new Date().getTimezoneOffset()}`, body)
-      setMinutes(''); setPct(''); setLogging(false)
-      onChange()
-    } catch (e) {
-      toast.error((e as Error).message ?? 'Failed to log session')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const exportSessions = (fmt: 'csv' | 'json') => {
-    const rows = exportRows ?? []
-    let content: string
-    let mime: string
-    if (fmt === 'csv') {
-      content = 'date,minutes,pages,progress_pct\n' +
-        rows.map(r => `${r.date},${Math.round(r.seconds / 60)},${r.pages},${r.progress_pct ?? ''}`).join('\n')
-      mime = 'text/csv'
-    } else {
-      content = JSON.stringify(rows, null, 2)
-      mime = 'application/json'
-    }
-    const blob = new Blob([content], { type: mime })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `reading-log-${bookId}.${fmt}`
-    a.click()
-    URL.revokeObjectURL(a.href)
-  }
-
-  const canExport = exportRows != null && exportRows.length > 0
-  const chip = 'rounded-md border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors'
-
-  return (
-    <div>
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-        <button
-          type="button"
-          onClick={() => setLogging(o => !o)}
-          className="flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-primary transition-colors"
-        >
-          <Plus className="w-4 h-4" /> Log session
-        </button>
-        {canExport && (
-          <div className="flex items-center gap-1.5">
-            <Download className="w-3.5 h-3.5 text-muted-foreground/50" />
-            <button type="button" onClick={() => exportSessions('csv')} className={chip}>CSV</button>
-            <button type="button" onClick={() => exportSessions('json')} className={chip}>JSON</button>
-          </div>
-        )}
-      </div>
-      {logging && (
-        <form onSubmit={submitLog} className="mt-3 flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground/70">Minutes</span>
-            <input
-              type="number" min="1" step="1" required autoFocus
-              value={minutes} onChange={e => setMinutes(e.target.value)}
-              className="w-24 rounded-md border border-border bg-background px-2 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground/70">Progress % <span className="text-muted-foreground/40">(optional)</span></span>
-            <input
-              type="number" min="0" max="100" step="1"
-              value={pct} onChange={e => setPct(e.target.value)}
-              className="w-28 rounded-md border border-border bg-background px-2 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </label>
-          <button
-            type="submit" disabled={saving || !minutes}
-            className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
-          >
-            {saving ? 'Saving…' : 'Add'}
-          </button>
-          <button
-            type="button" onClick={() => { setLogging(false); setMinutes(''); setPct('') }}
-            className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          >
-            Cancel
-          </button>
-        </form>
-      )}
-    </div>
-  )
-}
-
 // A small "i" that explains a chart on hover or tap. Tap-toggle so it works on
 // touch (native title tooltips don't). Reserved for the non-obvious charts.
 function InfoHint({ text }: { text: string }) {
@@ -1836,10 +1682,7 @@ function StatsLayoutHero({ own, aggregate, bookId, onChange }: StatsLayoutProps)
           All readers: {formatDuration(aggregate.total_seconds)} · {aggregate.total_sessions} reading day{aggregate.total_sessions !== 1 ? 's' : ''} · {aggregate.distinct_readers} reader{aggregate.distinct_readers !== 1 ? 's' : ''}
         </p>
       )}
-      {/* Log a session by hand · export the log */}
-      <div className="mt-4 pt-3 border-t border-border/60">
-        <ManualLogControls bookId={bookId} onChange={onChange} exportRows={own.session_timeline} />
-      </div>
+
     </div>
   )
 }

@@ -3,9 +3,9 @@ import { useSearchParams, useLocation, useNavigate, Link } from 'react-router-do
 import * as LucideIcons from 'lucide-react'
 import {
   BookOpen, Plus, Pencil, Trash2,
-  ChevronLeft, ChevronRight, Bookmark, Library as LibraryIcon, Layers, Home, BarChart3,
+  ChevronLeft, ChevronRight, Bookmark, Library as LibraryIcon, Layers, Home,
   Settings, Shield, LogOut, ChevronsUpDown, Lock, X, BookPlus, ExternalLink,
-  Sun, Moon, MoonStar, Flame, Coffee, Check, Sparkles, Users, Quote, BookMarked,
+  Sun, Moon, MoonStar, Flame, Coffee, Check, Users, Quote,
   type LucideIcon,
 } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -15,7 +15,6 @@ import { EntityModal } from '@/components/EntityModal'
 import { TomeMark } from '@/components/TomeMark'
 import { useAuth, isAdmin, isMember } from '@/contexts/AuthContext'
 import { applyTheme, getStoredTheme, type ThemeId } from '@/lib/theme'
-import { DOCS, docsLink } from '@/lib/docs'
 
 const SIDEBAR_KEY = 'tome_sidebar'
 
@@ -338,19 +337,6 @@ export function Sidebar({ libraries, savedFilters, activeTab, onLibrariesChange,
               <Layers className="w-4 h-4 group-hover:animate-[wiggle_0.4s_ease-in-out]" />
             </button>
             <Link
-              to="/stats"
-              title="Stats"
-              aria-label="Stats"
-              className={cn(
-                'group relative flex items-center justify-center w-9 h-9 rounded-lg transition-all',
-                location.pathname === '/stats'
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-              )}
-            >
-              <BarChart3 className="w-4 h-4 group-hover:animate-[wiggle_0.4s_ease-in-out]" />
-            </Link>
-            <Link
               to="/highlights"
               title="Highlights"
               aria-label="Highlights"
@@ -363,21 +349,6 @@ export function Sidebar({ libraries, savedFilters, activeTab, onLibrariesChange,
             >
               <Quote className="w-4 h-4 group-hover:animate-[wiggle_0.4s_ease-in-out]" />
             </Link>
-            {isMember(user) && (
-              <Link
-                to="/wishlist"
-                title="Wishlist"
-                aria-label="Wishlist"
-                className={cn(
-                  'group relative flex items-center justify-center w-9 h-9 rounded-lg transition-all',
-                  location.pathname === '/wishlist'
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                )}
-              >
-                <Sparkles className="w-4 h-4 group-hover:animate-[wiggle_0.4s_ease-in-out]" />
-              </Link>
-            )}
             {isAdmin(user) && (
               <Link
                 to="/bindery"
@@ -481,18 +452,6 @@ export function Sidebar({ libraries, savedFilters, activeTab, onLibrariesChange,
                 <span className="truncate">Series</span>
               </button>
               <Link
-                to="/stats"
-                className={cn(
-                  'group flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm transition-all touch-feedback',
-                  location.pathname === '/stats'
-                    ? 'bg-primary/10 text-primary font-medium'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                )}
-              >
-                <BarChart3 className="w-4 h-4 shrink-0 group-hover:animate-[wiggle_0.4s_ease-in-out]" />
-                <span className="truncate">Stats</span>
-              </Link>
-              <Link
                 to="/highlights"
                 className={cn(
                   'group flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm transition-all touch-feedback',
@@ -504,34 +463,6 @@ export function Sidebar({ libraries, savedFilters, activeTab, onLibrariesChange,
                 <Quote className="w-4 h-4 shrink-0 group-hover:animate-[wiggle_0.4s_ease-in-out]" />
                 <span className="truncate">Highlights</span>
               </Link>
-              {isMember(user) && (
-                <Link
-                  to="/wishlist"
-                  className={cn(
-                    'group flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm transition-all touch-feedback',
-                    location.pathname === '/wishlist'
-                      ? 'bg-primary/10 text-primary font-medium'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  )}
-                >
-                  <Sparkles className="w-4 h-4 shrink-0 group-hover:animate-[wiggle_0.4s_ease-in-out]" />
-                  <span className="truncate">Wishlist</span>
-                </Link>
-              )}
-              {isMember(user) && (
-                <Link
-                  to="/hardcover"
-                  className={cn(
-                    'group flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm transition-all touch-feedback',
-                    location.pathname === '/hardcover'
-                      ? 'bg-primary/10 text-primary font-medium'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  )}
-                >
-                  <BookMarked className="w-4 h-4 shrink-0 group-hover:animate-[wiggle_0.4s_ease-in-out]" />
-                  <span className="truncate">Hardcover</span>
-                </Link>
-              )}
               {isAdmin(user) && (
                 <Link
                   to="/bindery"
@@ -686,19 +617,6 @@ export function Sidebar({ libraries, savedFilters, activeTab, onLibrariesChange,
                   <span className="truncate">Series</span>
                 </button>
                 <Link
-                  to="/stats"
-                  onClick={onMobileClose}
-                  className={cn(
-                    'group flex items-center gap-2 w-full px-2 py-2.5 rounded-lg text-sm transition-all touch-feedback',
-                    location.pathname === '/stats'
-                      ? 'bg-primary/10 text-primary font-medium'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  )}
-                >
-                  <BarChart3 className="w-5 h-5 shrink-0 group-hover:animate-[wiggle_0.4s_ease-in-out]" />
-                  <span className="truncate">Stats</span>
-                </Link>
-                <Link
                   to="/highlights"
                   onClick={onMobileClose}
                   className={cn(
@@ -711,21 +629,6 @@ export function Sidebar({ libraries, savedFilters, activeTab, onLibrariesChange,
                   <Quote className="w-5 h-5 shrink-0 group-hover:animate-[wiggle_0.4s_ease-in-out]" />
                   <span className="truncate">Highlights</span>
                 </Link>
-                {isMember(user) && (
-                  <Link
-                    to="/wishlist"
-                    onClick={onMobileClose}
-                    className={cn(
-                      'group flex items-center gap-2 w-full px-2 py-2.5 rounded-lg text-sm transition-all touch-feedback',
-                      location.pathname === '/wishlist'
-                        ? 'bg-primary/10 text-primary font-medium'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                    )}
-                  >
-                    <Sparkles className="w-5 h-5 shrink-0 group-hover:animate-[wiggle_0.4s_ease-in-out]" />
-                    <span className="truncate">Wishlist</span>
-                  </Link>
-                )}
                 {isAdmin(user) && (
                   <Link
                     to="/bindery"
@@ -809,14 +712,16 @@ export function Sidebar({ libraries, savedFilters, activeTab, onLibrariesChange,
               {/* Actions */}
               <div className="px-2 pb-3 space-y-0.5">
                 <MobileThemeRow />
-                <Link
-                  to="/settings"
-                  onClick={onMobileClose}
-                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                >
-                  <Settings className="w-5 h-5 shrink-0" />
-                  Settings
-                </Link>
+                {isMember(user) && (
+                  <Link
+                    to="/settings"
+                    onClick={onMobileClose}
+                    className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  >
+                    <Settings className="w-5 h-5 shrink-0" />
+                    Settings
+                  </Link>
+                )}
                 {isAdmin(user) && (
                   <Link
                     to="/admin"
@@ -827,17 +732,6 @@ export function Sidebar({ libraries, savedFilters, activeTab, onLibrariesChange,
                     Admin
                   </Link>
                 )}
-                <a
-                  href={docsLink(DOCS.home)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={onMobileClose}
-                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                >
-                  <BookOpen className="w-5 h-5 shrink-0" />
-                  <span className="flex-1">Docs</span>
-                  <ExternalLink className="w-3.5 h-3.5 shrink-0 opacity-60" />
-                </a>
                 <button
                   onClick={() => { logout(); onMobileClose() }}
                   className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-destructive/80 hover:text-destructive hover:bg-destructive/10 transition-colors"
@@ -946,21 +840,19 @@ function CollapsedUserMenu({ user, logout, onExpand }: { user: { username: strin
       </button>
       {open && (
         <div className="absolute bottom-full left-1 right-1 mb-1 bg-card border border-border rounded-xl shadow-lg shadow-accent-soft py-1.5 z-50 w-40">
-          <Link to="/settings" onClick={() => setOpen(false)} className={menuItem}>
-            <Settings className="w-4 h-4 shrink-0" />
-            Settings
-          </Link>
-          {(user?.is_admin || user?.role === 'admin') && (
+          {isMember(user) && (
+            <Link to="/settings" onClick={() => setOpen(false)} className={menuItem}>
+              <Settings className="w-4 h-4 shrink-0" />
+              Settings
+            </Link>
+          )}
+          {isAdmin(user) && (
             <Link to="/admin" onClick={() => setOpen(false)} className={menuItem}>
               <Shield className="w-4 h-4 shrink-0" />
               Admin
             </Link>
           )}
-          <a href={docsLink(DOCS.home)} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)} className={menuItem}>
-            <BookOpen className="w-4 h-4 shrink-0" />
-            <span className="flex-1">Docs</span>
-            <ExternalLink className="w-3 h-3 shrink-0 opacity-60" />
-          </a>
+
           <div className="my-1 h-px bg-border mx-2" />
           <ThemeMenuItems itemClass={menuItem} />
           <div className="my-1 h-px bg-border mx-2" />
@@ -1012,21 +904,19 @@ function UserMenu({ user, logout, onCollapse }: { user: { username: string; is_a
 
       {open && (
         <div className="absolute bottom-full left-2 right-2 mb-1 bg-card border border-border rounded-xl shadow-lg shadow-accent-soft py-1.5 z-50">
-          <Link to="/settings" onClick={() => setOpen(false)} className={menuItem}>
-            <Settings className="w-4 h-4 shrink-0" />
-            Settings
-          </Link>
-          {(user?.is_admin || user?.role === 'admin') && (
+          {isMember(user) && (
+            <Link to="/settings" onClick={() => setOpen(false)} className={menuItem}>
+              <Settings className="w-4 h-4 shrink-0" />
+              Settings
+            </Link>
+          )}
+          {isAdmin(user) && (
             <Link to="/admin" onClick={() => setOpen(false)} className={menuItem}>
               <Shield className="w-4 h-4 shrink-0" />
               Admin
             </Link>
           )}
-          <a href={docsLink(DOCS.home)} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)} className={menuItem}>
-            <BookOpen className="w-4 h-4 shrink-0" />
-            <span className="flex-1">Docs</span>
-            <ExternalLink className="w-3 h-3 shrink-0 opacity-60" />
-          </a>
+
           <div className="my-1 h-px bg-border mx-2" />
           <ThemeMenuItems itemClass={menuItem} />
           <div className="my-1 h-px bg-border mx-2" />

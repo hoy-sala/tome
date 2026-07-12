@@ -8,8 +8,7 @@ day boundary must never split into two days — or fabricate a re-read.
 """
 from datetime import datetime, timedelta, timezone
 
-from backend.models.ko_stats import PageStat
-from backend.models.tome_sync import ReadingSession
+from backend.models.reading import ReadingSession
 from backend.services.reading_day import (
     date_modifier,
     effective_today,
@@ -34,50 +33,7 @@ def test_helpers_roll_midnight_sessions_back():
     assert epoch_day_int(_epoch(2026, 6, 2, 3), CEST) == epoch_day_int(e, CEST) + 1
 
 
-def test_rereads_ignore_a_session_crossing_utc_midnight(client, db, admin_user, make_book):
-    """A continuous 23:30–00:30 UTC evening read (UTC+2 user) is ONE reading day,
-    so its pages are not re-reads. Under UTC-day bucketing every page dwelled on
-    both sides of midnight counted as revisited."""
-    user, _ = admin_user
-    book = make_book(title="Evening Read")
-    before = _epoch(2026, 6, 1, 23, 30)
-    after = _epoch(2026, 6, 2, 0, 15)
-    for p in range(1, 6):                     # pages 1-5 before midnight...
-        db.add(PageStat(user_id=user.id, book_id=book.id, page=p, total_pages=100,
-                        start_time=before + p, duration_seconds=60, device="Kindle"))
-    for p in range(1, 6):                     # ...and dwelled again just after
-        db.add(PageStat(user_id=user.id, book_id=book.id, page=p, total_pages=100,
-                        start_time=after + p, duration_seconds=60, device="Kindle"))
-    db.flush()
 
-    rr = client.get(f"/api/stats?days=0&tz_offset={CEST}").json()["rereads"]["books"]
-    assert book.id not in {b["book_id"] for b in rr}
-
-    # A genuine revisit ten days later still registers.
-    later = after + 10 * 86_400
-    for p in range(1, 6):
-        db.add(PageStat(user_id=user.id, book_id=book.id, page=p, total_pages=100,
-                        start_time=later + p, duration_seconds=60, device="Kindle"))
-    db.flush()
-    rr = client.get(f"/api/stats?days=0&tz_offset={CEST}").json()["rereads"]["books"]
-    assert book.id in {b["book_id"] for b in rr}
-
-
-def test_per_book_timeline_one_day_across_midnight(client, db, admin_user, make_book):
-    """The per-book reading log buckets a midnight-crossing device read into one
-    reading day (one 'session'), not two."""
-    user, _ = admin_user
-    book = make_book(title="Night Owl Book")
-    for i, ts in enumerate([_epoch(2026, 6, 1, 23, 30), _epoch(2026, 6, 2, 0, 15)]):
-        db.add(PageStat(user_id=user.id, book_id=book.id, page=i + 1, total_pages=100,
-                        start_time=ts, duration_seconds=600, device="Kindle"))
-    db.flush()
-
-    own = client.get(f"/api/books/{book.id}/reading-stats?tz_offset={CEST}").json()["own"]
-    assert own["sessions"] == 1
-    assert len(own["session_timeline"]) == 1
-    assert own["session_timeline"][0]["date"] == "2026-06-01"
-    assert own["session_timeline"][0]["seconds"] == 1200
 
 
 def test_web_session_timeline_uses_reading_day(client, db, admin_user, make_book):
@@ -124,20 +80,4 @@ def test_daily_chart_and_heatmap_agree_with_streak(client, db, admin_user, make_
     assert data["headline"]["current_streak_days"] >= 1
 
 
-def test_dna_rhythm_counts_midnight_read_as_one_active_day(db, admin_user, make_book):
-    """DNA rhythm's active-day set uses reading days: 20 midnight-crossing
-    evening reads are 20 active days, not 40."""
-    from backend.services import reconciled_reading as rr
 
-    user, _ = admin_user
-    book = make_book(title="DNA Book")
-    base = _epoch(2026, 5, 1, 23, 30)
-    for day in range(20):
-        for ts in (base + day * 86_400, base + day * 86_400 + 3_000):  # straddles midnight UTC
-            db.add(PageStat(user_id=user.id, book_id=book.id, page=1, total_pages=100,
-                            start_time=ts, duration_seconds=300, device="Kindle"))
-    db.flush()
-
-    covered = rr.covered_book_ids(db, user.id)
-    days = rr.active_days(db, user.id, date_modifier(CEST), covered)
-    assert len(days) == 20

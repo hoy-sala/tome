@@ -12,7 +12,7 @@ from typing import Optional
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile, File, Form, status
 from backend.services.safe_fetch import fetch_safe_image, UnsafeURLError
-from backend.services.ko_hash import ko_partial_md5, record_ko_hash, record_served_artifact
+
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -1071,13 +1071,8 @@ def get_book_annotations(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Highlights/notes the current user has synced from KOReader for this book.
-
-    KOReader owns annotations and pushes them via the TomeSync plugin; the web's
-    only write is DELETE /api/annotations/{id} (drops the row + tombstones it so the
-    deletion syncs back). Web reader (foliate) inline rendering is a later phase.
-    """
-    from backend.models.tome_sync import Annotation
+    """Highlights/notes the current user has created for this book."""
+    from backend.models.reading import Annotation
 
     book = db.get(Book, book_id)
     if not book or book.status != "active":
@@ -1105,145 +1100,6 @@ def get_book_annotations(
         }
         for a in rows
     ]
-
-
-# ── Per-book reading stats ────────────────────────────────────────────────────
-
-@router.get("/{book_id}/reading-stats")
-def get_book_reading_stats(
-    book_id: int,
-    tz_offset: int = Query(0, description="Client timezone offset in minutes (JS getTimezoneOffset)"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Return the current user's reading statistics for one book.
-
-    Admins additionally receive a library-wide aggregate (all users).
-    """
-    from backend.core.permissions import is_admin as _is_admin
-    from backend.services.reading_stats import (
-        compute_book_reading_stats,
-        compute_book_aggregate_stats,
-        compute_book_chapter_times,
-        compute_book_page_intensity,
-    )
-
-    book = db.get(Book, book_id)
-    if not book or book.status != "active":
-        raise HTTPException(status_code=404, detail="Book not found")
-    if not user_can_see_book(db, current_user, book):
-        raise HTTPException(status_code=404, detail="Book not found")
-
-    own = compute_book_reading_stats(db, user_id=current_user.id, book_id=book_id, tz_offset=tz_offset)
-    aggregate = (
-        compute_book_aggregate_stats(db, book_id=book_id)
-        if _is_admin(current_user)
-        else None
-    )
-    # Per-page intensity from imported KOReader page-stats (None if web-only reading)
-    intensity = compute_book_page_intensity(db, user_id=current_user.id, book_id=book_id, tz_offset=tz_offset)
-    # Time per TOC chapter (None without a chapter map or page-stats)
-    chapters = compute_book_chapter_times(db, user_id=current_user.id, book_id=book_id)
-
-    return {"own": own, "aggregate": aggregate, "intensity": intensity, "chapters": chapters}
-
-
-class ManualSessionIn(PydanticBaseModel):
-    duration_minutes: float
-    end_progress: Optional[float] = None   # 0–1 fraction reached at the end of the session
-    pages: Optional[int] = None
-    started_at: Optional[str] = None       # ISO; defaults to now (UTC)
-
-
-@router.post("/{book_id}/sessions", status_code=201)
-def add_manual_reading_session(
-    book_id: int,
-    payload: ManualSessionIn,
-    tz_offset: int = Query(0, description="Client timezone offset in minutes (JS getTimezoneOffset)"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Log a reading session by hand (``device="manual"``).
-
-    Mirrors the device-session status logic (sticky completion) so a manual
-    entry advances progress/status the same way a synced one would. Returns the
-    refreshed per-book ``own`` stats so the UI can update without a second call.
-    """
-    from datetime import datetime, timedelta, timezone as _timezone
-    import uuid as _uuid
-    from backend.models.tome_sync import ReadingSession
-    from backend.models.user_book_status import UserBookStatus
-    from backend.services.book_progress import apply_progress_to_status
-    from backend.services.reading_stats import compute_book_reading_stats
-
-    book = db.get(Book, book_id)
-    if not book or book.status != "active":
-        raise HTTPException(status_code=404, detail="Book not found")
-    if not user_can_see_book(db, current_user, book):
-        raise HTTPException(status_code=404, detail="Book not found")
-
-    if payload.duration_minutes is None or payload.duration_minutes <= 0:
-        raise HTTPException(status_code=422, detail="duration_minutes must be positive")
-    if payload.duration_minutes > 24 * 60:
-        # Also guards timedelta overflow (a huge value 500'd instead of 422ing).
-        raise HTTPException(status_code=422, detail="duration_minutes must be at most 1440 (24 hours)")
-    if payload.end_progress is not None and not (0.0 <= payload.end_progress <= 1.0):
-        raise HTTPException(status_code=422, detail="end_progress must be between 0 and 1")
-    if payload.pages is not None and payload.pages < 0:
-        raise HTTPException(status_code=422, detail="pages must be zero or positive")
-
-    duration = round(payload.duration_minutes * 60)
-    if payload.started_at:
-        try:
-            started = datetime.fromisoformat(payload.started_at.replace("Z", "+00:00"))
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid started_at")
-        if started.tzinfo is not None:
-            # Convert to UTC — everything else in the DB is UTC-naive. Stripping
-            # the offset would store "23:30+02:00" as 23:30 UTC (2h off).
-            started = started.astimezone(_timezone.utc).replace(tzinfo=None)
-    else:
-        started = datetime.utcnow()
-
-    status_row = (
-        db.query(UserBookStatus)
-        .filter(UserBookStatus.user_id == current_user.id, UserBookStatus.book_id == book_id)
-        .first()
-    )
-    prior = (
-        db.query(ReadingSession)
-        .filter(ReadingSession.user_id == current_user.id, ReadingSession.book_id == book_id)
-        .order_by(ReadingSession.started_at.desc())
-        .first()
-    )
-    progress_start = (
-        prior.progress_end if prior and prior.progress_end is not None
-        else (status_row.progress_pct if status_row else None)
-    )
-
-    db.add(ReadingSession(
-        user_id=current_user.id,
-        book_id=book_id,
-        started_at=started,
-        ended_at=started + timedelta(seconds=duration),
-        duration_seconds=duration,
-        progress_start=progress_start,
-        progress_end=payload.end_progress,
-        pages_turned=payload.pages,
-        device="manual",
-        session_uuid=str(_uuid.uuid4()),
-    ))
-
-    # Shared sticky-completion rule: a manual session advances progress/status
-    # the same way a synced one would, and never un-finishes a "read" book.
-    if payload.end_progress is not None:
-        apply_progress_to_status(
-            db, user_id=current_user.id, book_id=book_id,
-            pct=payload.end_progress, status_row=status_row,
-        )
-
-    db.commit()
-    return {"own": compute_book_reading_stats(db, user_id=current_user.id, book_id=book_id, tz_offset=tz_offset)}
 
 
 # ── Single book ───────────────────────────────────────────────────────────────
@@ -1689,6 +1545,7 @@ def download_book(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    require_role(current_user, "member")
     book_file = (
         db.query(BookFile)
         .filter(BookFile.id == file_id, BookFile.book_id == book_id)
@@ -1705,9 +1562,7 @@ def download_book(
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File no longer on disk")
 
-    from backend.services.metadata_embed import get_baked_path
-    serve_path = get_baked_path(book_file.book, book_file)
-    record_served_artifact(db, book_file.book_id, book_file, serve_path)
+    serve_path = Path(book_file.file_path)
 
     filename = f"{book_file.book.title}.{book_file.format}"
     audit(db, "books.downloaded", user_id=current_user.id, username=current_user.username,
@@ -2013,9 +1868,6 @@ def delete_book(
     audit(db, "books.deleted", user_id=current_user.id, username=current_user.username,
           resource_type="book", resource_id=deleted_id, resource_title=deleted_title)
 
-    from backend.services.metadata_embed import purge_book_cache
-    purge_book_cache(deleted_id)
-
     for fp in file_paths:
         try:
             fp.unlink(missing_ok=True)
@@ -2086,7 +1938,6 @@ def upload_book(
                 file_size=dest.stat().st_size,
                 content_hash=content_hash,
             ))
-            record_ko_hash(db, existing.id, ko_partial_md5(dest), "raw")
         else:
             tmp_path.unlink(missing_ok=True)
         db.commit()
@@ -2143,7 +1994,6 @@ def upload_book(
         file_size=dest.stat().st_size,
         content_hash=content_hash,
     ))
-    record_ko_hash(db, book.id, ko_partial_md5(dest), "raw")
 
     # Create genre tags from embedded metadata (epub dc:subject / CBZ ComicInfo)
     if meta.get("_genres"):
@@ -2169,19 +2019,12 @@ def upload_book(
         if bt:
             assign_book_to_type_library(db, book, bt)
 
-    # Wishlist matcher — find open wishes that match the new book
-    from backend.services.wish_matcher import match_on_book_created
-    matched_wishes = match_on_book_created(db, book)
-
     db.refresh(book)
     audit(db, "books.uploaded", user_id=current_user.id, username=current_user.username,
           resource_type="book", resource_id=book.id, resource_title=book.title,
           details={"format": suffix})
 
-    # Surface matched wish IDs in the response for the admin post-upload prompt
     out = BookDetailOut.model_validate(book)
-    if matched_wishes:
-        out.matched_wish_ids = [w.id for w in matched_wishes]
     return out
 
 
@@ -2364,7 +2207,6 @@ def ingest_book(
         file_size=dest.stat().st_size,
         content_hash=content_hash,
     ))
-    record_ko_hash(db, book.id, ko_partial_md5(dest), "raw")
 
     # Word count + chapter map (EPUB only) — parsed from the ingested file on
     # disk. Fixed-layout formats get an intrinsic page count instead.
@@ -2404,10 +2246,6 @@ def ingest_book(
         if bt:
             assign_book_to_type_library(db, book, bt)
 
-    # Wishlist matcher — find open wishes that match the new book
-    from backend.services.wish_matcher import match_on_book_created
-    matched_wishes = match_on_book_created(db, book)
-
     db.refresh(book)
     audit(
         db,
@@ -2420,10 +2258,7 @@ def ingest_book(
         details={"format": suffix},
     )
 
-    # Surface matched wish IDs in the response for the admin post-upload prompt
     out = BookDetailOut.model_validate(book)
-    if matched_wishes:
-        out.matched_wish_ids = [w.id for w in matched_wishes]
     return out
 
 

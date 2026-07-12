@@ -14,10 +14,7 @@ import { DashboardPage } from '@/pages/DashboardPage'
 import { BookDetailPage } from '@/pages/BookDetailPage'
 import { AdminPage } from '@/pages/AdminPage'
 import { SettingsPage } from '@/pages/SettingsPage'
-import { StatsPage } from '@/pages/StatsPage'
 import { BinderyPage } from '@/pages/BinderyPage'
-import { WishlistPage } from '@/pages/WishlistPage'
-import { HardcoverPage } from '@/pages/HardcoverPage'
 import { HighlightsPage } from '@/pages/HighlightsPage'
 import { api } from '@/lib/api'
 import { applyTheme, getStoredTheme } from '@/lib/theme'
@@ -108,20 +105,11 @@ function AppRoutes() {
         <Route
           path="/settings"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute minRole="member">
               <SettingsPage />
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/stats"
-          element={
-            <ProtectedRoute>
-              <StatsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route path="/stats-lab" element={<Navigate to="/stats" replace />} />
         <Route
           path="/highlights"
           element={
@@ -145,22 +133,6 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <BinderyPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/wishlist"
-          element={
-            <ProtectedRoute>
-              <WishlistPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/hardcover"
-          element={
-            <ProtectedRoute>
-              <HardcoverPage />
             </ProtectedRoute>
           }
         />

@@ -1,7 +1,9 @@
 import { Navigate } from 'react-router-dom'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuth, isMember, isAdmin } from '@/contexts/AuthContext'
 
-export function ProtectedRoute({ children }: { children: React.ReactNode }) {
+type Role = 'member' | 'admin'
+
+export function ProtectedRoute({ children, minRole }: { children: React.ReactNode; minRole?: Role }) {
   const { user, loading } = useAuth()
 
   if (loading) {
@@ -14,6 +16,14 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!user) {
     return <Navigate to="/login" replace />
+  }
+
+  if (minRole === 'admin' && !isAdmin(user)) {
+    return <Navigate to="/" replace />
+  }
+
+  if (minRole === 'member' && !isMember(user)) {
+    return <Navigate to="/" replace />
   }
 
   return <>{children}</>

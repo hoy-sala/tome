@@ -1,81 +1,24 @@
-<p align="center">
-  <img src="docs/screenshots/hero.gif" alt="Tome — browsing the library, reading stats, and KOReader sync in action" />
-</p>
-
 # Tome
 
 [![Build](https://github.com/bndct-devops/tome/actions/workflows/docker.yml/badge.svg)](https://github.com/bndct-devops/tome/actions/workflows/docker.yml)
-[![Release](https://img.shields.io/github/v/release/bndct-devops/tome?include_prereleases&sort=semver)](https://github.com/bndct-devops/tome/releases)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![Container](https://img.shields.io/badge/ghcr.io-bndct--devops%2Ftome-blue?logo=docker)](https://github.com/bndct-devops/tome/pkgs/container/tome)
 
-A self-hosted ebook library server that knows how you read -- not just what you own.
-
-Most library servers stop at file management. Tome connects to your e-reader via a custom [KOReader](https://koreader.rocks) plugin, records every reading session with page-level granularity, syncs positions bidirectionally between device and browser, and turns all of it into stats that get sharper the more you read.
+A self-hosted ebook library server for schools.
 
 Built with FastAPI, React, and SQLite. Ships as a single Docker image.
 
-> **[Documentation](https://tome.bndct.sh/docs)** · **[Why Tome?](https://tome.bndct.sh/why)** · **[Blog](https://tome.bndct.sh/blog)**
+## Features
 
-## Highlights
-
-- **TomeSync** -- custom KOReader plugin records reading sessions, syncs positions bidirectionally (device to web, web to device), and works fully offline. This is what makes Tome different. [Details](docs/koreader-plugin.md)
-- **Reading stats** -- session tracking, streaks, time-of-day heatmaps, reading pace, completion estimates, genre trends, monthly comparisons, and per-book breakdowns -- all powered by real session data from your e-reader
-- **Hardcover sync** -- push your ratings (half-stars included), progress, and finish dates to your [Hardcover](https://hardcover.app) profile. One-way, opt-in, per-user; nothing is ever deleted on Hardcover. If you don't know Hardcover yet: it's the indie, ad-free Goodreads alternative with a public API -- well worth a look even without Tome. [Details](https://tome.bndct.sh/docs/hardcover)
-- **Metadata from 3 sources** -- fetch and compare metadata from [Hardcover](https://hardcover.app), Google Books, and OpenLibrary with a side-by-side diff UI
-- **Built-in reader** -- EPUBs, manga (CBZ/CBR), and PDFs render directly in the browser. Two-page spread, RTL mode, webtoon scroll, pinch-to-zoom on mobile. [Details](docs/reader.md)
-- **Bindery** -- an inbox for incoming books. Drop files in a folder, review pre-filled metadata, accept into your library. Optional auto-import on a schedule. [Details](docs/bindery-deployment.md)
-- **Scribe** -- a Claude Code Skill for conversational batch ingest, metadata refresh, series-wide audits, and series-level annotation (arc breakdowns, publication status). Uses API tokens for auth and talks to Tome over HTTP. [Details](docs/scribe.md)
-- **OPDS feed** -- browse and download from KOReader, Panels, Chunky, or any OPDS client
-- **SSO (OIDC)** -- optional single sign-on against any OpenID Connect provider (Pocket ID, Authelia, Authentik, Keycloak, …) with group-to-role mapping and account linking. Local login always stays. [Details](docs/sso.md)
-- **Themes** -- 3 built-in (light, dark, amber) plus fully custom themes via 10-value hex palette
-
-Plus: series browsing with story arcs and publication status, bulk operations, libraries with icons, shelves (saved filters), Quick Connect (6-char code sign-in), OPDS PINs (e-ink-friendly passwords), role-based access control, per-user book visibility, user-level API tokens, audit logging, and a bulk import script. [Full feature list](docs/features.md)
-
-## How is Tome different?
-
-There are several self-hosted ebook tools — here's where Tome sits.
-
-| | Tome | Calibre-Web | Komga | Kavita |
-|---|---|---|---|---|
-| **Reading session tracking** (time, pace, streaks from your e-reader) | ✅ via TomeSync plugin | ❌ | ❌ | ❌ |
-| **Bidirectional position sync** with KOReader | ✅ | partial (KOSync) | ❌ | partial |
-| **Built-in EPUB + manga reader** | ✅ | ✅ | manga only | ✅ |
-| **Stats / reading insights** | ✅ rich | minimal | minimal | minimal |
-| **Single-binary deploy** | ✅ Docker, FastAPI + SQLite | requires Calibre install | ✅ | ✅ |
-| **Comics & novels in one place** | ✅ | EPUB-focused | comics-focused | ✅ |
-| **Maturity** | v1.0 | mature, dated UI | mature | mature |
-
-Pick **Calibre-Web** if you want the largest ecosystem and don't mind the dated UI. **Komga** if you're comics/manga-only. **Kavita** if you want a featureful all-rounder. **Tome** if reading-session tracking and KOReader integration are what you actually want — that's what it's built around.
-
-![Dashboard](docs/screenshots/dashboard.png)
-*Filter, sort, and browse your library. Bulk select for metadata edits, library assignment, or export.*
-
-![Series Detail](docs/screenshots/series-detail.png)
-*Drill into a series to see every volume, track progress per book, and pick up where you stopped.*
-
-![Book Detail](docs/screenshots/book-detail.png)
-*Full metadata view with cover, description, tags, and one-click reading.*
-
-![Series](docs/screenshots/series.png)
-*All your series at a glance with volume counts and descriptions.*
-
-![Stats](docs/screenshots/stats.png)
-*Reading activity, streaks, session history, and time-of-day patterns.*
-
-![Highlighting in KOReader](docs/screenshots/tomesync-koreader-highlight.png)
-*Highlight and annotate on your e-reader…*
-
-![Highlights in Tome](docs/screenshots/koreader-highlights.png)
-*…and they sync to Tome via the TomeSync plugin — collected per book with the text, your note, and the chapter.*
-
-### Mobile
-
-Tome works as a PWA on mobile. Pin it to your home screen for a native app feel.
-
-| | | | | |
-|---|---|---|---|---|
-| ![Home](docs/screenshots/mobile-home.png) | ![Stats](docs/screenshots/mobile-stats.png) | ![Sidebar](docs/screenshots/mobile-sidebar.png) | ![Series](docs/screenshots/mobile-series.png) | ![Reader](docs/screenshots/mobile-reader.png) |
+- **Built-in reader** -- EPUBs, manga (CBZ/CBR), and PDFs render directly in the browser. Two-page spread, RTL mode, webtoon scroll, pinch-to-zoom on mobile.
+- **Metadata from 3 sources** -- fetch and compare metadata from Hardcover, Google Books, and OpenLibrary with a side-by-side diff UI.
+- **Bindery** -- an inbox for incoming books. Drop files in a folder, review pre-filled metadata, accept into your library. Optional auto-import on a schedule.
+- **Scribe** -- a Claude Code Skill for conversational batch ingest, metadata refresh, and series audits. Uses API tokens for auth and talks to Tome over HTTP.
+- **OPDS feed** -- browse and download from KOReader, Panels, Chunky, or any OPDS client.
+- **SSO (OIDC)** -- optional single sign-on against any OpenID Connect provider with group-to-role mapping and account linking. Local login always stays.
+- **Themes** -- 3 built-in (light, dark, amber) plus fully custom themes via 10-value hex palette.
+- **Role-based access control** -- admin, member, and guest roles with per-user book visibility.
+- **Series browsing** with publication status, bulk operations, libraries with icons, shelves (saved filters), user-level API tokens, and audit logging.
 
 ## Quick Start
 
@@ -86,33 +29,12 @@ docker run -d \
   -p 8080:8080 \
   -v ./data:/data \
   -v ./books:/books \
-  -v ./bindery:/bindery \
   ghcr.io/bndct-devops/tome:latest
 ```
 
 Open `http://localhost:8080` and follow the setup wizard to create your admin account.
 
-Or with Docker Compose -- the canonical `docker-compose.yml` in this repo is portable; clone and `docker compose up -d`. See `docs/examples/` for setups specific to Unraid and similar.
-
-### Try it in 60 seconds
-
-Want to kick the tires before committing it to your homelab? This installer spins Tome up in a fresh `~/Tome` folder on a free port and prints the URL -- all it needs is Docker installed and running:
-
-```bash
-curl -fsSL https://tome.bndct.sh/install.sh | bash
-```
-
-Upload a book, click around, decide if it's for you. It uses a **fresh, empty** `~/Tome/books`, so nothing in your real library is touched. (It's a plain shell script -- read it first with `... | less` if you like.)
-
-Didn't click? Remove every trace -- container, image, and folder:
-
-```bash
-cd ~/Tome && docker compose down             # stop + remove the container
-docker rmi ghcr.io/bndct-devops/tome:latest  # drop the image
-rm -rf ~/Tome                                 # delete data + the test books folder
-```
-
-Did click? **Don't run it on your laptop long-term.** Move `~/Tome` to an always-on box (NAS, mini-PC, that spare Pi) and point the `books` volume at your real library. A sleeping laptop is a poor host for KOReader sync and OPDS -- a box that's always up is where Tome belongs.
+Or with Docker Compose -- clone and `docker compose up -d`.
 
 ### Volumes
 
@@ -131,8 +53,7 @@ Did click? **Don't run it on your laptop long-term.** Move `~/Tome` to an always
 | `TOME_LIBRARY_DIR` | No | `/books` | Library root |
 | `TOME_INCOMING_DIR` | No | `/bindery` | Bindery folder |
 | `TOME_PORT` | No | `8080` | HTTP port |
-| `TOME_PUBLIC_URL` | No | -- | Canonical public origin (e.g. `https://tome.example.org`). Pin this behind a reverse proxy so the KOReader plugin is baked with the correct `https://` URL |
-| `TOME_HARDCOVER_TOKEN` | No | -- | [Hardcover](https://hardcover.app) API token for metadata |
+| `TOME_PUBLIC_URL` | No | -- | Canonical public origin |
 | `TOME_AUTO_IMPORT` | No | `false` | Auto-import files from the bindery on a schedule |
 | `TOME_AUTO_IMPORT_INTERVAL` | No | `300` | Seconds between auto-import scans |
 | `TOME_SCAN_WORKERS` | No | `1` | Parallel scan workers (>1 = multi-process; ~60–80 MB each) |
@@ -161,24 +82,6 @@ Requirements: Python 3.12+, Node.js 18+
 | Frontend | React 19 / Vite / TypeScript |
 | Styling | Tailwind CSS 4 |
 | Auth | JWT (python-jose) |
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for project conventions and PR guidelines.
-
-## Documentation
-
-- [Reader](docs/reader.md) -- EPUB, comic/manga reader, keyboard shortcuts, ComicInfo.xml
-- [KOReader Plugin](docs/koreader-plugin.md) -- TomeSync setup, sync behavior, offline support
-- [Bindery](docs/bindery-deployment.md) -- setting up the incoming book inbox
-- [Scribe](docs/scribe.md) -- Claude Code Skill for batch ingest, metadata refresh, and series audits
-- [Import Script](docs/import.md) -- bulk importing an existing collection from filenames
-- [Features](docs/features.md) -- Quick Connect, OPDS PINs, permissions, themes, API tokens, and more
-
-## Acknowledgements
-
-- [KOReader](https://koreader.rocks) -- the open source e-reader app that Tome's sync plugin and OPDS integration are built for
-- [Hardcover](https://hardcover.app) -- the community-run, ad-free book-tracking platform. Its open GraphQL API powers Tome's metadata fetch, series catalogue, release detection, and profile sync -- go give them your shelf
-- [foliate-js](https://github.com/johnfactotum/foliate-js) -- the EPUB rendering engine powering Tome's built-in reader
-- Substantial portions of Tome were developed in collaboration with [Claude Code](https://claude.ai/code)
 
 ## License
 

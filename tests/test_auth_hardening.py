@@ -1,17 +1,13 @@
-"""Auth hardening: Quick Connect poll capability + KOSync create binding.
+"""Auth hardening: Quick Connect poll capability.
 
 Covers the fixes from the 2026-07-03 auth surface review:
 - Quick Connect: polling requires the poll_token issued at initiate, so the
   6-character display code can no longer be brute-forced into a login JWT.
-- KOSync /users/create (unauthenticated) never binds the new sync credential
-  to an existing Tome account; linking is the authenticated Settings path.
 """
-import hashlib
 from datetime import datetime, timedelta
 
 from starlette.testclient import TestClient
 
-from backend.models.kosync import KOSyncUser
 from backend.models.quick_connect import QuickConnectCode
 
 
@@ -105,41 +101,3 @@ class TestQuickConnectPollToken:
         assert resp.status_code == 410
 
 
-# ---------------------------------------------------------------------------
-# KOSync registration
-# ---------------------------------------------------------------------------
-
-class TestKOSyncCreateBinding:
-    def test_create_does_not_bind_to_existing_tome_account(
-        self, client: TestClient, db, admin_user
-    ):
-        user, _ = admin_user
-        # Attacker registers a KOSync credential under the victim's username.
-        resp = client.post("/api/v1/users/create",
-                           json={"username": user.username, "password": "attacker-md5"})
-        assert resp.status_code == 201
-
-        ks = db.query(KOSyncUser).filter(KOSyncUser.username == user.username).first()
-        assert ks is not None
-        assert ks.user_id is None  # NOT linked to the Tome account
-
-    def test_settings_register_reclaims_squatted_username(
-        self, client: TestClient, db, admin_user
-    ):
-        user, _ = admin_user
-        client.post("/api/v1/users/create",
-                    json={"username": user.username, "password": "attacker-md5"})
-
-        # The real user links from Settings (authenticated): the credential is
-        # re-keyed to their password and bound to their account.
-        resp = client.post("/api/auth/me/kosync", json={"password": "devicepass"})
-        assert resp.status_code == 201
-
-        ks = db.query(KOSyncUser).filter(KOSyncUser.username == user.username).first()
-        assert ks.user_id == user.id
-        assert ks.userkey == hashlib.md5(b"devicepass").hexdigest()
-
-    def test_duplicate_create_still_402(self, client: TestClient):
-        client.post("/api/v1/users/create", json={"username": "reader", "password": "k1"})
-        dup = client.post("/api/v1/users/create", json={"username": "reader", "password": "k2"})
-        assert dup.status_code == 402

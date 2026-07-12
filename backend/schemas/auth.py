@@ -39,7 +39,6 @@ class PermissionsOut(BaseModel):
     can_approve_bindery: bool
     can_view_stats: bool
     can_use_opds: bool
-    can_use_kosync: bool
     can_share: bool
     can_bulk_operations: bool
 

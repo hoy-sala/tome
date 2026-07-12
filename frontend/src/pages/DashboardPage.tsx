@@ -15,19 +15,13 @@ import { BookCard, type ViewMode } from '@/components/BookCard'
 import { SeriesStackCard } from '@/components/SeriesStackCard'
 import { StarRating } from '@/components/StarRating'
 import { SeriesRating } from '@/components/SeriesRating'
-import { SeriesFollowButton } from '@/components/SeriesFollowButton'
-import { UpcomingReleases } from '@/components/UpcomingReleases'
 import { CoverImage } from '@/components/CoverImage'
 import { Sidebar } from '@/components/Sidebar'
 import { SaveFilterButton } from '@/components/SaveFilterButton'
 import { AutocompleteInput } from '@/components/AutocompleteInput'
 import { UploadModal } from '@/components/UploadModal'
 import { ManageSeriesModal } from '@/components/ManageSeriesModal'
-import { SendButton } from '@/components/SendButton'
 import { BookAnimation } from '@/components/BookAnimation'
-import { HomeGoalRings } from '@/components/stats/GoalWidget'
-import { ReadingDNACard } from '@/components/stats/ReadingDNACard'
-import type { ReadingDNA } from '@/components/stats/shared'
 import { FocusMode } from '@/components/home/FocusMode'
 import { api } from '@/lib/api'
 import type { Book, ReadingStatus, Arc, SeriesMeta, SeriesStatus } from '@/lib/books'
@@ -707,7 +701,6 @@ export function DashboardPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [continueReading, setContinueReading] = useState<Book[]>([])
   const [homeStats, setHomeStats] = useState<HomeStats | null>(null)
-  const [readingDna, setReadingDna] = useState<ReadingDNA | null>(null)
   // Home view mode: 'focus' = single-book Focus mode, 'dashboard' = the full grid.
   const [homeMode, setHomeMode] = useState<'focus' | 'dashboard'>(
     () => (localStorage.getItem('tome_home_mode') as 'focus' | 'dashboard') || 'dashboard'
@@ -924,15 +917,6 @@ export function DashboardPage() {
     api.get<HighlightSpotlight>('/annotations/spotlight').then(setSpotlight).catch(() => {})
     api.get<SeriesItem[]>('/books/series').then(setSeriesList).catch(() => {})
   }, [])
-
-  // Reading DNA is the costliest home request — fetch it lazily, only once the
-  // dashboard Home view (the one place the card renders) is actually shown.
-  useEffect(() => {
-    if (tab !== 'home' || homeMode !== 'dashboard' || readingDna) return
-    api.get<ReadingDNA>(`/home/reading-dna?tz_offset=${new Date().getTimezoneOffset()}`)
-      .then(setReadingDna)
-      .catch(() => {})
-  }, [tab, homeMode, readingDna])
 
   // ── Filter chip helpers ───────────────────────────────────────────────────
   const activeFilterChips: { label: string; key: string }[] = [
@@ -1397,9 +1381,6 @@ export function DashboardPage() {
                   goals / no highlights), and a brand-new user would otherwise
                   see a bare bordered box. */}
               <aside className="rounded-2xl bg-muted/40 divide-y divide-border/60 overflow-hidden empty:hidden">
-                {readingDna && <ReadingDNACard dna={readingDna} />}
-                <HomeGoalRings />
-                <UpcomingReleases />
                 {spotlight?.highlight?.highlighted_text && (
                   <section className="p-4">
                     <header className="flex items-center justify-between mb-2.5">
@@ -1576,7 +1557,6 @@ export function DashboardPage() {
                                 Manage
                               </button>
                             )}
-                            <SeriesFollowButton seriesName={seriesDetail.name} />
                           </div>
                         </div>
 
@@ -2045,13 +2025,6 @@ export function DashboardPage() {
                 <Download className="w-3.5 h-3.5" />
                 Download ZIP
               </button>
-              {isMember(user) && (
-                <SendButton
-                  variant="bulk"
-                  disabled={bulkPending || selected.size === 0}
-                  books={books.filter(b => selected.has(b.id)).map(b => ({ id: b.id, title: b.title, files: b.files }))}
-                />
-              )}
               <button
                 onClick={() => { setBulkMetaOpen(true); api.get<Facets>('/books/facets').then(setFacets).catch(() => {}) }}
                 disabled={bulkPending || selected.size === 0}

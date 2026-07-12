@@ -1,11 +1,6 @@
 """Regression tests for book visibility (issue #53).
 
-Before the fix, every admin-uploaded book was visible to all members/guests
-regardless of library membership (`Book.added_by.in_(admin_ids)`), so placing
-an admin's book in a *private* library did not hide it. TomeSync's series
-browser applied no visibility filter at all, leaking the whole catalogue.
-
-The rule now: library membership is the gate. A book in a private library is
+The rule: library membership is the gate. A book in a private library is
 visible only to the owner, its assigned users, and admins. A book in *no*
 library falls back to the legacy shared-collection rule — admin/legacy unfiled
 books stay public; a member's own unfiled upload stays private to them.
@@ -15,7 +10,6 @@ from sqlalchemy.orm import Session
 from backend.core.security import hash_password, create_access_token
 from backend.models.book import Book, BookFile
 from backend.models.library import Library
-from backend.models.tome_sync import ApiKey
 from backend.models.user import User
 
 
@@ -79,12 +73,6 @@ def _series_names(client, token: str) -> set[str]:
     assert r.status_code == 200, r.text
     return {s["name"] for s in r.json()}
 
-
-def _api_key_hdr(db: Session, user_id: int) -> dict:
-    plaintext = ApiKey.generate()
-    db.add(ApiKey(user_id=user_id, key_hash=ApiKey.hash_key(plaintext), label="test"))
-    db.flush()
-    return {"Authorization": f"Bearer {plaintext}"}
 
 
 # ── The core bug: admin book in a private library ───────────────────────────────
@@ -216,45 +204,3 @@ def test_facets_exclude_private_series_and_authors(client, db, admin_user):
     assert "Secret Facet Series" not in r.json()["series"]
 
 
-# ── TomeSync series browser (was completely unfiltered) ─────────────────────────
-
-def test_tomesync_series_browser_excludes_private(client, db, admin_user):
-    admin, _ = admin_user
-    member, _ = _make_user(db, "mem_ts", "member")
-    pub = _make_lib(db, "Pub TS", is_public=True, owner_id=admin.id)
-    priv = _make_lib(db, "Priv TS", is_public=False, owner_id=admin.id)
-    pub_book = _make_book(db, "TS Pub", added_by=admin.id, series="TS Visible", series_index=1)
-    priv_book = _make_book(db, "TS Priv", added_by=admin.id, series="TS Secret", series_index=1)
-    _file_in(db, pub_book, pub)
-    _file_in(db, priv_book, priv)
-
-    hdr = _api_key_hdr(db, member.id)
-    r = client.get("/api/tome-sync/series", headers=hdr)
-    assert r.status_code == 200, r.text
-    names = {s["name"] for s in r.json()}
-    assert "TS Visible" in names
-    assert "TS Secret" not in names
-
-    # Direct series fetch on the private book's id must 404
-    r2 = client.get(f"/api/tome-sync/series/{priv_book.id}", headers=hdr)
-    assert r2.status_code == 404
-
-
-def test_tomesync_series_books_filtered(client, db, admin_user):
-    """Within a visible series, volumes that live only in a private library are
-    excluded from the per-series book list."""
-    admin, _ = admin_user
-    member, _ = _make_user(db, "mem_ts2", "member")
-    pub = _make_lib(db, "Pub TS2", is_public=True, owner_id=admin.id)
-    priv = _make_lib(db, "Priv TS2", is_public=False, owner_id=admin.id)
-    v1 = _make_book(db, "Mixed V1", added_by=admin.id, series="Mixed Series", series_index=1)
-    v2 = _make_book(db, "Mixed V2", added_by=admin.id, series="Mixed Series", series_index=2)
-    _file_in(db, v1, pub)
-    _file_in(db, v2, priv)
-
-    hdr = _api_key_hdr(db, member.id)
-    r = client.get(f"/api/tome-sync/series/{v1.id}", headers=hdr)
-    assert r.status_code == 200, r.text
-    ids = {b["id"] for b in r.json()["books"]}
-    assert v1.id in ids
-    assert v2.id not in ids

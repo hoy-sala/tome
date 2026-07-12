@@ -5,7 +5,7 @@ exercises the aggregate: search, grouping context, on-this-day, and that it only
 returns the caller's own highlights on books they can see.
 """
 from backend.core.security import create_access_token, hash_password
-from backend.models.tome_sync import Annotation
+from backend.models.reading import Annotation
 from backend.models.user import User
 
 

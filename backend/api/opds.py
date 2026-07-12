@@ -394,24 +394,6 @@ def opds_download(
           user_id=user.id, username=user.username,
           resource_type="book", resource_id=book.id, resource_title=book.title)
 
-    # Queue this download so the next unknown KOSync progress push auto-links to this book
-    try:
-        from backend.models.kosync import OPDSPendingLink, KOSyncDocumentMap
-        already_mapped = db.query(KOSyncDocumentMap).filter(
-            KOSyncDocumentMap.tome_user_id == user.id,
-            KOSyncDocumentMap.book_id == book.id,
-        ).first()
-        if not already_mapped:
-            db.add(OPDSPendingLink(user_id=user.id, book_id=book.id))
-            db.commit()
-    except Exception:
-        pass
-
-    from backend.services.metadata_embed import get_baked_path
-    from backend.services.ko_hash import record_served_artifact
-    serve_path = get_baked_path(book, book_file)
-    record_served_artifact(db, book.id, book_file, serve_path)
-
     media_type = FORMAT_MIME.get(book_file.format, "application/octet-stream")
     filename = f"{book.title}.{book_file.format}"
-    return FileResponse(str(serve_path), media_type=media_type, filename=filename)
+    return FileResponse(str(file_path), media_type=media_type, filename=filename)

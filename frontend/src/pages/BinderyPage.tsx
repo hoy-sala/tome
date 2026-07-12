@@ -6,7 +6,6 @@ import {
   Inbox, Zap, Eye, HelpCircle, Library as LibraryIcon,
 } from 'lucide-react'
 import { AppShell } from '@/components/AppShell'
-import { DOCS, docsLink } from '@/lib/docs'
 import { api } from '@/lib/api'
 import { useBookTypes } from '@/lib/bookTypes'
 import { useToast } from '@/contexts/ToastContext'
@@ -1399,15 +1398,7 @@ export function BinderyPage() {
                   ? `${unreviewed.length} imported + ${items.length} incoming`
                   : `${items.length} file${items.length !== 1 ? 's' : ''} waiting for review`}
             </p>
-            <a
-              href={docsLink(DOCS.bindery)}
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Bindery flow explained — open docs"
-              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            >
-              <HelpCircle className="w-3.5 h-3.5" />
-            </a>
+
           </div>
 
           {/* Toolbar — always visible when there are items */}
