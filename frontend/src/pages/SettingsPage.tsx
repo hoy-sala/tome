@@ -112,7 +112,7 @@ export function SettingsPage() {
     setPwError(null)
     setPwSuccess(false)
     if (newPassword !== confirmPassword) { setPwError('Passwords do not match'); return }
-    if (newPassword.length < 8) { setPwError('Password must be at least 8 characters'); return }
+    if (newPassword.length < 6) { setPwError('Password must be at least 6 characters'); return }
     setPwSaving(true)
     try {
       await api.put('/auth/me/password', { current_password: currentPassword, new_password: newPassword })

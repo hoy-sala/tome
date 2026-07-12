@@ -16,7 +16,7 @@ export function ForcePasswordChange() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
-    if (next.length < 8) { setError('Password must be at least 8 characters.'); return }
+    if (next.length < 6) { setError('Password must be at least 6 characters.'); return }
     if (next !== confirm) { setError('Passwords do not match.'); return }
     setSaving(true)
     try {

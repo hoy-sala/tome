@@ -23,12 +23,12 @@ export function SetupPage() {
   }
 
   const passwordsMatch = form.password === form.confirm && form.confirm.length > 0
-  const passwordStrong = form.password.length >= 8
+  const passwordStrong = form.password.length >= 6
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!passwordsMatch) { setError('Passwords do not match'); return }
-    if (!passwordStrong) { setError('Password must be at least 8 characters'); return }
+    if (!passwordStrong) { setError('Password must be at least 6 characters'); return }
 
     setLoading(true)
     setError(null)
@@ -154,7 +154,7 @@ export function SetupPage() {
               {form.password.length > 0 && (
                 <p className={cn('text-xs flex items-center gap-1', passwordStrong ? 'text-success' : 'text-muted-foreground')}>
                   {passwordStrong ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
-                  {passwordStrong ? 'Strong enough' : 'Minimum 8 characters'}
+                  {passwordStrong ? 'Strong enough' : 'Minimum 6 characters'}
                 </p>
               )}
             </div>
