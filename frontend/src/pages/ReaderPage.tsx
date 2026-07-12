@@ -728,8 +728,7 @@ export default function ReaderPage() {
   const [noteDraft, setNoteDraft] = useState<string | null>(null)  // null = not editing
   const [savingAnnotation, setSavingAnnotation] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const initialCfi = useRef<string | null>(null)
-  const readyToSave = useRef(false)
+  // Progress tracking disabled for performance
   // Holds the latest applyStyles so the foliate 'load' listener (registered
   // once at init) always re-applies the CURRENT theme/font on each new
   // chapter, instead of the stale values captured when the book opened.
@@ -745,36 +744,6 @@ export default function ReaderPage() {
   useEffect(() => { localStorage.setItem('reader_pdf_fit', pdfFitMode) }, [pdfFitMode])
   useEffect(() => { localStorage.setItem('reader_pdf_zoom', String(pdfZoom)) }, [pdfZoom])
 
-  // ── Save progress (debounced) ────────────────────────────────────────────────
-  //
-  // Pages are 0-indexed (0..total-1); progress is 1-based so the last page = 100%.
-  // When on the last page, persist status='read' directly instead of relying on
-  // a second call — otherwise the debounced save can overwrite the completion.
-
-  const saveProgress = useCallback((page: number, total: number) => {
-    if (!bookId || total <= 0) return
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    const isLastPage = page >= total - 1
-    const fraction = isLastPage ? 1 : (page + 1) / total
-    saveTimer.current = setTimeout(() => {
-      api.put(`/books/${bookId}/status`, {
-        status: isLastPage ? 'read' : 'reading',
-        progress_pct: fraction,
-        cfi: `comic:${page}`,
-      }).catch(() => {})
-    }, 1500)
-  }, [bookId])
-
-  const handleComicReadComplete = useCallback(() => {
-    if (!bookId || comicTotalPages <= 0) return
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    api.put(`/books/${bookId}/status`, {
-      status: 'read',
-      progress_pct: 1,
-      cfi: `comic:${comicTotalPages - 1}`,
-    }).catch(() => {})
-  }, [bookId, comicTotalPages])
-
   // 1-based progress so the last page (index total-1) reads as 100%.
   const comicPctFor = (page: number, total: number) =>
     total > 0 ? Math.min(100, Math.round(((page + 1) / total) * 100)) : 0
@@ -783,7 +752,6 @@ export default function ReaderPage() {
   useEffect(() => {
     if (!isComic || comicTotalPages === 0) return
     setProgress(comicPctFor(comicCurrentPage, comicTotalPages))
-    saveProgress(comicCurrentPage, comicTotalPages)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comicCurrentPage, comicTotalPages, isComic])
 
@@ -792,37 +760,10 @@ export default function ReaderPage() {
     setProgress(comicPctFor(page, total))
   }, [])
 
-  // ── PDF progress (position stored as `pdf:{page}`) ────────────────────────────
-
-  const savePdfProgress = useCallback((page: number, total: number) => {
-    if (!bookId || total <= 0) return
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    const isLast = page >= total - 1
-    const fraction = isLast ? 1 : (page + 1) / total
-    saveTimer.current = setTimeout(() => {
-      api.put(`/books/${bookId}/status`, {
-        status: isLast ? 'read' : 'reading',
-        progress_pct: fraction,
-        cfi: `pdf:${page}`,
-      }).catch(() => {})
-    }, 1500)
-  }, [bookId])
-
   const handlePdfProgress = useCallback((page: number, total: number) => {
     setPdfCurrentPage(page)
     setProgress(comicPctFor(page, total))
-    savePdfProgress(page, total)
-  }, [savePdfProgress])
-
-  const handlePdfReadComplete = useCallback(() => {
-    if (!bookId || pdfTotalPages <= 0) return
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    api.put(`/books/${bookId}/status`, {
-      status: 'read',
-      progress_pct: 1,
-      cfi: `pdf:${pdfTotalPages - 1}`,
-    }).catch(() => {})
-  }, [bookId, pdfTotalPages])
+  }, [])
 
   // ── Toolbar auto-hide for comic mode ────────────────────────────────────────
 
@@ -863,53 +804,24 @@ export default function ReaderPage() {
       const hasPdf = bookData.files?.some((f: BookFile) => f.format === 'pdf')
 
       if (hasComic) {
-        // Comic path: fetch page count, then stream pages
         setIsComic(true)
-
-        let savedPage = 0
-        let savedProgressPct = 0
-        try {
-          const s = await api.get<{ status: string; progress_pct: number | null; cfi: string | null }>(`/books/${bookId}/status`)
-          savedProgressPct = s.progress_pct ?? 0
-          if (s.cfi?.startsWith('comic:')) {
-            savedPage = parseInt(s.cfi.replace('comic:', ''), 10) || 0
-          }
-          api.put(`/books/${bookId}/status`, { status: 'reading' }).catch(() => {})
-        } catch { /* no saved position */ }
-
         try {
           const pagesData = await api.get<{ total: number; pages: { index: number; filename: string }[] }>(`/books/${bookId}/pages`)
           if (cancelled) return
           setComicTotalPages(pagesData.total)
-          // If we had a fractional progress but no cfi, approximate
-          if (savedPage === 0 && savedProgressPct > 0) {
-            savedPage = Math.floor(savedProgressPct * pagesData.total)
-          }
-          setComicCurrentPage(savedPage)
-          setProgress(comicPctFor(savedPage, pagesData.total))
+          setComicCurrentPage(0)
+          setProgress(comicPctFor(0, pagesData.total))
         } catch (e: unknown) {
           setLoadError(`Failed to load comic pages: ${(e as Error).message}`)
           setLoading(false)
           return
         }
-
         setLoading(false)
         return
       }
 
-      // PDF path: prefer EPUB if both exist (richer reflow), else render the PDF.
       if (hasPdf && !hasEpub) {
         setIsPdf(true)
-        try {
-          const s = await api.get<{ status: string; progress_pct: number | null; cfi: string | null }>(`/books/${bookId}/status`)
-          if (s.cfi?.startsWith('pdf:')) {
-            setPdfInitialPage(parseInt(s.cfi.replace('pdf:', ''), 10) || 0)
-          } else if (s.progress_pct && s.progress_pct > 0) {
-            setPdfInitialFraction(s.progress_pct)
-          }
-        } catch { /* no saved position */ }
-        api.put(`/books/${bookId}/status`, { status: 'reading' }).catch(() => {})
-        // PdfReader loads the document itself; clear the page-level spinner.
         setLoading(false)
         return
       }
@@ -919,19 +831,6 @@ export default function ReaderPage() {
         setLoading(false)
         return
       }
-
-      // EPUB path (unchanged)
-      let savedProgressPct = 0
-      try {
-        const s = await api.get<{ status: string; progress_pct: number | null; cfi: string | null }>(`/books/${bookId}/status`)
-        if (s.cfi) initialCfi.current = s.cfi
-        if (s.progress_pct) {
-          savedProgressPct = s.progress_pct
-          setProgress(Math.round(s.progress_pct * 100))
-        }
-      } catch { /* no saved position */ }
-
-      api.put(`/books/${bookId}/status`, { status: 'reading' }).catch(() => {})
 
       if (!customElements.get('foliate-view')) {
         await new Promise<void>((resolve, reject) => {
@@ -1015,17 +914,8 @@ export default function ReaderPage() {
           cfi?: string
           tocItem?: { label?: string }
         }
-        const pct = Math.round((detail.fraction ?? 0) * 100)
-        setProgress(pct)
+        setProgress(Math.round((detail.fraction ?? 0) * 100))
         if (detail.tocItem?.label) setChapterLabel(detail.tocItem.label.trim())
-
-        if (!readyToSave.current) return
-
-        const fraction = detail.fraction ?? 0
-        if (detail.cfi) saveCfi(detail.cfi, fraction)
-        if (pct >= 95) {
-          api.put(`/books/${bookId}/status`, { status: 'read', progress_pct: 1, cfi: detail.cfi ?? null }).catch(() => {})
-        }
       })
 
       try {
@@ -1038,24 +928,11 @@ export default function ReaderPage() {
 
       if (cancelled) return
 
-      // Show content immediately; position restore runs in background.
       setLoading(false)
-      readyToSave.current = true
 
       annotationsPromise.then(list => {
         if (!cancelled) painter.start(list).catch(() => {})
       })
-
-      try {
-        const cfi = initialCfi.current
-        if (cfi && cfi.startsWith('epubcfi(')) {
-          await view.goTo(cfi)
-        } else if (savedProgressPct > 0) {
-          await view.goToFraction(savedProgressPct)
-        } else {
-          await view.goTo(0)
-        }
-      } catch { /* ignore nav errors */ }
     }
 
     init()
@@ -1083,20 +960,6 @@ export default function ReaderPage() {
     applyStylesRef.current = applyStyles
     if (!isComic) applyStyles()
   }, [applyStyles, isComic])
-
-  // ── Save EPUB position (debounced) ────────────────────────────────────────
-
-  const saveCfi = useCallback((cfi: string, fraction: number) => {
-    if (!bookId) return
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => {
-      api.put(`/books/${bookId}/status`, {
-        status: 'reading',
-        progress_pct: fraction,
-        cfi,
-      }).catch(() => {})
-    }, 1500)
-  }, [bookId])
 
   // ── EPUB navigation ────────────────────────────────────────────────────────
 
@@ -1409,7 +1272,7 @@ export default function ReaderPage() {
               spread={spread}
               theme={theme}
               onPageChange={setComicCurrentPage}
-              onReadComplete={handleComicReadComplete}
+              onReadComplete={() => {}}
             />
           )}
 
@@ -1419,7 +1282,7 @@ export default function ReaderPage() {
               totalPages={comicTotalPages}
               theme={theme}
               onProgress={handleComicProgress}
-              onReadComplete={handleComicReadComplete}
+              onReadComplete={() => {}}
             />
           )}
 
@@ -1626,7 +1489,7 @@ export default function ReaderPage() {
               onDocLoaded={setPdfTotalPages}
               onError={(m) => setLoadError(m)}
               onProgress={handlePdfProgress}
-              onReadComplete={handlePdfReadComplete}
+              onReadComplete={() => {}}
             />
           )}
 
