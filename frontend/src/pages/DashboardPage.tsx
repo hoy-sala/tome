@@ -1794,7 +1794,7 @@ export function DashboardPage() {
             </button>
 
             {/* Select mode toggle — selection operates on individual books, hidden while grouped */}
-            {books.length > 0 && !groupActive && (
+            {isMember(user) && books.length > 0 && !groupActive && (
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => {
@@ -2010,7 +2010,7 @@ export function DashboardPage() {
           )}
 
           {/* ── Bulk action bar ──────────────────────────────────────────── */}
-          {selectionMode && (
+          {isMember(user) && selectionMode && (
             <div className="mb-3 flex items-center gap-2 px-3 py-2 rounded-xl bg-primary/5 border border-primary/20">
               <span className="text-xs font-medium text-primary">{selected.size} selected</span>
               <div className="flex-1" />
