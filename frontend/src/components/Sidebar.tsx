@@ -490,7 +490,7 @@ export function Sidebar({ libraries, savedFilters, activeTab, onLibrariesChange,
             <Section
               title="Libraries"
               icon={<LibraryIcon className="w-3 h-3" />}
-              onAdd={openCreateLibModal}
+              onAdd={user?.permissions?.can_manage_libraries ? openCreateLibModal : undefined}
             >
               {libraries.map(lib => (
                 <SidebarItem
@@ -652,7 +652,7 @@ export function Sidebar({ libraries, savedFilters, activeTab, onLibrariesChange,
               <Section
                 title="Libraries"
                 icon={<LibraryIcon className="w-3 h-3" />}
-                onAdd={openCreateLibModal}
+                onAdd={user?.permissions?.can_manage_libraries ? openCreateLibModal : undefined}
               >
                 {libraries.map(lib => (
                   <SidebarItem
