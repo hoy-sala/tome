@@ -1060,8 +1060,8 @@ export function BookDetailPage() {
               collapses as one. */}
           <div className="flex-1 min-w-0">
             {titleBlock}
-            {statusProgressBlock}
-            {ratingBlock}
+            {isMember(user) && statusProgressBlock}
+            {isMember(user) && ratingBlock}
             {descriptionBlock}
             {metadataGridFull}
             {highlightsBlock}
