@@ -14,7 +14,6 @@ import { useSidebarLists } from '@/lib/sidebarLists'
 import { BookCard, type ViewMode } from '@/components/BookCard'
 import { SeriesStackCard } from '@/components/SeriesStackCard'
 import { StarRating } from '@/components/StarRating'
-import { SeriesRating } from '@/components/SeriesRating'
 import { CoverImage } from '@/components/CoverImage'
 import { Sidebar } from '@/components/Sidebar'
 import { SaveFilterButton } from '@/components/SaveFilterButton'
@@ -1478,10 +1477,6 @@ export function DashboardPage() {
                             {seriesDetail.author && (
                               <p className="text-sm text-muted-foreground mt-0.5">{seriesDetail.author}</p>
                             )}
-                            <SeriesRating
-                              seriesName={seriesDetail.name}
-                              isUnserialized={seriesDetail.name === '__unserialized__'}
-                            />
                             {(() => {
                               const total = seriesDetail.books.length
                               const readCount = seriesDetail.books.filter(b => b.reading_status === 'read').length
