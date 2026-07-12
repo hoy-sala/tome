@@ -5,7 +5,7 @@ import {
   LayoutGrid, List,
   ChevronUp, ChevronDown, SlidersHorizontal, Loader2,
   Library as LibraryIcon, CheckSquare, XSquare, Download, Pencil,
-  Flame, BookCheck, Clock, BookOpenCheck, Play, CheckCheck, Trash2, Settings2, Layers, Star, Quote, Moon, Shuffle,
+  Flame, BookCheck, Clock, BookOpenCheck, Play, Trash2, Settings2, Layers, Star, Quote, Moon, Shuffle,
 } from 'lucide-react'
 import { AppHeader, HeaderSearch } from '@/components/AppHeader'
 import { useAuth, isMember, isAdmin } from '@/contexts/AuthContext'
@@ -286,7 +286,6 @@ export function DashboardPage() {
   const [expandedSeries, setExpandedSeries] = useState<string | null>(null)
   const [seriesDetail, setSeriesDetail] = useState<SeriesDetail | null>(null)
   const [seriesDetailLoading, setSeriesDetailLoading] = useState(false)
-  const [markingAllRead, setMarkingAllRead] = useState(false)
   const [contentType, setContentType] = useState<string>('volume')
   // Series meta (status badges) — keyed by series name
   const [seriesMetaMap, setSeriesMetaMap] = useState<Record<string, SeriesStatus>>({})
@@ -418,24 +417,6 @@ export function DashboardPage() {
         {status}
       </span>
     )
-  }
-
-  async function markAllRead(books: SeriesDetailBook[]) {
-    if (markingAllRead) return
-    setMarkingAllRead(true)
-    try {
-      const unread = books.filter(b => b.reading_status !== 'read')
-      await Promise.all(unread.map(b => api.put(`/books/${b.id}/status`, { status: 'read' })))
-      // Refresh detail
-      if (expandedSeries) {
-        const detail = await api.get<SeriesDetail>(`/books/series-detail?name=${encodeURIComponent(expandedSeries)}`)
-        setSeriesDetail(detail)
-      }
-    } catch {
-      // silent
-    } finally {
-      setMarkingAllRead(false)
-    }
   }
 
   function toggleSort(field: SortField) {
@@ -1531,14 +1512,6 @@ export function DashboardPage() {
                                 </button>
                               )
                             })()}
-                            <button
-                              onClick={() => markAllRead(seriesDetail.books)}
-                              disabled={markingAllRead || seriesDetail.books.every(b => b.reading_status === 'read')}
-                              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-card text-sm font-medium text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                            >
-                              {markingAllRead ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCheck className="w-3.5 h-3.5" />}
-                              Mark all read
-                            </button>
                             {isAdmin(user) && (
                               <button
                                 onClick={() => setManageSeriesOpen(true)}
