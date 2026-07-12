@@ -241,8 +241,8 @@ function StreamingComicReader({
   // (Actually keyboard handling is done in the parent for comic mode too)
 
   const imgStyle: React.CSSProperties = fitMode === 'height'
-    ? { maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }
-    : { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }
+    ? { height: '100%', width: 'auto', objectFit: 'contain' }
+    : { width: '100%', height: 'auto', objectFit: 'contain' }
 
   // Reset zoom and loading state on page change
   useEffect(() => {
@@ -617,7 +617,7 @@ const PdfReader = forwardRef<PdfReaderHandle, PdfReaderProps>(function PdfReader
   return (
     <div
       ref={containerRef}
-      className="flex-1 overflow-y-auto overflow-x-hidden"
+      className="flex-1 overflow-y-auto overflow-x-auto"
       style={{ background: themeColors.bg }}
     >
       {!base && (
