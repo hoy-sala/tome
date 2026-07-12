@@ -867,13 +867,12 @@ export default function ReaderPage() {
         setIsComic(true)
 
         let savedPage = 0
+        let savedProgressPct = 0
         try {
           const s = await api.get<{ status: string; progress_pct: number | null; cfi: string | null }>(`/books/${bookId}/status`)
+          savedProgressPct = s.progress_pct ?? 0
           if (s.cfi?.startsWith('comic:')) {
             savedPage = parseInt(s.cfi.replace('comic:', ''), 10) || 0
-          } else if (s.progress_pct) {
-            // Will refine once we know totalPages
-            savedPage = 0 // will be set below after we know total
           }
           api.put(`/books/${bookId}/status`, { status: 'reading' }).catch(() => {})
         } catch { /* no saved position */ }
@@ -883,13 +882,8 @@ export default function ReaderPage() {
           if (cancelled) return
           setComicTotalPages(pagesData.total)
           // If we had a fractional progress but no cfi, approximate
-          if (savedPage === 0) {
-            try {
-              const s = await api.get<{ status: string; progress_pct: number | null; cfi: string | null }>(`/books/${bookId}/status`)
-              if (s.progress_pct && s.progress_pct > 0 && !s.cfi?.startsWith('comic:')) {
-                savedPage = Math.floor(s.progress_pct * pagesData.total)
-              }
-            } catch { /* ignore */ }
+          if (savedPage === 0 && savedProgressPct > 0) {
+            savedPage = Math.floor(savedProgressPct * pagesData.total)
           }
           setComicCurrentPage(savedPage)
           setProgress(comicPctFor(savedPage, pagesData.total))
@@ -1044,6 +1038,10 @@ export default function ReaderPage() {
 
       if (cancelled) return
 
+      // Show content immediately; position restore runs in background.
+      setLoading(false)
+      readyToSave.current = true
+
       annotationsPromise.then(list => {
         if (!cancelled) painter.start(list).catch(() => {})
       })
@@ -1058,9 +1056,6 @@ export default function ReaderPage() {
           await view.goTo(0)
         }
       } catch { /* ignore nav errors */ }
-
-      readyToSave.current = true
-      setLoading(false)
     }
 
     init()
