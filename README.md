@@ -1,12 +1,10 @@
 # Tome
 
-[![Build](https://github.com/bndct-devops/tome/actions/workflows/docker.yml/badge.svg)](https://github.com/bndct-devops/tome/actions/workflows/docker.yml)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
-[![Container](https://img.shields.io/badge/ghcr.io-bndct--devops%2Ftome-blue?logo=docker)](https://github.com/bndct-devops/tome/pkgs/container/tome)
 
-A self-hosted ebook library server for schools.
+A self-hosted ebook library server — stripped down for personal use.
 
-Built with FastAPI, React, and SQLite. Ships as a single Docker image.
+Built with FastAPI, React, and SQLite.
 
 ## Features
 
@@ -22,19 +20,13 @@ Built with FastAPI, React, and SQLite. Ships as a single Docker image.
 
 ## Quick Start
 
+Clone the repo and run:
+
 ```bash
-docker run -d \
-  --name tome \
-  --restart unless-stopped \
-  -p 8080:8080 \
-  -v ./data:/data \
-  -v ./books:/books \
-  ghcr.io/bndct-devops/tome:latest
+docker compose up -d
 ```
 
 Open `http://localhost:8080` and follow the setup wizard to create your admin account.
-
-Or with Docker Compose -- clone and `docker compose up -d`.
 
 ### Volumes
 
@@ -82,6 +74,12 @@ Requirements: Python 3.12+, Node.js 18+
 | Frontend | React 19 / Vite / TypeScript |
 | Styling | Tailwind CSS 4 |
 | Auth | JWT (python-jose) |
+
+## Acknowledgments
+
+- Forked from [bndct-devops/tome](https://github.com/bndct-devops/tome) — the original project with full features (KOReader sync, reading stats, Hardcover sync, and more). Go check it out if you want the complete experience.
+- [KOReader](https://koreader.rocks) — the open source e-reader app
+- [foliate-js](https://github.com/johnfactotum/foliate-js) — the EPUB rendering engine
 
 ## License
 
