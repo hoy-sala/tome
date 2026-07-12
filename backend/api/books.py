@@ -1757,7 +1757,8 @@ def read_cbz(book_id: int, token: str = Query(...), db: Session = Depends(get_db
 
         file_path = cached
 
-    return FileResponse(str(file_path), media_type="application/x-cbz")
+    return FileResponse(str(file_path), media_type="application/x-cbz",
+        headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
 @router.get("/{book_id}/read.pdf")
@@ -1792,7 +1793,8 @@ def read_pdf(book_id: int, token: str = Query(...), db: Session = Depends(get_db
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found on disk")
 
-    return FileResponse(str(file_path), media_type="application/pdf")
+    return FileResponse(str(file_path), media_type="application/pdf",
+        headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
 @router.get("/{book_id}/read.epub")
@@ -1833,7 +1835,11 @@ def read_epub(
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File no longer on disk")
 
-    return FileResponse(str(file_path), media_type="application/epub+zip")
+    return FileResponse(
+        str(file_path),
+        media_type="application/epub+zip",
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
 
 
 @router.delete("/{book_id}", status_code=status.HTTP_204_NO_CONTENT)
