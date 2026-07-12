@@ -108,7 +108,6 @@ export function BookDetailPage() {
   const isDirty = editing && book != null && JSON.stringify(draft) !== JSON.stringify(book)
   const canEdit = isMember(user)
   const canDelete = isMember(user)
-  const canDownload = user?.permissions?.can_download ?? false
 
   useEffect(() => {
     if (!isDirty) return
@@ -393,7 +392,7 @@ export function BookDetailPage() {
     </button>
   ) : null
 
-  const downloadButtons = book.files.length > 0 && canDownload ? (
+  const downloadButtons = book.files.length > 0 && isMember(user) ? (
     <div className="mt-4 space-y-2">
       {book.files.map(f => (
         <button
