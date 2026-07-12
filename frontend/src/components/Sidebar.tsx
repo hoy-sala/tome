@@ -840,20 +840,23 @@ function CollapsedUserMenu({ user, logout, onExpand }: { user: import('@/context
       </button>
       {open && (
         <div className="absolute bottom-full left-1 right-1 mb-1 bg-card border border-border rounded-xl shadow-lg shadow-accent-soft py-1.5 z-50 w-40">
-          {isMember(user) && (
-            <Link to="/settings" onClick={() => setOpen(false)} className={menuItem}>
-              <Settings className="w-4 h-4 shrink-0" />
-              Settings
-            </Link>
+          {(isMember(user) || isAdmin(user)) && (
+            <>
+              {isMember(user) && (
+                <Link to="/settings" onClick={() => setOpen(false)} className={menuItem}>
+                  <Settings className="w-4 h-4 shrink-0" />
+                  Settings
+                </Link>
+              )}
+              {isAdmin(user) && (
+                <Link to="/admin" onClick={() => setOpen(false)} className={menuItem}>
+                  <Shield className="w-4 h-4 shrink-0" />
+                  Admin
+                </Link>
+              )}
+              <div className="my-1 h-px bg-border mx-2" />
+            </>
           )}
-          {isAdmin(user) && (
-            <Link to="/admin" onClick={() => setOpen(false)} className={menuItem}>
-              <Shield className="w-4 h-4 shrink-0" />
-              Admin
-            </Link>
-          )}
-
-          <div className="my-1 h-px bg-border mx-2" />
           <ThemeMenuItems itemClass={menuItem} />
           <div className="my-1 h-px bg-border mx-2" />
           <button onClick={logout} className={destructive}>
@@ -904,20 +907,23 @@ function UserMenu({ user, logout, onCollapse }: { user: import('@/contexts/AuthC
 
       {open && (
         <div className="absolute bottom-full left-2 right-2 mb-1 bg-card border border-border rounded-xl shadow-lg shadow-accent-soft py-1.5 z-50">
-          {isMember(user) && (
-            <Link to="/settings" onClick={() => setOpen(false)} className={menuItem}>
-              <Settings className="w-4 h-4 shrink-0" />
-              Settings
-            </Link>
+          {(isMember(user) || isAdmin(user)) && (
+            <>
+              {isMember(user) && (
+                <Link to="/settings" onClick={() => setOpen(false)} className={menuItem}>
+                  <Settings className="w-4 h-4 shrink-0" />
+                  Settings
+                </Link>
+              )}
+              {isAdmin(user) && (
+                <Link to="/admin" onClick={() => setOpen(false)} className={menuItem}>
+                  <Shield className="w-4 h-4 shrink-0" />
+                  Admin
+                </Link>
+              )}
+              <div className="my-1 h-px bg-border mx-2" />
+            </>
           )}
-          {isAdmin(user) && (
-            <Link to="/admin" onClick={() => setOpen(false)} className={menuItem}>
-              <Shield className="w-4 h-4 shrink-0" />
-              Admin
-            </Link>
-          )}
-
-          <div className="my-1 h-px bg-border mx-2" />
           <ThemeMenuItems itemClass={menuItem} />
           <div className="my-1 h-px bg-border mx-2" />
           <button onClick={logout} className={destructive}>
