@@ -340,16 +340,13 @@ export function DashboardPage() {
     setSeriesDetail(null)
     setSeriesArcs([])
     setSeriesDescExpanded(false)
-    Promise.all([
-      api.get<SeriesDetail>(`/books/series-detail?name=${encodeURIComponent(seriesName)}`),
-      api.get<Arc[]>(`/series/${encodeURIComponent(seriesName)}/arcs`),
-    ])
-      .then(([detail, arcs]) => {
-        setSeriesDetail(detail)
-        setSeriesArcs(arcs)
-      })
-      .catch(() => {})
+    api.get<SeriesDetail>(`/books/series-detail?name=${encodeURIComponent(seriesName)}`)
+      .then(setSeriesDetail)
+      .catch(() => toast.error('Failed to load series'))
       .finally(() => setSeriesDetailLoading(false))
+    api.get<Arc[]>(`/series/${encodeURIComponent(seriesName)}/arcs`)
+      .then(setSeriesArcs)
+      .catch(() => {})
   }
 
   // Auto-open series detail when navigating via ?tab=series&series_detail=Name
