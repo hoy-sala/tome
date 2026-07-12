@@ -156,11 +156,12 @@ async def lifespan(app: FastAPI):
             conn.commit()
         # Composite index for the re-reads group-by over (user, book, page) —
         # create_all only builds indexes for brand-new tables.
-        conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_ko_page_stats_user_book_page "
-            "ON ko_page_stats (user_id, book_id, page)"
-        ))
-        conn.commit()
+        if "ko_page_stats" in existing:
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_ko_page_stats_user_book_page "
+                "ON ko_page_stats (user_id, book_id, page)"
+            ))
+            conn.commit()
         # Web-created annotations carry an EPUB CFI so the web reader can
         # re-paint them without a text search (annotations table pre-exists).
         an_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(annotations)")).fetchall()}
