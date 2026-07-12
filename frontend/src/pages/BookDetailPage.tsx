@@ -4,7 +4,7 @@ import {
   Camera, Download, Edit2, Save, X,
   Calendar, Globe, Hash, Building2, FileText, Trash2, Loader2,
   Sparkles, Library, Check, BookMarked, ChevronLeft, ChevronRight, Home,
-  Tag as TagIcon, StickyNote, ChevronDown, Archive, AlignLeft
+  Tag as TagIcon, StickyNote, ChevronDown, AlignLeft
 } from 'lucide-react'
 import { useAuth, isMember } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
@@ -12,11 +12,10 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { MetadataFetchModal } from '@/components/MetadataFetchModal'
 import { CoverPickerModal } from '@/components/CoverPickerModal'
 import { BookAnimation } from '@/components/BookAnimation'
-import { StarRating } from '@/components/StarRating'
 import { CoverImage } from '@/components/CoverImage'
 import { AutocompleteInput } from '@/components/AutocompleteInput'
 import { api } from '@/lib/api'
-import type { BookDetail, BookFile, Library as LibraryType, BookStatus, ReadingStatus } from '@/lib/books'
+import type { BookDetail, BookFile, Library as LibraryType } from '@/lib/books'
 import { formatBytes } from '@/lib/books'
 import { useBookTypes } from '@/lib/bookTypes'
 import { cn } from '@/lib/utils'
@@ -82,16 +81,6 @@ export function BookDetailPage() {
   const [libPending, setLibPending] = useState<Set<number>>(new Set())
   // optimistic local library_ids so UI updates instantly
   const [localLibIds, setLocalLibIds] = useState<number[]>([])
-  const [bookStatus, setBookStatus] = useState<ReadingStatus>('unread')
-  const [progressPct, setProgressPct] = useState<number | null>(null)
-  const [cfi, setCfi] = useState<string | null>(null)
-  const [progressAnimated, setProgressAnimated] = useState(false)
-  const [statusSaving, setStatusSaving] = useState(false)
-  const [statusPopKey, setStatusPopKey] = useState(0)
-  const [rating, setRating] = useState<number | null>(null)
-  const [review, setReview] = useState('')       // saved review text
-  const [reviewDraft, setReviewDraft] = useState('')  // in-progress edit
-  const [editingReview, setEditingReview] = useState(false)
   const [annotations, setAnnotations] = useState<Annotation[]>([])
   const [confirmingHighlight, setConfirmingHighlight] = useState<number | null>(null)
   const [highlightsOpen, setHighlightsOpen] = useState(true)
@@ -168,18 +157,9 @@ export function BookDetailPage() {
       .catch(() => setError('Book not found'))
       .finally(() => setLoading(false))
     api.get<LibraryType[]>('/libraries').then(setLibraries).catch(() => toast.error('Failed to load libraries'))
-    api.get<BookStatus>(`/books/${id}/status`).then(s => { setBookStatus(s.status); setProgressPct(s.progress_pct); setCfi(s.cfi ?? null); setProgressAnimated(false); setRating(s.rating ?? null); setReview(s.review ?? ''); setEditingReview(false) }).catch(() => {})
     api.get<typeof adjacent>(`/books/${id}/adjacent`).then(setAdjacent).catch(() => {})
     api.get<Annotation[]>(`/books/${id}/annotations`).then(setAnnotations).catch(() => {})
   }, [id])
-
-  // Animate progress bar from 0 after it loads
-  useEffect(() => {
-    if (progressPct != null && progressPct > 0 && !progressAnimated) {
-      const t = setTimeout(() => setProgressAnimated(true), 100)
-      return () => clearTimeout(t)
-    }
-  }, [progressPct, progressAnimated])
 
   async function toggleLibrary(libId: number) {
     if (!book || libPending.has(libId)) return
@@ -198,76 +178,6 @@ export function BookDetailPage() {
       setLocalLibIds(prev => inLib ? [...prev, libId] : prev.filter(x => x !== libId))
     } finally {
       setLibPending(prev => { const s = new Set(prev); s.delete(libId); return s })
-    }
-  }
-
-  function applyStatus(s: BookStatus) {
-    setBookStatus(s.status)
-    setProgressPct(s.progress_pct)
-    setCfi(s.cfi ?? null)
-    setProgressAnimated(false)
-    setStatusPopKey(k => k + 1)
-  }
-
-  async function restoreStatus(prev: { status: ReadingStatus; progress_pct: number | null; cfi: string | null }) {
-    if (!id) return
-    try {
-      // Send progress + cfi back too, so undoing an "unread" (which clears them) restores your position.
-      const restored = await api.put<BookStatus>(`/books/${id}/status`, prev)
-      applyStatus(restored)
-    } catch {
-      toast.error('Failed to undo')
-    }
-  }
-
-  const STATUS_LABEL: Record<ReadingStatus, string> = {
-    unread: 'Marked unread — reading progress cleared',
-    reading: 'Marked as reading',
-    read: 'Marked as read',
-    shelved: 'Shelved — kept your progress',
-  }
-
-  async function handleStatusChange(s: ReadingStatus) {
-    if (!id || statusSaving || s === bookStatus) return
-    const prev = { status: bookStatus, progress_pct: progressPct, cfi }
-    setStatusSaving(true)
-    try {
-      const updated = await api.put<BookStatus>(`/books/${id}/status`, { status: s })
-      applyStatus(updated)
-      toast.info(STATUS_LABEL[s], { action: { label: 'Undo', onClick: () => restoreStatus(prev) } })
-    } catch {
-      toast.error('Failed to update reading status')
-    } finally {
-      setStatusSaving(false)
-    }
-  }
-
-  async function saveRating(next: number | null) {
-    if (!id) return
-    const prev = rating
-    setRating(next)                  // optimistic
-    try {
-      await api.put<BookStatus>(`/books/${id}/rating`, { rating: next })
-    } catch {
-      setRating(prev)
-      toast.error('Failed to save rating')
-    }
-  }
-
-  function startEditingReview() {
-    setReviewDraft(review)
-    setEditingReview(true)
-  }
-
-  async function saveReview() {
-    if (!id) return
-    const next = reviewDraft.trim()
-    setReview(next)                  // optimistic — collapse to rendered view
-    setEditingReview(false)
-    try {
-      await api.put<BookStatus>(`/books/${id}/rating`, { review: next || null })
-    } catch {
-      toast.error('Failed to save review')
     }
   }
 
@@ -516,110 +426,6 @@ export function BookDetailPage() {
         </div>
       )}
     </>
-  )
-
-  // Status + progress bar
-  const statusProgressBlock = (
-    <div className="mt-4 mb-4 flex items-center flex-wrap gap-1.5">
-      {(['unread', 'reading', 'read'] as ReadingStatus[]).map(s => (
-        <button
-          key={bookStatus === s ? `${s}-${statusPopKey}` : s}
-          disabled={statusSaving}
-          onClick={() => handleStatusChange(s)}
-          className={cn(
-            'px-2.5 py-1 rounded-md text-xs font-medium border transition-all capitalize',
-            bookStatus === s
-              ? s === 'reading'
-                ? 'bg-warning/10 border-warning text-warning animate-[pop_0.2s_ease-out]'
-                : s === 'read'
-                  ? 'bg-success/10 border-success text-success animate-[pop_0.2s_ease-out]'
-                  : 'bg-muted border-border text-foreground animate-[pop_0.2s_ease-out]'
-              : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
-          )}
-        >
-          {s}
-        </button>
-      ))}
-      {/* Shelved — set apart from the linear unread→reading→read progression.
-          Keeps your reading position; just removes the book from Continue
-          Reading, series progress, and stats until you pick it back up. */}
-      <span className="mx-1 h-4 w-px bg-border self-center" aria-hidden />
-      <button
-        key={bookStatus === 'shelved' ? `shelved-${statusPopKey}` : 'shelved'}
-        disabled={statusSaving}
-        onClick={() => handleStatusChange('shelved')}
-        title="Shelved — set aside, keeps your progress"
-        className={cn(
-          'px-2.5 py-1 rounded-md text-xs font-medium border transition-all inline-flex items-center gap-1.5',
-          bookStatus === 'shelved'
-            ? 'bg-muted border-foreground/30 text-foreground animate-[pop_0.2s_ease-out]'
-            : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
-        )}
-      >
-        <Archive className="w-3.5 h-3.5" />
-        Shelved
-      </button>
-      {statusSaving && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground self-center" />}
-      {progressPct != null && progressPct > 0 && bookStatus !== 'unread' && (
-        <div className="flex items-center gap-2 w-full mt-1.5">
-          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary rounded-full transition-all duration-700 ease-out"
-              style={{ width: progressAnimated ? `${Math.round(progressPct * 100)}%` : '0%' }}
-            />
-          </div>
-          <span className="text-xs text-muted-foreground tabular-nums shrink-0">
-            {Math.round(progressPct * 100)}%
-
-          </span>
-        </div>
-      )}
-    </div>
-  )
-
-  // Your rating + optional review
-  const ratingBlock = (
-    <div className="mb-5">
-      <div className="flex items-center gap-2.5">
-        <StarRating value={rating} onChange={saveRating} />
-        <span className="text-xs text-muted-foreground">
-          {rating ? `You rated this ${rating}/5` : 'Rate this book'}
-        </span>
-        {!review && !editingReview && (
-          <button
-            type="button"
-            onClick={startEditingReview}
-            className="text-xs text-primary hover:underline"
-          >
-            Add a review
-          </button>
-        )}
-      </div>
-      {editingReview ? (
-        <textarea
-          value={reviewDraft}
-          onChange={e => setReviewDraft(e.target.value)}
-          onBlur={saveReview}
-          autoFocus
-          rows={3}
-          placeholder="What did you think? (optional, saved automatically)"
-          className="mt-2 w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none"
-        />
-      ) : review ? (
-        <div className="group/review relative mt-2.5 border-l-2 border-primary/30 pl-3">
-          <p className="whitespace-pre-wrap pr-7 text-sm leading-relaxed text-foreground/90">{review}</p>
-          <button
-            type="button"
-            onClick={startEditingReview}
-            aria-label="Edit review"
-            title="Edit review"
-            className="absolute right-0 top-0 p-1 text-muted-foreground/50 transition-colors hover:text-foreground"
-          >
-            <Edit2 className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      ) : null}
-    </div>
   )
 
   // Genres block for the left sidebar (variant 1)
@@ -1060,8 +866,6 @@ export function BookDetailPage() {
               collapses as one. */}
           <div className="flex-1 min-w-0">
             {titleBlock}
-            {isMember(user) && statusProgressBlock}
-            {isMember(user) && ratingBlock}
             {descriptionBlock}
             {metadataGridFull}
             {highlightsBlock}
