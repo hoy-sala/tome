@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import {
   ArrowLeft, Eye, EyeOff, Download, Check, RefreshCw, Loader2,
   Copy, Trash2, Plus, Key, Smartphone, CheckCircle, Info, X, ChevronDown, ChevronUp,
-  AlertTriangle, ExternalLink,
+  AlertTriangle,
 } from 'lucide-react'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { api } from '@/lib/api'

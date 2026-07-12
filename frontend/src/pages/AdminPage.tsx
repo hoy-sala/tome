@@ -1,12 +1,12 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   Users, Plus, Pencil, Trash2, Shield, Check, X,
   ChevronDown, ChevronUp, Loader2, ArrowLeft,
   RefreshCw, FolderInput, HardDrive, Database,
   BookOpen, Folder, Trash, Tag, LogIn,
-  Activity, ChevronsUpDown, Copy, GitMerge,
-  User, Eye, ExternalLink, Send, Mail, Sparkles, Search, Layers,
+  Activity, ChevronsUpDown,
+  User, Eye,
 } from 'lucide-react'
 import { MetadataManager } from '@/components/MetadataManager'
 import { LibraryHealthTab } from '@/components/LibraryHealth'
@@ -14,7 +14,7 @@ import { useAuth, isAdmin } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { IconPicker } from '@/components/Sidebar'
-import { CoverImage } from '@/components/CoverImage'
+
 import type { BookType } from '@/lib/books'
 import { invalidateBookTypesCache } from '@/lib/bookTypes'
 import { BookAnimation } from '@/components/BookAnimation'

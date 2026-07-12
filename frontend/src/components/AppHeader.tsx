@@ -2,7 +2,7 @@ import { type ReactNode, type RefObject } from 'react'
 import { Menu, Search, Upload, X } from 'lucide-react'
 import { useAuth, isMember } from '@/contexts/AuthContext'
 import { TomeMark } from '@/components/TomeMark'
-import { SyncStatusBadge } from '@/components/SyncStatusBadge'
+
 import { NotificationBell } from '@/components/NotificationBell'
 
 /**
@@ -36,7 +36,6 @@ export function AppHeader({ onMenuClick, search, actions, onUploadClick }: {
         {search}
         <div className="flex items-center gap-1.5 ml-auto">
           {actions}
-          <SyncStatusBadge />
           <NotificationBell />
           {onUploadClick && isMember(user) && (
             <button

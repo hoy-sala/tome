@@ -5,7 +5,7 @@ import {
   Calendar, Globe, Hash, Building2, FileText, Trash2, Loader2,
   Sparkles, Library, Check, BookMarked, ChevronLeft, ChevronRight, Home,
   Tag as TagIcon, StickyNote, ChevronDown, Archive, AlignLeft,
-  Plus, TrendingUp, TrendingDown, Minus, Info
+  TrendingUp, TrendingDown, Minus, Info
 } from 'lucide-react'
 import { useAuth, isMember } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
@@ -738,8 +738,6 @@ export function BookDetailPage() {
               <StatsLayoutHero
                 own={readingStats.own}
                 aggregate={readingStats.aggregate}
-                bookId={Number(id)}
-                onChange={refreshStats}
               />
             )}
             {readingStats.intensity && <IntensityBlock data={readingStats.intensity} />}
@@ -1231,8 +1229,6 @@ export function BookDetailPage() {
 interface StatsLayoutProps {
   own: BookReadingStats
   aggregate: { total_seconds: number; total_sessions: number; distinct_readers: number } | null
-  bookId: number
-  onChange: () => void
 }
 
 /** Activity bars (minutes per reading day) + an optional progress lane below.
@@ -1593,7 +1589,7 @@ function MomentumChip({ momentum }: { momentum: NonNullable<BookReadingStats['mo
   )
 }
 
-function StatsLayoutHero({ own, aggregate, bookId, onChange }: StatsLayoutProps) {
+function StatsLayoutHero({ own, aggregate }: StatsLayoutProps) {
   const supporting: { label: string; value: string }[] = [
     { label: 'sessions', value: String(own.sessions) },
     { label: 'pages', value: own.pages_turned > 0 ? String(own.pages_turned) : '—' },

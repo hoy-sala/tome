@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   RefreshCw, Loader2, BookOpen, Check, X, Trash2, Search,
   ChevronRight, ChevronDown, ArrowLeft, FolderOpen,
-  Inbox, Zap, Eye, HelpCircle, Library as LibraryIcon,
+  Inbox, Zap, Eye, Library as LibraryIcon,
 } from 'lucide-react'
 import { AppShell } from '@/components/AppShell'
 import { api } from '@/lib/api'

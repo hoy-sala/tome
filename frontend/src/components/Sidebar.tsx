@@ -4,7 +4,7 @@ import * as LucideIcons from 'lucide-react'
 import {
   BookOpen, Plus, Pencil, Trash2,
   ChevronLeft, ChevronRight, Bookmark, Library as LibraryIcon, Layers, Home,
-  Settings, Shield, LogOut, ChevronsUpDown, Lock, X, BookPlus, ExternalLink,
+  Settings, Shield, LogOut, ChevronsUpDown, Lock, X, BookPlus,
   Sun, Moon, MoonStar, Flame, Coffee, Check, Users, Quote,
   type LucideIcon,
 } from 'lucide-react'
@@ -803,7 +803,7 @@ function MobileThemeRow() {
   )
 }
 
-function CollapsedUserMenu({ user, logout, onExpand }: { user: { username: string; is_admin?: boolean; role?: string } | null; logout: () => void; onExpand: () => void }) {
+function CollapsedUserMenu({ user, logout, onExpand }: { user: import('@/contexts/AuthContext').AuthUser | null; logout: () => void; onExpand: () => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -866,7 +866,7 @@ function CollapsedUserMenu({ user, logout, onExpand }: { user: { username: strin
   )
 }
 
-function UserMenu({ user, logout, onCollapse }: { user: { username: string; is_admin?: boolean; role?: string } | null; logout: () => void; onCollapse: () => void }) {
+function UserMenu({ user, logout, onCollapse }: { user: import('@/contexts/AuthContext').AuthUser | null; logout: () => void; onCollapse: () => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
