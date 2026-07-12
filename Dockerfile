@@ -2,7 +2,7 @@
 FROM node:22-alpine AS frontend-build
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
-RUN npm ci --legacy-peer-deps
+RUN --mount=type=cache,target=/root/.npm npm ci --legacy-peer-deps
 COPY frontend/ ./
 RUN npm run build
 
@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends unrar-free && r
 
 COPY pyproject.toml ./
 COPY backend/__init__.py ./backend/
-RUN pip install --no-cache-dir .
+RUN --mount=type=cache,target=/root/.cache/pip pip install .
 
 COPY backend/ ./backend/
 COPY alembic.ini ./
