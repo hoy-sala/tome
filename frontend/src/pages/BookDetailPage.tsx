@@ -19,7 +19,7 @@ import { api } from '@/lib/api'
 import type { BookDetail, BookFile, Library as LibraryType, BookStatus, ReadingStatus } from '@/lib/books'
 import { formatBytes } from '@/lib/books'
 import { useBookTypes } from '@/lib/bookTypes'
-import { cn, formatDuration, formatDate } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 
 interface Facets {
   authors: string[]
