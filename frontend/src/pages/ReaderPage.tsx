@@ -703,8 +703,6 @@ export default function ReaderPage() {
   const [isPdf, setIsPdf] = useState(false)
   const [pdfTotalPages, setPdfTotalPages] = useState(0)
   const [pdfCurrentPage, setPdfCurrentPage] = useState(0)
-  const [pdfInitialPage, setPdfInitialPage] = useState(-1)
-  const [pdfInitialFraction, setPdfInitialFraction] = useState(0)
   const [pdfFitMode, setPdfFitMode] = useState<FitMode>(
     () => (localStorage.getItem('reader_pdf_fit') as FitMode) ?? 'width'
   )
@@ -1481,8 +1479,8 @@ export default function ReaderPage() {
             <PdfReader
               ref={pdfRef}
               bookId={bookId!}
-              initialPage={pdfInitialPage}
-              initialFraction={pdfInitialFraction}
+              initialPage={-1}
+              initialFraction={0}
               theme={theme}
               fitMode={pdfFitMode}
               zoom={pdfZoom}
