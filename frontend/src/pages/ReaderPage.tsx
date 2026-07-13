@@ -479,6 +479,8 @@ const PdfReader = forwardRef<PdfReaderHandle, PdfReaderProps>(function PdfReader
 
     try {
       const page = await doc.getPage(i + 1)
+      // Page may have scrolled out of view (and been cleared) during the await
+      if (!visiblePages.current.has(i) || !canvasRefs.current[i]) return
       const unit = page.getViewport({ scale: 1 })
       const cssScale = displayW / unit.width
       const dpr = Math.min(window.devicePixelRatio || 1, 2)
@@ -493,6 +495,7 @@ const PdfReader = forwardRef<PdfReaderHandle, PdfReaderProps>(function PdfReader
       renderTasks.current.set(i, task)
       await task.promise
       renderTasks.current.delete(i)
+      if (!visiblePages.current.has(i)) return // scrolled away during render
       renderedScale.current.set(i, displayW)
       setPageHeights((prev) => {
         const real = displayW * (unit.height / unit.width)
@@ -619,7 +622,7 @@ const PdfReader = forwardRef<PdfReaderHandle, PdfReaderProps>(function PdfReader
   return (
     <div
       ref={containerRef}
-      className="flex-1 overflow-y-auto overflow-x-auto"
+      className="flex-1 overflow-y-auto overflow-x-hidden"
       style={{ background: themeColors.bg }}
     >
       {!base && (
